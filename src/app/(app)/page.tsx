@@ -14,8 +14,7 @@ export default async function DashboardPage() {
       ? Math.round((mora.clientesEnMora / portfolio.activeClients) * 100)
       : 0
 
-  // placeholder — replace with real recaudo once payments are seeded
-  const totalRecaudado = 0
+  const totalRecaudado = chart.reduce((s, r) => s + r.recaudado, 0)
   const metaPercent =
     portfolio.portfolioTotal > 0
       ? Math.round((totalRecaudado / portfolio.portfolioTotal) * 100)
@@ -58,34 +57,23 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="Resumen del Portafolio">
-        <select className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
-          <option>Todos los Proyectos</option>
-          <option>Central Kreativa</option>
-        </select>
-        <select className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
-          <option>Todos los Estados</option>
-          <option>Al día</option>
-          <option>En mora</option>
-          <option>Crítico</option>
-        </select>
-      </PageHeader>
+      <PageHeader title="Resumen del Portafolio" />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="grid grid-cols-4 gap-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-            Portafolio Total
+            Recaudo Proyectado 2026
           </p>
           <p className="mt-1 text-2xl font-bold text-slate-900">
             {formatCOP(portfolio.portfolioTotal)}
           </p>
           <p className="mt-1 text-xs text-emerald-600">
-            {portfolio.activeClients} clientes activos
+            {portfolio.activeClients} contratos activos · c/IVA
           </p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
             Total Recaudado
           </p>
@@ -98,14 +86,14 @@ export default async function DashboardPage() {
             </p>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
               <div
-                className="h-full rounded-full bg-blue-500"
+                className="h-full rounded-full bg-emerald-500"
                 style={{ width: `${metaPercent}%` }}
               />
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
             Saldo Pendiente
           </p>
@@ -115,7 +103,7 @@ export default async function DashboardPage() {
           <p className="mt-1 text-xs text-slate-400">Cartera total activa</p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
             Clientes en Mora
           </p>
@@ -138,58 +126,52 @@ export default async function DashboardPage() {
       </div>
 
       {/* Bottom row */}
-      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-        {/* Desglose */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-semibold text-slate-900">Desglose de Cartera</p>
-          <div className="mt-4 divide-y divide-slate-100">
-            {desglose.map(({ icon: Icon, iconBg, iconColor, label, value, subtext }) => (
+      <div className="mt-4 flex gap-4">
+        {/* Desglose — fixed 350px wide */}
+        <div className="flex h-[480px] w-[350px] shrink-0 flex-col rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="shrink-0 text-sm font-semibold text-slate-900">Desglose de Cartera</p>
+          <div className="mt-3 flex min-h-0 flex-1 flex-col">
+            {desglose.map(({ icon: Icon, iconBg, iconColor, label, value, subtext }, idx) => (
               <div
                 key={label}
-                className="flex items-center gap-4 py-3 first:pt-0 last:pb-0"
+                className={`flex flex-1 items-center gap-4 ${idx < desglose.length - 1 ? "border-b border-slate-100" : ""}`}
               >
-                <div
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${iconBg}`}
-                >
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${iconBg}`}>
                   <Icon className={`h-5 w-5 ${iconColor}`} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                    {label}
-                  </p>
-                  <p className="text-lg font-bold text-slate-900">{value}</p>
-                  <p className="text-xs text-slate-400">{subtext}</p>
+                  <p className="font-medium uppercase tracking-wider text-slate-500 text-[clamp(0.6rem,1.3vh,0.8rem)]">{label}</p>
+                  <p className="font-bold text-slate-900 text-[clamp(1rem,3.2vh,2.25rem)] leading-tight">{value}</p>
+                  <p className="text-slate-400 text-[clamp(0.6rem,1.1vh,0.75rem)]">{subtext}</p>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Rendimiento chart */}
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-semibold text-slate-900">
-            Proyecciones 2026
-          </p>
-          <RendimientoChart data={chart} />
-          <div className="mt-4 flex gap-6 border-t border-slate-100 pt-4">
+        {/* Chart — fills remaining width */}
+        <div className="flex h-[480px] flex-1 flex-col rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-sm font-semibold text-slate-900">Proyectado vs. Recaudado 2026</p>
+          <div className="min-h-0 flex-1">
+            <RendimientoChart data={chart} />
+          </div>
+          <div className="mt-3 flex gap-6 border-t border-slate-100 pt-3 shrink-0">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                Prom. Proyectado / Mes
-              </p>
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Prom. Proyectado / Mes</p>
               <p className="mt-0.5 text-sm font-bold text-slate-900">
-                {formatCOP(
-                  chart.length > 0
-                    ? chart.reduce((s, r) => s + r.proyectado, 0) / chart.length
-                    : 0
-                )}
+                {formatCOP(chart.length > 0 ? chart.reduce((s, r) => s + r.proyectado, 0) / chart.length : 0)}
               </p>
             </div>
             <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                Total Proyectado
-              </p>
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Total Proyectado</p>
               <p className="mt-0.5 text-sm font-bold text-slate-900">
                 {formatCOP(chart.reduce((s, r) => s + r.proyectado, 0))}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Total Recaudado</p>
+              <p className="mt-0.5 text-sm font-bold text-emerald-600">
+                {formatCOP(totalRecaudado)}
               </p>
             </div>
           </div>

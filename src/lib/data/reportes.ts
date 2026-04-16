@@ -104,7 +104,7 @@ export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal
     db.execute(sql`
       SELECT
         month,
-        COALESCE(SUM(canon_proyectado), 0)::numeric AS proyectado
+        ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado - pronto_pago_proyectado), 0) * 1.19)::numeric AS proyectado
       FROM projections
       WHERE year = ${year}
       GROUP BY month

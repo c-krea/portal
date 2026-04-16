@@ -8,6 +8,38 @@ Format: [YYYY-MM-DD] — description
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-04-16
+### Added
+- Tenant NITs: all 65 tenants updated with real NIT/Documento values from Siesa Ocupacion + Recaudo sheets (replaced `IMPORT-XXX` placeholders)
+- Payments history imported: 2,695 records (Jan 2024 → Apr 2026) from ckrea.xlsx Recaudo sheet — full Siesa fields stored (`siesa_docto`, `siesa_cruce`, `siesa_clasificacion`, `fecha_pronto_pago`, `fecha_vencimiento`, `fecha_factura`, `valor_aplicado`, `pronto_pago_aplicado`, `valor_final`)
+- Linear CKR-13: tracking 1 missing payment (SOLORZANO) + NEOGRAFICK new tenant to add
+- IT questions saved: API format, sync frequency, RK numbering, unit 505 Siesa structure
+
+## [1.5.0] — 2026-04-16
+### Fixed
+- PP mutual exclusivity rule: `invoice-engine.ts` now sets `prontoPagoRef = 0` when a phase discount is active for that period. PP only applies after phase discount expires.
+- `projections` table: zeroed out 199 rows where `pronto_pago_proyectado > 0` AND `descuento_proyectado > 0` simultaneously (~$48M COP corrected)
+- Proyecciones detail table: `PP%` column now shows `—` for any contract with an active phase discount in 2026 (was incorrectly showing 10% for all)
+- `financial-rules-engine-spec.md §2.4`: added Rule A point 4 — phase discount and PP are mutually exclusive
+### Added
+- Proyecciones detail table: click-to-sort on all columns (↑/↓ indicator, no extra icons). Extracted to `src/components/proyecciones/detalle-table.tsx`.
+- Mora page: 3 aging-bucket KPI cards (0–30 / 31–60 / 61+ días) — white cards with colored left border accent, pill badge for day range, interest as main KPI, client count inline
+- Mora table: simplified to 4 columns (Arrendatario | Días | Meses pendientes | Total), click-to-sort, headers always visible
+- `getMoraRows()`: added `meses_pendientes` (COUNT of overdue cartera rows per tenant)
+- Linear CKR-12: unit 505 annual lump sum billing — pending investigation
+### Removed
+- `AccrualForm` removed from mora page — daily interest accrual handled by Vercel Cron only
+
+## [1.4.0] — 2026-04-16
+### Changed
+- `/proyecciones` — complete redesign: KPI breakdown cards, formula explainer, monthly Recharts bar chart (navy, rounded, full hover tooltip), per-contract detail table (78 rows with meses, dcto%, PP%, neto anual c/IVA)
+- "Generar proyecciones" form moved to floating gear icon → modal overlay (hidden by default)
+- Dashboard: stacked single bar chart (emerald fills navy as recaudo arrives), removed filter dropdowns, Desglose card equal-height flex items with fluid `clamp(vh)` typography
+- Sidebar: "Dashboard" → "Resumen", Proyecciones moved to slot #2, Usuarios + Configuración hidden from nav
+- Layout: `max-w-[1440px]` centered, natural scroll restored on all pages
+### Removed
+- `/reportes` page deleted — proyectado vs recaudado chart now lives on dashboard directly
+
 ## [1.3.0] — 2026-04-16
 ### Added
 - `/configuracion` — financial rules editor: view/edit IVA rate, PP window, mora rate, grace period, IPC % via inline forms; automations panel showing cron schedule

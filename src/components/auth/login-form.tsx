@@ -1,13 +1,15 @@
 "use client"
 
+import { useState } from "react"
 import { useActionState } from "react"
 import { signIn, type LoginState } from "@/app/(auth)/login/actions"
-import { Loader2 } from "lucide-react"
+import { Loader2, Eye, EyeOff } from "lucide-react"
 
 const initial: LoginState = {}
 
 export function LoginForm() {
   const [state, action, pending] = useActionState(signIn, initial)
+  const [showPassword, setShowPassword] = useState(false)
 
   return (
     <form action={action} className="flex flex-col gap-4">
@@ -29,14 +31,38 @@ export function LoginForm() {
         <label className="mb-1.5 block text-xs font-medium text-slate-300">
           Contraseña
         </label>
+        <div className="relative">
+          <input
+            type={showPassword ? "text" : "password"}
+            name="password"
+            required
+            autoComplete="current-password"
+            placeholder="••••••••"
+            className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 pr-10 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-200"
+            tabIndex={-1}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
         <input
-          type="password"
-          name="password"
-          required
-          autoComplete="current-password"
-          placeholder="••••••••"
-          className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          type="checkbox"
+          id="remember_me"
+          name="remember_me"
+          value="1"
+          defaultChecked
+          className="h-4 w-4 rounded border-slate-600 bg-slate-700 accent-blue-500"
         />
+        <label htmlFor="remember_me" className="text-xs text-slate-400 select-none cursor-pointer">
+          Recordarme
+        </label>
       </div>
 
       {state.error && (

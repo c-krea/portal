@@ -6,6 +6,7 @@ export type MoraRow = {
   cliente: string
   unitNumber: string | null
   diasMora: number
+  mesesPendientes: number
   saldoVencido: number
   interesAcumulado: number
   saldoTotal: number
@@ -53,6 +54,7 @@ export async function getMoraRows(): Promise<MoraRow[]> {
       COALESCE(t.nombre_corto, t.razon_social)     AS cliente,
       u.unit_number,
       MAX(c.dias_mora)                             AS dias_mora,
+      COUNT(c.id)::int                             AS meses_pendientes,
       SUM(c.valor_vencido)::numeric                AS saldo_vencido,
       SUM(c.interes_acumulado)::numeric            AS interes_acumulado,
       SUM(c.saldo)::numeric                        AS saldo_total
@@ -77,6 +79,7 @@ export async function getMoraRows(): Promise<MoraRow[]> {
     cliente: String(r.cliente),
     unitNumber: r.unit_number ? String(r.unit_number) : null,
     diasMora: Number(r.dias_mora ?? 0),
+    mesesPendientes: Number(r.meses_pendientes ?? 0),
     saldoVencido: Number(r.saldo_vencido ?? 0),
     interesAcumulado: Number(r.interes_acumulado ?? 0),
     saldoTotal: Number(r.saldo_total ?? 0),

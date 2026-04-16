@@ -18,7 +18,8 @@ export async function signIn(
     return { error: "Ingrese email y contraseña" }
   }
 
-  const supabase = await createClient()
+  const rememberMe = formData.get("remember_me") === "1"
+  const supabase = await createClient(rememberMe)
   const { error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {

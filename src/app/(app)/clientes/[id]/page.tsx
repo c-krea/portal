@@ -29,6 +29,12 @@ const PAYMENT_STATUS_CONFIG: Record<string, { cls: string; label: string }> = {
   anulado: { cls: "bg-slate-100 text-slate-400", label: "Anulado" },
 }
 
+const CLASIFICACION_CONFIG: Record<string, { cls: string; label: string }> = {
+  RECAUDADO: { cls: "bg-emerald-50 text-emerald-700", label: "Recaudado" },
+  "NO PROYECTADO": { cls: "bg-slate-100 text-slate-500", label: "No proyectado" },
+  VENCIDO: { cls: "bg-rose-50 text-rose-700", label: "Vencido" },
+}
+
 function KpiCard({
   label,
   value,
@@ -317,68 +323,69 @@ export default async function ClienteDetailPage({
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                      Fecha
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                      Monto Aplicado
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                      Pronto Pago
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                      Total
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                      Concepto
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                      Estado
-                    </th>
+                  <tr className="border-b border-slate-100 bg-slate-50">
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Fecha</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Recibo</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Factura</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Aplicado</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">PP</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Neto</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Clasificación</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pagos.map((p) => {
-                    const cfg =
-                      PAYMENT_STATUS_CONFIG[p.status] ?? {
-                        cls: "bg-slate-100 text-slate-500",
-                        label: p.status,
-                      }
+                    const clsf = p.siesaClasificacion
+                      ? (CLASIFICACION_CONFIG[p.siesaClasificacion] ?? { cls: "bg-slate-100 text-slate-500", label: p.siesaClasificacion })
+                      : null
                     return (
-                      <tr
-                        key={p.id}
-                        className="border-b border-slate-50 hover:bg-slate-50"
-                      >
-                        <td className="px-4 py-3 text-slate-600">{p.fechaRecaudo}</td>
-                        <td className="px-4 py-3 font-medium text-slate-900">
+                      <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50">
+                        <td className="px-4 py-3 text-slate-600 tabular-nums">{p.fechaRecaudo}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                          {p.siesaDocto ?? "—"}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                          {p.siesaCruce ?? (p.concepto ? p.concepto : "—")}
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-slate-900 tabular-nums">
                           {formatCOP(p.valorAplicado)}
                         </td>
-                        <td className="px-4 py-3 text-emerald-600">
+                        <td className="px-4 py-3 text-right text-emerald-600 tabular-nums">
                           {p.prontoPagoAplicado > 0 ? formatCOP(p.prontoPagoAplicado) : (
-                            <span className="text-slate-400">—</span>
+                            <span className="text-slate-300">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 font-semibold text-slate-900">
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900 tabular-nums">
                           {formatCOP(p.valorFinal)}
                         </td>
-                        <td className="px-4 py-3 text-slate-500 text-xs">
-                          {p.concepto ?? (p.siesaDocto ? `Doc: ${p.siesaDocto}` : "—")}
-                        </td>
                         <td className="px-4 py-3">
-                          <span
-                            className={cn(
-                              "rounded-full px-2.5 py-0.5 text-xs font-medium",
-                              cfg.cls,
-                            )}
-                          >
-                            {cfg.label}
-                          </span>
+                          {clsf && (
+                            <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", clsf.cls)}>
+                              {clsf.label}
+                            </span>
+                          )}
                         </td>
                       </tr>
                     )
                   })}
                 </tbody>
+                <tfoot>
+                  <tr className="border-t border-slate-200 bg-slate-50">
+                    <td colSpan={3} className="px-4 py-3 text-xs font-medium text-slate-500">
+                      {pagos.length} pagos mostrados
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold text-slate-700 tabular-nums">
+                      {formatCOP(pagos.reduce((s, p) => s + p.valorAplicado, 0))}
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold text-emerald-600 tabular-nums">
+                      {formatCOP(pagos.reduce((s, p) => s + p.prontoPagoAplicado, 0))}
+                    </td>
+                    <td className="px-4 py-3 text-right text-xs font-semibold text-slate-900 tabular-nums">
+                      {formatCOP(pagos.reduce((s, p) => s + p.valorFinal, 0))}
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
               </table>
             </div>
           ) : (

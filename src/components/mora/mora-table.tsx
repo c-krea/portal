@@ -1,188 +1,113 @@
 "use client"
 
-import {
-  useReactTable,
-  getCoreRowModel,
-  getSortedRowModel,
-  getFilteredRowModel,
-  flexRender,
-  type ColumnDef,
-  type SortingState,
-} from "@tanstack/react-table"
 import { useState } from "react"
-import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import Link from "next/link"
 import { formatCOP } from "@/lib/formatters"
-import { cn } from "@/lib/utils"
 import type { MoraRow } from "@/lib/data/mora"
 
-function diasMoraLabel(dias: number) {
-  if (dias <= 30) return { label: "Leve", class: "bg-amber-50 text-amber-700" }
-  if (dias <= 90) return { label: "Moderado", class: "bg-orange-50 text-orange-700" }
-  return { label: "Crítico", class: "bg-rose-50 text-rose-700" }
-}
+type SortKey = "cliente" | "diasMora" | "mesesPendientes" | "saldoVencido" | "saldoTotal"
+type SortDir = "asc" | "desc"
 
-const columns: ColumnDef<MoraRow>[] = [
-  {
-    accessorKey: "unitNumber",
-    header: "Local",
-    size: 90,
-    cell: ({ getValue }) => (
-      <span className="font-medium text-slate-700">{getValue<string>() ?? "—"}</span>
-    ),
-  },
-  {
-    accessorKey: "cliente",
-    header: "Cliente",
-    cell: ({ getValue }) => (
-      <span className="font-medium text-slate-900">{getValue<string>()}</span>
-    ),
-  },
-  {
-    accessorKey: "diasMora",
-    header: "Días en Mora",
-    size: 130,
-    cell: ({ getValue }) => {
-      const dias = getValue<number>()
-      const { label, class: cls } = diasMoraLabel(dias)
-      return (
-        <div className="flex items-center gap-2">
-          <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", cls)}>
-            {label}
-          </span>
-          <span className="text-slate-600">{dias}</span>
-        </div>
-      )
-    },
-  },
-  {
-    accessorKey: "saldoVencido",
-    header: "Saldo Vencido",
-    size: 150,
-    cell: ({ getValue }) => (
-      <span className="text-right font-medium text-rose-600">
-        {formatCOP(getValue<number>())}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "interesAcumulado",
-    header: "Interés Acum.",
-    size: 130,
-    cell: ({ getValue }) => (
-      <span className="text-right text-slate-600">
-        {formatCOP(getValue<number>())}
-      </span>
-    ),
-  },
-  {
-    accessorKey: "saldoTotal",
-    header: "Saldo Total",
-    size: 130,
-    cell: ({ getValue }) => (
-      <span className="text-right font-semibold text-slate-900">
-        {formatCOP(getValue<number>())}
-      </span>
-    ),
-  },
+const COLS: { key: SortKey; label: string; align: "left" | "right" }[] = [
+  { key: "cliente",         label: "Arrendatario",     align: "left" },
+  { key: "diasMora",        label: "Días mora",        align: "right" },
+  { key: "mesesPendientes", label: "Facturas",         align: "right" },
+  { key: "saldoVencido",    label: "Vencido",          align: "right" },
+  { key: "saldoTotal",      label: "Saldo total",      align: "right" },
 ]
 
-export function MoraTable({ data }: { data: MoraRow[] }) {
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: "diasMora", desc: true },
-  ])
-  const [globalFilter, setGlobalFilter] = useState("")
+function diasBadge(dias: number) {
+  if (dias <= 30) return "bg-amber-50 text-amber-700"
+  if (dias <= 60) return "bg-orange-50 text-orange-700"
+  return "bg-rose-50 text-rose-700"
+}
 
-  const table = useReactTable({
-    data,
-    columns,
-    state: { sorting, globalFilter },
-    onSortingChange: setSorting,
-    onGlobalFilterChange: setGlobalFilter,
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
+export function MoraTable({ data }: { data: MoraRow[] }) {
+  const [sortKey, setSortKey] = useState<SortKey>("diasMora")
+  const [sortDir, setSortDir] = useState<SortDir>("desc")
+
+  function handleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+    } else {
+      setSortKey(key)
+      setSortDir("desc")
+    }
+  }
+
+  const sorted = [...data].sort((a, b) => {
+    const av = a[sortKey]
+    const bv = b[sortKey]
+    const sign = sortDir === "asc" ? 1 : -1
+    if (typeof av === "number" && typeof bv === "number") return (av - bv) * sign
+    return String(av).localeCompare(String(bv)) * sign
   })
 
   return (
-    <div>
-      {/* Search */}
-      <div className="mb-4">
-        <input
-          type="text"
-          placeholder="Buscar cliente o local..."
-          value={globalFilter}
-          onChange={(e) => setGlobalFilter(e.target.value)}
-          className="w-full max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
-      </div>
-
-      {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full text-sm">
-          <thead>
-            {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id} className="border-b border-slate-100">
-                {hg.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    onClick={header.column.getToggleSortingHandler()}
-                    className={cn(
-                      "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500",
-                      header.column.getCanSort() && "cursor-pointer select-none hover:text-slate-700"
-                    )}
-                    style={{ width: header.column.columnDef.size }}
-                  >
-                    <div className="flex items-center gap-1">
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                      {header.column.getCanSort() && (
-                        <span className="text-slate-300">
-                          {header.column.getIsSorted() === "asc" ? (
-                            <ArrowUp className="h-3 w-3 text-slate-500" />
-                          ) : header.column.getIsSorted() === "desc" ? (
-                            <ArrowDown className="h-3 w-3 text-slate-500" />
-                          ) : (
-                            <ArrowUpDown className="h-3 w-3" />
-                          )}
-                        </span>
-                      )}
-                    </div>
-                  </th>
-                ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {table.getRowModel().rows.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={columns.length}
-                  className="py-12 text-center text-slate-400"
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-slate-100 bg-slate-50">
+            {COLS.map(({ key, label, align }) => {
+              const active = sortKey === key
+              const indicator = active ? (sortDir === "asc" ? " ↑" : " ↓") : ""
+              return (
+                <th
+                  key={key}
+                  onClick={() => handleSort(key)}
+                  className={`cursor-pointer select-none px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 hover:text-slate-800 ${
+                    align === "right" ? "text-right" : "text-left"
+                  }${active ? " text-slate-800" : ""}`}
                 >
-                  No hay clientes en mora
+                  {label}{indicator}
+                </th>
+              )
+            })}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {sorted.length === 0 ? (
+            <tr>
+              <td colSpan={COLS.length} className="py-12 text-center text-sm text-slate-400">
+                No hay clientes en mora
+              </td>
+            </tr>
+          ) : (
+            sorted.map((row) => (
+              <tr key={row.tenantId} className="hover:bg-slate-50">
+                <td className="px-4 py-3">
+                  <Link
+                    href={`/clientes/${row.tenantId}`}
+                    className="font-medium text-slate-900 hover:text-blue-600 hover:underline"
+                  >
+                    {row.cliente}
+                  </Link>
+                  {row.unitNumber && (
+                    <span className="ml-2 text-xs text-slate-400">#{row.unitNumber}</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${diasBadge(row.diasMora)}`}>
+                    {row.diasMora}d
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right text-slate-700">
+                  {row.mesesPendientes > 0 ? row.mesesPendientes : "—"}
+                </td>
+                <td className="px-4 py-3 text-right font-mono font-semibold text-rose-600">
+                  {formatCOP(row.saldoVencido)}
+                </td>
+                <td className="px-4 py-3 text-right font-mono text-slate-700">
+                  {formatCOP(row.saldoTotal)}
                 </td>
               </tr>
-            ) : (
-              table.getRowModel().rows.map((row) => (
-                <tr
-                  key={row.id}
-                  className="border-b border-slate-50 hover:bg-slate-50"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+            ))
+          )}
+        </tbody>
+      </table>
+      <div className="border-t border-slate-100 px-4 py-2 text-xs text-slate-400">
+        {sorted.length} clientes en mora
       </div>
-
-      {/* Footer */}
-      <p className="mt-2 text-xs text-slate-400">
-        {table.getFilteredRowModel().rows.length} clientes
-      </p>
     </div>
   )
 }

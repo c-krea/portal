@@ -112,6 +112,7 @@ Where:
 1. **Full payment required.** Partial payments do NOT qualify for the PP discount. The tenant must pay 100% of the net invoiced amount (canon - descuento_fase + IVA - PP) within the window.
 2. **10 calendar day window.** Counted from the invoice date (fecha factura), not from the 1st of the month. If invoice date = March 1, the PP deadline = March 11.
 3. **Payment must clear.** The payment date is the date the funds are received and reconciled, not the transfer initiation date.
+4. **Phase discount and PP are mutually exclusive.** If a tenant has an active phase discount (10%, 20%, 30%, or 43%) for a given month, PP = 0 for that month regardless of their `pp_rate`. PP only activates in months where no phase discount is in effect. This motivates timely payment once the phase discount expires.
 
 ### 2.5 Accounting Treatment
 
@@ -601,9 +602,17 @@ Aggregated from C-KREA GB data:
 
 When a tenant vacates or an invoice needs correction, a credit note (NVS document) is issued with a negative amount. Three such cases exist in the current data (DINAMO MARKETING, PEDRAZA RIVEROS, BECERRA MATEUS). Credit notes reverse the original factura and should zero out any associated PP credit notes.
 
-### 9.8 Annual Prepayment
+### 9.8 Annual Prepayment — Unit 505 (TATIANA CONTRERAS) ⚠️ NEEDS PORTAL IMPLEMENTATION
 
-One tenant (unit with "1 ano anticipado septiembre el 10 pp") has a prepaid annual arrangement. The annual payment is subject to 10% PP if paid in full. The portal should support annual billing cycles as an exception.
+**Confirmed:** Annual lump sum. Tenant paid the full year in advance as a single payment. C-Krea applied a 43% discount to the annual total as an incentive for prepayment.
+
+**Accounting treatment:**
+- 1 annual invoice (not 12 monthly invoices) covering the full lease year
+- Discount = 43% off the annual canon total
+- Monthly projections in DB are for planning only; do NOT auto-generate monthly invoices for this contract
+- Portal does not yet support annual billing cycles — currently shows 20% in projections (wrong)
+
+**Pending:** Build annual billing support or manually record this contract outside the standard monthly flow. See Linear issue for tracking.
 
 ### 9.9 Deposits and Advance Payments
 

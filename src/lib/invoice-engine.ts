@@ -205,7 +205,10 @@ async function computeAndInsertInvoice(
   const iva = roundCOP(netCanon * IVA_RATE)
 
   // Step 5: Pronto pago (reference — applied at payment time, not baked into invoice total)
-  const prontoPagoRef = roundCOP(netCanon * (r.prontoPagoPct / 100))
+  // Rule: PP only applies when no phase discount is active that month.
+  // Clients with an active phase discount (10/20/30/43%) get PP = 0.
+  // After phase expires, they get PP = 10% for paying within 10 days.
+  const prontoPagoRef = descuentoFase > 0 ? 0 : roundCOP(netCanon * (r.prontoPagoPct / 100))
 
   // Step 6: Gastos — electricity only (water is included in canon, not a separate charge)
   const electricidad = r.energiaTotal != null ? roundCOP(r.energiaTotal) : 0

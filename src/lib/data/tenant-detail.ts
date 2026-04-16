@@ -44,6 +44,8 @@ export type PagoHistorialItem = {
   valorFinal: number
   concepto: string | null
   siesaDocto: string | null
+  siesaCruce: string | null
+  siesaClasificacion: string | null
   status: string
 }
 
@@ -141,11 +143,11 @@ export async function getTenantPayments(tenantId: string): Promise<PagoHistorial
       COALESCE(valor_aplicado, 0)::numeric        AS valor_aplicado,
       COALESCE(pronto_pago_aplicado, 0)::numeric  AS pronto_pago_aplicado,
       COALESCE(valor_final, 0)::numeric           AS valor_final,
-      concepto, siesa_docto, status
+      concepto, siesa_docto, siesa_cruce, siesa_clasificacion, status
     FROM payments
     WHERE tenant_id = ${tenantId}
     ORDER BY fecha_recaudo DESC
-    LIMIT 30
+    LIMIT 50
   `)
   return rows.map((r) => ({
     id: String(r.id),
@@ -155,6 +157,8 @@ export async function getTenantPayments(tenantId: string): Promise<PagoHistorial
     valorFinal: Number(r.valor_final ?? 0),
     concepto: r.concepto ? String(r.concepto) : null,
     siesaDocto: r.siesa_docto ? String(r.siesa_docto) : null,
+    siesaCruce: r.siesa_cruce ? String(r.siesa_cruce) : null,
+    siesaClasificacion: r.siesa_clasificacion ? String(r.siesa_clasificacion) : null,
     status: String(r.status),
   }))
 }

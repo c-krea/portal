@@ -1,30 +1,35 @@
 import { db } from "@/lib/db/client"
-import { contracts, cartera, projections } from "@/lib/db/schema"
+import { contracts, cartera } from "@/lib/db/schema"
 import { sql, inArray, gt } from "drizzle-orm"
-
-const MONTH_LABELS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
+import { getProyectadoVsReal } from "@/lib/data/reportes"
 
 export async function getDashboardData() {
   const [portfolio, mora, chart] = await Promise.all([
     getPortfolioStats(),
     getMoraStats(),
-    getMonthlyProjections(),
+    getProyectadoVsReal(2026),
   ])
   return { portfolio, mora, chart }
 }
 
 async function getPortfolioStats() {
-  const rows = await db
-    .select({
-      portfolioTotal: sql<string>`COALESCE(SUM(${contracts.canonBase}), 0)`,
-      activeClients: sql<number>`COUNT(DISTINCT ${contracts.tenantId})`,
-    })
-    .from(contracts)
-    .where(inArray(contracts.status, ["activo", "critico"]))
+  const [projRow, clientRow] = await Promise.all([
+    db.execute(sql`
+      SELECT ROUND(
+        COALESCE(SUM(canon_proyectado - descuento_proyectado - pronto_pago_proyectado), 0) * 1.19
+      ) AS portfolio_total
+      FROM projections
+      WHERE year = 2026
+    `),
+    db
+      .select({ activeClients: sql<number>`COUNT(DISTINCT ${contracts.tenantId})` })
+      .from(contracts)
+      .where(inArray(contracts.status, ["activo", "critico"])),
+  ])
 
   return {
-    portfolioTotal: Number(rows[0]?.portfolioTotal ?? 0),
-    activeClients: Number(rows[0]?.activeClients ?? 0),
+    portfolioTotal: Number((projRow as Array<Record<string, unknown>>)[0]?.portfolio_total ?? 0),
+    activeClients: Number(clientRow[0]?.activeClients ?? 0),
   }
 }
 
@@ -49,23 +54,3 @@ async function getMoraStats() {
   }
 }
 
-async function getMonthlyProjections() {
-  const rows = await db
-    .select({
-      month: projections.month,
-      proyectado: sql<string>`COALESCE(SUM(${projections.canonProyectado}), 0)`,
-    })
-    .from(projections)
-    .where(sql`${projections.year} = 2026`)
-    .groupBy(projections.month)
-    .orderBy(projections.month)
-
-  return MONTH_LABELS.map((label, i) => {
-    const row = rows.find((r) => r.month === i + 1)
-    return {
-      mes: label,
-      proyectado: Number(row?.proyectado ?? 0),
-      recibido: 0,
-    }
-  })
-}

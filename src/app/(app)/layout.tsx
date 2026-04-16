@@ -31,8 +31,8 @@ export default async function AppLayout({
   return (
     <>
       <Sidebar displayName={displayName} signOutAction={signOut} />
-      <main className="ml-[220px] flex min-h-screen flex-1 flex-col">
-        <div className="flex-1 px-6 py-6 max-w-7xl w-full mx-auto">{children}</div>
+      <main className="ml-[220px] flex min-h-screen w-full flex-col">
+        <div className="flex-1 px-8 py-6 w-full max-w-[1440px] mx-auto">{children}</div>
       </main>
     </>
   )

@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { LogOut, Settings } from "lucide-react"
@@ -25,9 +26,7 @@ export function Sidebar({ displayName, signOutAction }: SidebarProps) {
     <aside className="fixed inset-y-0 left-0 z-50 flex w-[220px] flex-col bg-slate-900">
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white">
-          <span className="text-sm font-bold text-slate-900">CK</span>
-        </div>
+        <Image src="/ckrea-logo.png" alt="C-Krea" width={36} height={36} className="shrink-0" />
         <span className="text-sm font-semibold tracking-wide text-white">C-KREA</span>
       </div>
 

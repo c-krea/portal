@@ -2,6 +2,149 @@
 
 ---
 
+## 2026-04-16 — Payments Import Session
+
+### What happened
+
+**Analyzed ckrea.xlsx (Siesa/CSI export) — 5 sheets:**
+- `Recaudo` = payments history (3,134 rows, 2,696 ARRENDAMIENTOS = C-Krea rental payments, Jan 2024 → Apr 2026)
+- `Cartera` = outstanding balances (already in DB)
+- `Ocupacion` = tenant/contract data (already imported)
+- `Documentos` = Siesa invoice list (used for Siesa CSV export format)
+- `Estado de resultados` = P&L journal entries (not rental payments)
+
+**Workflow decision recorded:**
+- Siesa is source of truth: creates invoices (FVS-XXXXX) + receipts (RK-XXXXX)
+- Portal = management/analytics layer reading from Siesa exports
+- Long-term: direct API key to CSI for push-back
+- IT questions saved to memory: `it_questions_siesa.md` (API format, sync frequency, RK numbering, etc.)
+
+**Tenant NIT fix:**
+- All tenants were imported with fake `IMPORT-XXX` NITs — real NITs not captured in original import
+- 62 tenants updated with real NITs via name-matching from Ocupacion + Recaudo sheets
+- 3 skipped pending confirmation (units 120, 121, 209) → CKR-13 created
+- Units 209 (PROHERCOL=901148181), 120 (GUZMAN=1023891322), 121 (SONIA=1013660654) confirmed same session and updated
+- 65 total tenants: 65 now have real NITs (100%)
+- NEOGRAFICK (new unit 121 tenant) + BECERRA as unit 120 current occupant: NITs still needed for tenant records, not payments
+
+**Payments import:**
+- 2,695 / 2,696 ARRENDAMIENTOS payments imported into `payments` table
+- Only SOLORZANO RAMIREZ KELLY ALEXANDRA (NIT 53154279, 1 payment 2026-03-02, $3,225,000) skipped — not in tenant DB
+- Cross-validated: PP total exact match ($218,993,654), net total diff = exactly her 1 payment ($3,225,000)
+- Siesa fields stored: `siesa_docto` (RK-XXXX), `siesa_cruce` (FVS/NVS reference), `siesa_clasificacion`
+- CKR-13 updated with final status
+
+**Design note — historical payments vs reconciliation:**
+- Imported payments are read-only history from Siesa. NOT run through `reconcilePayment`.
+- Cartera table already has correct saldos from Siesa snapshot — no re-reconciliation needed.
+- New payments entered via portal form going forward use reconciliation engine normally.
+
+### Decisions
+- Import ARRENDAMIENTOS only — skip NACIONALES REYMON (other company), SERV.PUB, INTERESES MORA
+- NVS (credit notes, negative valorFinal) imported as-is — needed for audit trail
+- Historical payments: display-only, not reconciled against portal cartera
+
+### Next session
+- Polish mora page with real payment data
+- Polish clientes/[id] page with payment history
+
+---
+
+## 2026-04-16 — Financial Rules Corrections + Mora Redesign Session
+
+### What happened
+
+**PP mutual exclusivity rule (Rule A correction)**
+- New rule confirmed: PP (pronto pago 10%) only applies in months where NO phase discount is active. Clients with 10/20/30/43% phase discount get PP = 0 during those months; PP kicks in only after phase expires.
+- `invoice-engine.ts`: one-line fix — `prontoPagoRef = descuentoFase > 0 ? 0 : roundCOP(netCanon * prontoPagoPct / 100)`
+- `financial-rules-engine-spec.md §2.4`: added point 4 documenting the mutual exclusivity rule
+
+**DB projection data fix**
+- 199 rows in `projections` had `pronto_pago_proyectado > 0` AND `descuento_proyectado > 0` simultaneously — wrong per new rule
+- Total bad PP zeroed: ~$48M COP
+- SQL: `UPDATE projections SET pronto_pago_proyectado = 0 WHERE descuento_proyectado > 0 AND pronto_pago_proyectado > 0`
+- Verified 0 remaining wrong rows after update
+
+**Proyecciones table — PP% column fixed + sortable**
+- `getProyeccionDetalle` query: `PP%` now computed as `CASE WHEN MAX(descuento_proyectado) > 0 THEN 0 ELSE pronto_pago_pct END` — clients with any phase discount in 2026 show `—`, not 10%
+- Extracted table to `src/components/proyecciones/detalle-table.tsx` (client component) with click-to-sort on all columns. Active column shows ↑/↓ indicator. No extra icons added.
+
+**Unit 505 (Tatiana Contreras) — annual lump sum**
+- Confirmed: paid full year upfront as single payment, 43% discount on annual total
+- DB NOT touched — monthly projections still show 20% (wrong) but left intentionally pending investigation
+- `financial-rules-engine-spec.md §9.8`: updated with confirmed treatment + pending note
+- Linear CKR-12 created: "Unit 505 (Tatiana Contreras) — annual lump sum billing not modeled"
+
+**Discount distribution verified against DB**
+- 30% contracts: 7 in DB but only 2 still active past April (211 ends May, 805 ends June). Projections already encode correct expiry months.
+- 20% contracts: 25 in DB → 24 effectively (505 should be 43%, left as-is pending CKR-12)
+- 10% contracts: 11 in DB, all end June. Matches user data.
+
+**Mora page — full redesign**
+- Removed `AccrualForm` ("Calcular Intereses de Mora" / "Ejecutar Acumulación") — cron handles daily accrual automatically
+- Kept 4 top KPIs: Cartera Vencida | Clientes | Prom. Días | Interés Acum.
+- Added 3 aging-bucket KPI cards (new row below):
+  - 0–30 días (amber left border + pill badge)
+  - 31–60 días (orange left border + pill badge)
+  - 61+ días (rose left border + pill badge)
+  - Each shows: interest accumulated as big KPI + `X clientes` inline label. No full colored background — white cards with left border accent only.
+- Simplified table: replaced TanStack/multi-column table with clean 4-column view: Arrendatario | Días en mora (colored badge) | Meses pendientes | Total
+- `getMoraRows()` query: added `COUNT(c.id) AS meses_pendientes`
+- Table headers always visible even when empty (empty state inside tbody)
+- Click-to-sort on all 4 columns
+
+### Gotchas
+- `projections.pronto_pago_proyectado` was seeded with PP values even for phase-discount months — always zero out this column when phase discount is active
+- `c.pronto_pago_pct` (contract rate) ≠ effective PP for the year — must compute from projections data for correct display
+- Unit 505: do NOT generate monthly invoices for her until CKR-12 is resolved
+
+---
+
+## 2026-04-16 — UI Polish + Dashboard Redesign Session
+
+### What happened
+
+**Proyecciones page — full redesign**
+- Replaced year-coverage table with data-rich layout: 4 KPI breakdown cards (canon bruto, descuentos+PP, IVA, total neto c/IVA), formula explainer bar, monthly bar chart, per-contract detail table
+- Monthly chart: Recharts direct (not Tremor) — dark navy bars, rounded tops, hover tooltip shows full monthly breakdown (canon bruto → descuentos → PP → base neta → IVA → total neto)
+- Detail table: 78 rows, Local | Arrendatario | Desde (dd/mm/yy) | Meses transcurridos | Canon/mes | Dcto% | PP% | Neto anual c/IVA | Estado
+- "Generar proyecciones" hidden as floating gear icon (fixed bottom-right) → modal overlay
+- New data fns: `getProyeccionBreakdown`, `getProyeccionDetalle`, `getProyeccionMensual` (all with full breakdown columns)
+
+**Dashboard redesign**
+- Removed "Todos los Proyectos" and "Todos los Estados" filter dropdowns
+- Replaced dual grouped bars with single stacked bar: emerald fills from bottom (recaudado), navy on top (remainder = proyectado − recaudado). Total bar height = proyectado always.
+- Tooltip shows: Proyectado | Recaudado | Cumplimiento %
+- Desglose de Cartera card: each item `flex-1` (equal 25% height), fluid font sizes via `clamp()` with vh units — scales with viewport, never breaks layout
+- Layout: `max-w-[1440px]` centered, natural scroll restored (was briefly viewport-locked, reverted)
+
+**Reportes deleted**
+- `/reportes` page and `recaudo-chart.tsx` deleted — dashboard now shows the same proyectado vs recaudado chart
+- `getProyectadoVsReal` from `reportes.ts` reused in dashboard (no duplication)
+
+**Sidebar cleanup**
+- "Dashboard" → "Resumen" (Spanish)
+- Proyecciones moved to #2 slot (right below Resumen)
+- Usuarios and Configuración hidden from nav (pages still exist at their URLs)
+
+**Admin user**
+- Password set for germanwarfare07@gmail.com: `Testadmin2025*` (via Supabase SQL crypt)
+
+### Decisions made
+- Recharts used directly (not Tremor) for all new charts — gives access to `radius`, `stackId`, `Cell`, custom tooltips without wrapper limitations
+- Stacked bar chosen over grouped bars: saves horizontal space, visually intuitive (green "fills up" the navy projection)
+- `clamp(min, Xvh, max)` for fluid typography inside fixed-height flex cards — pure CSS, no JS resize observers needed
+- Reportes removed entirely rather than redirected — no value having a separate page with same data as dashboard
+
+### Next session
+- Review remaining routes live: /clientes, /clientes/[id], /mora, /gastos, /pagos, /facturas, /medidores
+- Commit all session changes + push to Vercel
+- Test CRON_SECRET endpoint
+- Add Vercel domain to Supabase Auth redirect URLs
+- Linear cleanup: WOR-43/44/45 (wrong workspace), CKR-1→4
+
+---
+
 ## 2026-04-16 — Project Setup Session
 
 ### What happened
