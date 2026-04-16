@@ -28,11 +28,13 @@ async function getMoraStats() {
 
   const rows = await execute(`
     SELECT
-      COALESCE(SUM(valor_vencido), 0)::numeric          AS total_mora,
-      COALESCE(SUM(saldo), 0)::numeric                  AS total_saldo,
-      COALESCE(SUM(interes_acumulado), 0)::numeric      AS total_interes,
-      COUNT(DISTINCT tenant_id)::int                    AS clientes_en_mora,
-      ROUND(AVG(NULLIF(dias_mora, 0)), 0)::numeric      AS avg_dias_mora
+      COALESCE(SUM(valor_vencido), 0)::numeric                                          AS total_mora,
+      COALESCE(SUM(saldo), 0)::numeric                                                  AS total_saldo,
+      COALESCE(SUM(interes_acumulado), 0)::numeric                                      AS total_interes,
+      COUNT(DISTINCT tenant_id)::int                                                    AS clientes_en_mora,
+      ROUND(AVG(NULLIF(dias_mora, 0)), 0)::numeric                                      AS avg_dias_mora,
+      COALESCE(SUM(CASE WHEN dias_mora > 60 THEN valor_vencido ELSE 0 END), 0)::numeric AS mora_critica,
+      COALESCE(SUM(CASE WHEN dias_mora BETWEEN ${grace + 1} AND 60 THEN valor_vencido ELSE 0 END), 0)::numeric AS mora_activa
     FROM cartera
     WHERE valor_vencido > 0 AND dias_mora > ${grace}
   `)
@@ -44,5 +46,7 @@ async function getMoraStats() {
     totalInteres:    Number(r.total_interes ?? 0),
     clientesEnMora:  Number(r.clientes_en_mora ?? 0),
     avgDiasMora:     Number(r.avg_dias_mora ?? 0),
+    moraCritica:     Number(r.mora_critica ?? 0),
+    moraActiva:      Number(r.mora_activa ?? 0),
   }
 }

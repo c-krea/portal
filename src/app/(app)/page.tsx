@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/layout/page-header"
 import { RendimientoChart } from "@/components/dashboard/rendimiento-chart"
 import { getDashboardData } from "@/lib/data/dashboard"
 import { formatCOP, formatPercent } from "@/lib/formatters"
-import { AlertTriangle, TrendingUp, Clock, Calendar } from "lucide-react"
+import { AlertTriangle, TrendingUp, Clock, Flame } from "lucide-react"
 
 export default async function DashboardPage() {
   const { portfolio, mora, chart } = await getDashboardData()
@@ -22,36 +22,36 @@ export default async function DashboardPage() {
 
   const desglose = [
     {
-      icon: AlertTriangle,
+      icon: Flame,
       iconBg: "bg-rose-50",
       iconColor: "text-rose-500",
-      label: "Total en Mora",
-      value: formatCOP(mora.totalMora),
-      subtext: `${mora.clientesEnMora} clientes`,
+      label: "Mora Crítica",
+      value: formatCOP(mora.moraCritica),
+      subtext: "Más de 2 meses",
+    },
+    {
+      icon: AlertTriangle,
+      iconBg: "bg-amber-50",
+      iconColor: "text-amber-500",
+      label: "Mora Activa",
+      value: formatCOP(mora.moraActiva),
+      subtext: "1 a 2 meses",
     },
     {
       icon: TrendingUp,
       iconBg: "bg-emerald-50",
       iconColor: "text-emerald-500",
-      label: "Intereses Acumulados",
+      label: "Intereses",
       value: formatCOP(mora.totalInteres),
-      subtext: "Por mora",
+      subtext: "Acumulados por mora",
     },
     {
       icon: Clock,
-      iconBg: "bg-amber-50",
-      iconColor: "text-amber-500",
-      label: "Prom. Días en Mora",
-      value: `${mora.avgDiasMora} días`,
-      subtext: "Promedio general",
-    },
-    {
-      icon: Calendar,
       iconBg: "bg-blue-50",
       iconColor: "text-blue-500",
-      label: "Saldo Total Cartera",
-      value: formatCOP(mora.totalSaldo),
-      subtext: "Cartera activa",
+      label: "Promedio de Días",
+      value: `${mora.avgDiasMora} días`,
+      subtext: "En mora",
     },
   ]
 
@@ -60,7 +60,7 @@ export default async function DashboardPage() {
       <PageHeader title="Resumen del Portafolio" />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
             Recaudo Proyectado 2026
@@ -95,16 +95,6 @@ export default async function DashboardPage() {
 
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-            Saldo Pendiente
-          </p>
-          <p className="mt-1 text-2xl font-bold text-slate-900">
-            {formatCOP(mora.totalSaldo)}
-          </p>
-          <p className="mt-1 text-xs text-slate-400">Cartera total activa</p>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
             Clientes en Mora
           </p>
           <p className="mt-1 text-2xl font-bold text-rose-500">
@@ -129,7 +119,7 @@ export default async function DashboardPage() {
       <div className="mt-4 flex gap-4">
         {/* Desglose — fixed 350px wide */}
         <div className="flex h-[480px] w-[350px] shrink-0 flex-col rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="shrink-0 text-sm font-semibold text-slate-900">Desglose de Cartera</p>
+          <p className="shrink-0 text-sm font-semibold text-slate-900">Desglose de Mora</p>
           <div className="mt-3 flex min-h-0 flex-1 flex-col">
             {desglose.map(({ icon: Icon, iconBg, iconColor, label, value, subtext }, idx) => (
               <div
