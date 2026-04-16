@@ -74,7 +74,7 @@ export function MoraTable({ data }: { data: MoraRow[] }) {
             </tr>
           ) : (
             sorted.map((row) => (
-              <tr key={row.tenantId} className="hover:bg-slate-50">
+              <tr key={`${row.tenantId}-${row.unitNumber ?? ''}`} className="hover:bg-slate-50">
                 <td className="px-4 py-3">
                   <Link
                     href={`/clientes/${row.tenantId}`}
