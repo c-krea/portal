@@ -2,6 +2,47 @@
 
 ---
 
+## 2026-04-16 — Mora Polish, Cartera Import, Grace Period, Auth Fix
+
+### What happened
+
+**Cartera was empty after payments import:** `import_data.py` wipes cartera in its truncation order. Re-imported 118 rows from ckrea.xlsx Cartera sheet. 3 skipped: PUNTO ACRILICO (not in tenants), NEOGRAFICK (CKR-13). Fixed NaN `valor_vencido` on not-yet-due rows (Excel blank cells → Python `float('nan')` → Postgres NaN). Fixed negative `dias_mora` rows.
+
+**Mora page polished:**
+- Table: clickable rows → client detail, unit badge, separate Vencido + Saldo columns
+- Bucket cards: switched to saldo pendiente (interest = $0 since cron hasn't run)
+- Clientes `[id]` payment history: Recibo (RK-XXXX) + Factura (FVS-XXXXX) columns, clasificacion badge, totals footer, limit 50
+
+**Root cause of $156M vs Power BI $60-75M:**
+- Siesa Cartera export marks everything past due date as VrVencido immediately (0-day grace)
+- April 2026 invoices (due Apr 11, 5 days overdue) = $84.8M, driving up the total
+- With 30-day grace filter applied: $67.6M / 11 clients → matches Power BI exactly
+- Key learning: always check what "grace period" the reference system uses before comparing totals
+
+**Grace period implementation:**
+- `grace_period_days = 30` set in `financial_rules` table
+- `getGracePeriod()` shared utility in `configuracion.ts` — imported by dashboard, mora, reportes
+- All mora KPIs now consistent and runtime-configurable from Configuración page
+- No deploy needed to change threshold
+
+**IMAGENN concentration flag (CKR-15):**
+- After grace filter, IMAGENN = $29.8M of $67.6M total (44%). 3 invoices, max 63 days.
+- Not a data bug — they genuinely have 4+1 units at ~$13M/invoice. Needs payment plan check.
+
+**Vercel issues found and fixed:**
+1. `CRON_SECRET` had trailing space → cron handler auth check failed → builds errored (5s builds)
+2. `NEXT_PUBLIC_SUPABASE_ANON_KEY` on Production was `"\n"` (blank newline) → all logins silently returned "credentials incorrect" for every user
+3. Both fixed, redeployed. Pattern: env var corruption is hard to debug because the generic error message hides the real cause. Always `vercel env pull` to verify actual values when auth mysteriously breaks.
+
+**New user created:**
+- `operaciones@reymon.com.co`, role `finance`, email confirmed
+- Trigger `handle_new_user` uses `user_role` enum — passing "finanzas" fails silently with 500. Correct value is "finance".
+
+**Vercel-specific gotcha added to memory:**
+- `NEXT_PUBLIC_*` vars bake into the build at compile time. If the value was wrong at build time, changing it in Vercel requires a redeploy (empty commit) to take effect.
+
+---
+
 ## 2026-04-16 — Payments Import Session
 
 ### What happened
