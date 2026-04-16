@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import { PageHeader } from "@/components/layout/page-header"
 import { LecturaForm } from "@/components/medidores/lectura-form"
 import { getUnitsWithMeters, getMeterReadings } from "@/lib/data/medidores"

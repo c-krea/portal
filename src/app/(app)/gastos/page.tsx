@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import { PageHeader } from "@/components/layout/page-header"
 import { GastosTable } from "@/components/gastos/gastos-table"
 import { getGastoRows, getGastoSummary } from "@/lib/data/gastos"

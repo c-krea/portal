@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import { PageHeader } from "@/components/layout/page-header"
 import { GenerateForm } from "@/components/facturas/generate-form"
 import { getFacturas, getFacturaSummary, getAvailablePeriodos } from "@/lib/data/facturas"

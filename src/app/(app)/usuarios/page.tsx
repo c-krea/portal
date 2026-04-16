@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import { PageHeader } from "@/components/layout/page-header"
 import { getUsuarios } from "@/lib/data/usuarios"
 import { cn } from "@/lib/utils"

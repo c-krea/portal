@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import { PageHeader } from "@/components/layout/page-header"
 import { RegistrarPagoForm } from "@/components/pagos/registrar-pago-form"
 import { getRecentPagos, getActiveTenantOptions } from "@/lib/data/pagos"

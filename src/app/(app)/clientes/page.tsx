@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import { PageHeader } from "@/components/layout/page-header"
 import { ClientesTable } from "@/components/clientes/clientes-table"
 import { getClienteRows } from "@/lib/data/clientes"
