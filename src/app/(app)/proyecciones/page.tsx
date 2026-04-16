@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import { PageHeader } from "@/components/layout/page-header"
 import { GenerateProyeccionesForm } from "@/components/proyecciones/generate-form"
 import { getProyeccionSummaries, getContractsForProjection } from "@/lib/data/proyecciones"
