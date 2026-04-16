@@ -1,5 +1,6 @@
 import { db } from "@/lib/db/client"
 import { sql } from "drizzle-orm"
+import { getGracePeriod } from "@/lib/data/configuracion"
 
 const MONTH_LABELS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
 
@@ -133,11 +134,13 @@ export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal
 }
 
 export async function getReporteSummary(year = 2026): Promise<ReporteSummary> {
+  const grace = await getGracePeriod()
+
   const [carteraRow, pagosRow] = await Promise.all([
     db.execute(sql`
       SELECT
         COALESCE(SUM(saldo), 0)::numeric             AS total_cartera,
-        COALESCE(SUM(valor_vencido), 0)::numeric     AS total_vencido,
+        COALESCE(SUM(valor_vencido) FILTER (WHERE dias_mora > ${grace}), 0)::numeric AS total_vencido,
         COALESCE(SUM(interes_acumulado), 0)::numeric AS total_interes
       FROM cartera
     `),

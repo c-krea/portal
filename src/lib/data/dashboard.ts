@@ -1,7 +1,8 @@
 import { db } from "@/lib/db/client"
-import { contracts, cartera } from "@/lib/db/schema"
-import { sql, inArray, gt } from "drizzle-orm"
+import { contracts } from "@/lib/db/schema"
+import { sql, inArray } from "drizzle-orm"
 import { getProyectadoVsReal } from "@/lib/data/reportes"
+import { getGracePeriod } from "@/lib/data/configuracion"
 
 export async function getDashboardData() {
   const [portfolio, mora, chart] = await Promise.all([
@@ -34,23 +35,26 @@ async function getPortfolioStats() {
 }
 
 async function getMoraStats() {
-  const rows = await db
-    .select({
-      totalMora: sql<string>`COALESCE(SUM(${cartera.valorVencido}), 0)`,
-      totalSaldo: sql<string>`COALESCE(SUM(${cartera.saldo}), 0)`,
-      totalInteres: sql<string>`COALESCE(SUM(${cartera.interesAcumulado}), 0)`,
-      clientesEnMora: sql<number>`COUNT(DISTINCT ${cartera.tenantId})`,
-      avgDiasMora: sql<string>`ROUND(AVG(NULLIF(${cartera.diasMora}, 0)), 0)`,
-    })
-    .from(cartera)
-    .where(gt(cartera.valorVencido, "0"))
+  const grace = await getGracePeriod()
 
+  const rows = await db.execute(sql`
+    SELECT
+      COALESCE(SUM(valor_vencido), 0)::numeric          AS total_mora,
+      COALESCE(SUM(saldo), 0)::numeric                  AS total_saldo,
+      COALESCE(SUM(interes_acumulado), 0)::numeric      AS total_interes,
+      COUNT(DISTINCT tenant_id)::int                    AS clientes_en_mora,
+      ROUND(AVG(NULLIF(dias_mora, 0)), 0)::numeric      AS avg_dias_mora
+    FROM cartera
+    WHERE valor_vencido > 0 AND dias_mora > ${grace}
+  `)
+
+  const r = (rows as Array<Record<string, unknown>>)[0] ?? {}
   return {
-    totalMora: Number(rows[0]?.totalMora ?? 0),
-    totalSaldo: Number(rows[0]?.totalSaldo ?? 0),
-    totalInteres: Number(rows[0]?.totalInteres ?? 0),
-    clientesEnMora: Number(rows[0]?.clientesEnMora ?? 0),
-    avgDiasMora: Number(rows[0]?.avgDiasMora ?? 0),
+    totalMora:       Number(r.total_mora ?? 0),
+    totalSaldo:      Number(r.total_saldo ?? 0),
+    totalInteres:    Number(r.total_interes ?? 0),
+    clientesEnMora:  Number(r.clientes_en_mora ?? 0),
+    avgDiasMora:     Number(r.avg_dias_mora ?? 0),
   }
 }
 

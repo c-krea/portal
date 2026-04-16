@@ -1,14 +1,6 @@
 import { db } from "@/lib/db/client"
 import { sql } from "drizzle-orm"
-
-async function getGracePeriod(): Promise<number> {
-  const rows = await db.execute(sql`
-    SELECT rule_value::numeric FROM financial_rules
-    WHERE rule_key = 'grace_period_days'
-    LIMIT 1
-  `)
-  return Number((rows as Array<Record<string, unknown>>)[0]?.rule_value ?? 0)
-}
+import { getGracePeriod } from "@/lib/data/configuracion"
 
 export type MoraRow = {
   tenantId: string

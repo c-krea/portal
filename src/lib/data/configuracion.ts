@@ -18,6 +18,15 @@ export const RULE_LABELS: Record<string, { label: string; unit: string; hint: st
   ipc_increment_pct:   { label: "Incremento IPC anual",   unit: "%",        hint: "Porcentaje anual (ej: 5.1)" },
 }
 
+export async function getGracePeriod(): Promise<number> {
+  const rows = await db.execute(sql`
+    SELECT rule_value::numeric FROM financial_rules
+    WHERE rule_key = 'grace_period_days'
+    LIMIT 1
+  `)
+  return Number((rows as Array<Record<string, unknown>>)[0]?.rule_value ?? 0)
+}
+
 export async function getFinancialRules(companyId: string): Promise<FinancialRule[]> {
   const rows = await db
     .select({
