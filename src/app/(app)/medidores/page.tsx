@@ -4,8 +4,7 @@ import { PageHeader } from "@/components/layout/page-header"
 import { LecturaForm } from "@/components/medidores/lectura-form"
 import { getUnitsWithMeters, getMeterReadings } from "@/lib/data/medidores"
 import { formatCOP } from "@/lib/formatters"
-import { db } from "@/lib/db/client"
-import { sql } from "drizzle-orm"
+import { execute } from "@/lib/db/executor"
 
 export default async function MedidoresPage({
   searchParams,
@@ -14,7 +13,7 @@ export default async function MedidoresPage({
 }) {
   const { periodo } = await searchParams
 
-  const companies = await db.execute(sql`SELECT id FROM companies LIMIT 1`)
+  const companies = await execute(`SELECT id FROM companies LIMIT 1`)
   const companyId = String(companies[0].id)
 
   const [units, readings] = await Promise.all([

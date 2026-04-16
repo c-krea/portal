@@ -1,5 +1,4 @@
-import { db } from "@/lib/db/client"
-import { sql } from "drizzle-orm"
+import { execute, supabaseAdmin } from "@/lib/db/executor"
 
 export type UnitWithMeter = {
   unitId: string
@@ -26,7 +25,7 @@ export type MeterReadingRow = {
 }
 
 export async function getUnitsWithMeters(companyId: string): Promise<UnitWithMeter[]> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       u.id                                               AS unit_id,
       u.unit_number,
@@ -38,7 +37,7 @@ export async function getUnitsWithMeters(companyId: string): Promise<UnitWithMet
     FROM units u
     LEFT JOIN contracts c
            ON c.unit_id = u.id
-          AND c.company_id = ${companyId}::uuid
+          AND c.company_id = '${companyId}'::uuid
           AND c.status IN ('activo', 'critico')
     LEFT JOIN tenants t ON c.tenant_id = t.id
     LEFT JOIN LATERAL (
@@ -48,7 +47,7 @@ export async function getUnitsWithMeters(companyId: string): Promise<UnitWithMet
       ORDER BY periodo DESC
       LIMIT 1
     ) mr_last ON true
-    WHERE u.company_id = ${companyId}::uuid
+    WHERE u.company_id = '${companyId}'::uuid
       AND u.has_electricity_meter = true
     ORDER BY u.unit_number
   `)
@@ -69,7 +68,7 @@ export async function getMeterReadings(
   companyId: string,
   periodo?: string,
 ): Promise<MeterReadingRow[]> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       mr.id,
       mr.unit_id,
@@ -83,8 +82,8 @@ export async function getMeterReadings(
       mr.notas
     FROM meter_readings mr
     JOIN units u ON mr.unit_id = u.id
-    WHERE mr.company_id = ${companyId}::uuid
-      ${periodo ? sql`AND mr.periodo = ${periodo}` : sql``}
+    WHERE mr.company_id = '${companyId}'::uuid
+      ${periodo ? `AND mr.periodo = '${periodo}'` : ``}
     ORDER BY mr.periodo DESC, u.unit_number
   `)
 
@@ -100,4 +99,34 @@ export async function getMeterReadings(
     totalEnergia:    Number(r.total_energia),
     notas:           r.notas ? String(r.notas) : null,
   }))
+}
+
+export async function upsertMeterReading(reading: {
+  companyId: string
+  unitId: string
+  periodo: string
+  lecturaAnterior: string
+  lecturaActual: string
+  kwh: string
+  tarifaKwh: string
+  totalEnergia: string
+  notas: string | null
+}): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("meter_readings")
+    .upsert(
+      {
+        company_id:       reading.companyId,
+        unit_id:          reading.unitId,
+        periodo:          reading.periodo,
+        lectura_anterior: reading.lecturaAnterior,
+        lectura_actual:   reading.lecturaActual,
+        kwh:              reading.kwh,
+        tarifa_kwh:       reading.tarifaKwh,
+        total_energia:    reading.totalEnergia,
+        notas:            reading.notas,
+      },
+      { onConflict: "unit_id,periodo" },
+    )
+  if (error) throw new Error(error.message)
 }

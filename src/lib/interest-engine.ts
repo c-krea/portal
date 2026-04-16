@@ -10,9 +10,7 @@
  *   - Updates invoice.subtotal_interes (cumulative) + status → 'vencida'
  */
 
-import { db } from "@/lib/db/client"
-import { invoices, interestAccruals } from "@/lib/db/schema"
-import { eq, sql } from "drizzle-orm"
+import { execute, supabaseAdmin } from "@/lib/db/executor"
 
 const DAILY_RATE = 0.0005 // 0.05%/day = 1.5%/month
 
@@ -45,7 +43,7 @@ export async function runInterestAccrual(
   accrualDate: string, // YYYY-MM-DD
 ): Promise<InterestAccrualSummary> {
   // Fetch all overdue invoices: emitida/parcial/vencida with fecha_vencimiento < accrualDate AND saldo > 0
-  const overdueRows = await db.execute(sql`
+  const overdueRows = await execute(`
     SELECT
       i.id,
       i.contract_id,
@@ -62,17 +60,17 @@ export async function runInterestAccrual(
     JOIN contracts c ON i.contract_id = c.id
     JOIN tenants t   ON i.tenant_id   = t.id
     JOIN units u     ON i.unit_id     = u.id
-    WHERE i.company_id = ${companyId}::uuid
+    WHERE i.company_id = '${companyId}'::uuid
       AND i.status IN ('emitida', 'parcial', 'vencida')
       AND i.saldo::numeric > 0
-      AND i.fecha_vencimiento < ${accrualDate}::date
+      AND i.fecha_vencimiento < '${accrualDate}'::date
     ORDER BY i.fecha_vencimiento
   `)
 
   // Fetch which invoices already have an accrual for this date
-  const existingAccruals = await db.execute(sql`
+  const existingAccruals = await execute(`
     SELECT DISTINCT invoice_id FROM interest_accruals
-    WHERE accrual_date = ${accrualDate}::date
+    WHERE accrual_date = '${accrualDate}'::date
   `)
   const alreadyAccrued = new Set(
     (existingAccruals as Array<Record<string, unknown>>).map((r) => String(r.invoice_id)),
@@ -114,25 +112,29 @@ export async function runInterestAccrual(
       const cumulativeInterest = prevCumulative + interestAmount
 
       // Insert accrual row
-      await db.insert(interestAccruals).values({
-        invoiceId,
-        contractId: String(row.contract_id),
-        accrualDate,
-        daysOverdue,
-        overdueBalance: String(overdueBalance),
-        dailyRate: String(DAILY_RATE),
-        interestAmount: String(interestAmount),
-        cumulativeInterest: String(cumulativeInterest),
-      })
+      const { error: accrualError } = await supabaseAdmin
+        .from("interest_accruals")
+        .insert({
+          invoice_id:          invoiceId,
+          contract_id:         String(row.contract_id),
+          accrual_date:        accrualDate,
+          days_overdue:        daysOverdue,
+          overdue_balance:     String(overdueBalance),
+          daily_rate:          String(DAILY_RATE),
+          interest_amount:     String(interestAmount),
+          cumulative_interest: String(cumulativeInterest),
+        })
+      if (accrualError) throw new Error(accrualError.message)
 
       // Update invoice: subtotal_interes + status → vencida
-      await db
-        .update(invoices)
-        .set({
-          subtotalInteres: String(cumulativeInterest),
-          status: "vencida",
+      const { error: updateError } = await supabaseAdmin
+        .from("invoices")
+        .update({
+          subtotal_interes: String(cumulativeInterest),
+          status:           "vencida",
         })
-        .where(eq(invoices.id, invoiceId))
+        .eq("id", invoiceId)
+      if (updateError) throw new Error(updateError.message)
 
       results.push({
         invoiceId,

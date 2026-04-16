@@ -1,8 +1,6 @@
 "use server"
 
-import { db } from "@/lib/db/client"
-import { financialRules } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
+import { supabaseAdmin } from "@/lib/db/executor"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -30,10 +28,11 @@ export async function updateFinancialRule(
   }
 
   try {
-    await db
-      .update(financialRules)
-      .set({ ruleValue: String(parsed.data.value) })
-      .where(eq(financialRules.id, parsed.data.id))
+    const { error } = await supabaseAdmin
+      .from("financial_rules")
+      .update({ rule_value: String(parsed.data.value) })
+      .eq("id", parsed.data.id)
+    if (error) throw new Error(error.message)
 
     revalidatePath("/configuracion")
     return { success: true }

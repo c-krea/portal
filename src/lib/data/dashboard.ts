@@ -1,6 +1,4 @@
-import { db } from "@/lib/db/client"
-import { contracts } from "@/lib/db/schema"
-import { sql, inArray } from "drizzle-orm"
+import { execute } from "@/lib/db/executor"
 import { getProyectadoVsReal } from "@/lib/data/reportes"
 import { getGracePeriod } from "@/lib/data/configuracion"
 
@@ -14,30 +12,21 @@ export async function getDashboardData() {
 }
 
 async function getPortfolioStats() {
-  const [projRow, clientRow] = await Promise.all([
-    db.execute(sql`
-      SELECT ROUND(
-        COALESCE(SUM(canon_proyectado - descuento_proyectado - pronto_pago_proyectado), 0) * 1.19
-      ) AS portfolio_total
-      FROM projections
-      WHERE year = 2026
-    `),
-    db
-      .select({ activeClients: sql<number>`COUNT(DISTINCT ${contracts.tenantId})` })
-      .from(contracts)
-      .where(inArray(contracts.status, ["activo", "critico"])),
+  const [rows1, rows2] = await Promise.all([
+    execute(`SELECT ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado - pronto_pago_proyectado), 0) * 1.19) AS portfolio_total FROM projections WHERE year = 2026`),
+    execute(`SELECT COUNT(DISTINCT tenant_id)::int AS active_clients FROM contracts WHERE status IN ('activo', 'critico')`),
   ])
 
   return {
-    portfolioTotal: Number((projRow as Array<Record<string, unknown>>)[0]?.portfolio_total ?? 0),
-    activeClients: Number(clientRow[0]?.activeClients ?? 0),
+    portfolioTotal: Number(rows1[0]?.portfolio_total ?? 0),
+    activeClients: Number(rows2[0]?.active_clients ?? 0),
   }
 }
 
 async function getMoraStats() {
   const grace = await getGracePeriod()
 
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       COALESCE(SUM(valor_vencido), 0)::numeric          AS total_mora,
       COALESCE(SUM(saldo), 0)::numeric                  AS total_saldo,
@@ -57,4 +46,3 @@ async function getMoraStats() {
     avgDiasMora:     Number(r.avg_dias_mora ?? 0),
   }
 }
-

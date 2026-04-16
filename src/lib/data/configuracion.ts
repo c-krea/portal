@@ -1,6 +1,4 @@
-import { db } from "@/lib/db/client"
-import { financialRules } from "@/lib/db/schema"
-import { eq, sql } from "drizzle-orm"
+import { execute, supabaseAdmin } from "@/lib/db/executor"
 
 export type FinancialRule = {
   id: string
@@ -19,7 +17,7 @@ export const RULE_LABELS: Record<string, { label: string; unit: string; hint: st
 }
 
 export async function getGracePeriod(): Promise<number> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT rule_value::numeric FROM financial_rules
     WHERE rule_key = 'grace_period_days'
     LIMIT 1
@@ -28,19 +26,16 @@ export async function getGracePeriod(): Promise<number> {
 }
 
 export async function getFinancialRules(companyId: string): Promise<FinancialRule[]> {
-  const rows = await db
-    .select({
-      id: financialRules.id,
-      ruleKey: financialRules.ruleKey,
-      ruleValue: financialRules.ruleValue,
-      description: financialRules.description,
-    })
-    .from(financialRules)
-    .where(eq(financialRules.companyId, sql`${companyId}::uuid`))
-    .orderBy(financialRules.ruleKey)
-
-  return rows.map((r) => ({
-    ...r,
-    ruleValue: Number(r.ruleValue),
+  const { data, error } = await supabaseAdmin
+    .from("financial_rules")
+    .select("id, rule_key, rule_value, description")
+    .eq("company_id", companyId)
+    .order("rule_key")
+  if (error) throw new Error(error.message)
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    ruleKey: r.rule_key as string,
+    ruleValue: Number(r.rule_value),
+    description: r.description as string | null,
   }))
 }

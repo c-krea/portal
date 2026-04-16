@@ -1,5 +1,4 @@
-import { db } from "@/lib/db/client"
-import { sql } from "drizzle-orm"
+import { execute } from "@/lib/db/executor"
 
 export type PagoRow = {
   id: string
@@ -22,7 +21,7 @@ export type TenantOption = {
 }
 
 export async function getRecentPagos(limit = 30): Promise<PagoRow[]> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       p.id,
       p.tenant_id,
@@ -58,7 +57,7 @@ export async function getRecentPagos(limit = 30): Promise<PagoRow[]> {
 }
 
 export async function getActiveTenantOptions(): Promise<TenantOption[]> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT DISTINCT ON (t.id)
       t.id,
       COALESCE(t.nombre_corto, t.razon_social)  AS label,

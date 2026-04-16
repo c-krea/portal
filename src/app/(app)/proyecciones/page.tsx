@@ -11,12 +11,10 @@ import {
 } from "@/lib/data/proyecciones"
 import { getFinancialRules } from "@/lib/data/configuracion"
 import { formatCOP, formatPercent } from "@/lib/formatters"
-import { db } from "@/lib/db/client"
-import { sql } from "drizzle-orm"
-
+import { execute } from "@/lib/db/executor"
 
 export default async function ProyeccionesPage() {
-  const companies = await db.execute(sql`SELECT id FROM companies LIMIT 1`)
+  const companies = await execute(`SELECT id FROM companies LIMIT 1`)
   const companyId = String((companies as Array<Record<string, unknown>>)[0].id)
 
   const year = 2026

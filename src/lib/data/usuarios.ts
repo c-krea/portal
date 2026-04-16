@@ -1,5 +1,4 @@
-import { db } from "@/lib/db/client"
-import { sql } from "drizzle-orm"
+import { execute } from "@/lib/db/executor"
 
 export type UsuarioRow = {
   id: string
@@ -13,7 +12,7 @@ export type UsuarioRow = {
 }
 
 export async function getUsuarios(): Promise<UsuarioRow[]> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       p.id,
       p.full_name,

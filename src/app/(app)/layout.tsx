@@ -1,9 +1,7 @@
 import { Sidebar } from "@/components/layout/sidebar"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { db } from "@/lib/db/client"
-import { profiles } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
+import { supabaseAdmin } from "@/lib/db/executor"
 import { signOut } from "@/app/(auth)/login/actions"
 
 export default async function AppLayout({
@@ -19,14 +17,12 @@ export default async function AppLayout({
   if (!user) redirect("/login")
 
   // Load profile for display name
-  const profileRows = await db
-    .select({ fullName: profiles.fullName, role: profiles.role })
-    .from(profiles)
-    .where(eq(profiles.id, user.id))
-    .limit(1)
-
-  const profile = profileRows[0] ?? null
-  const displayName = profile?.fullName ?? user.email ?? "Usuario"
+  const { data: profileData } = await supabaseAdmin
+    .from("profiles")
+    .select("full_name, role")
+    .eq("id", user.id)
+    .single()
+  const displayName = profileData?.full_name ?? user.email ?? "Usuario"
 
   return (
     <>

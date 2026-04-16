@@ -1,8 +1,6 @@
 "use server"
 
-import { db } from "@/lib/db/client"
-import { projections } from "@/lib/db/schema"
-import { sql } from "drizzle-orm"
+import { execute, supabaseAdmin } from "@/lib/db/executor"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { getContractsForProjection } from "@/lib/data/proyecciones"
@@ -36,7 +34,7 @@ export async function generarProyecciones(
   const multiplier = 1 + ipcRate / 100
 
   try {
-    const companies = await db.execute(sql`SELECT id FROM companies LIMIT 1`)
+    const companies = await execute(`SELECT id FROM companies LIMIT 1`)
     const companyId = String((companies as Array<Record<string, unknown>>)[0].id)
 
     const contracts = await getContractsForProjection(companyId, year)
@@ -56,20 +54,20 @@ export async function generarProyecciones(
         const newPP        = Math.round((newCanon - newDescuento) * (c.prontoPagoPct / 100))
 
         const rows = Array.from({ length: 12 }, (_, i) => ({
-          companyId,
-          contractId:          c.contractId,
-          unitId:              c.unitId,
+          company_id:            companyId,
+          contract_id:           c.contractId,
+          unit_id:               c.unitId,
           year,
-          month:               i + 1,
-          canonProyectado:     String(newCanon),
-          descuentoProyectado: String(newDescuento),
-          prontoPagoProyectado: String(newPP),
+          month:                 i + 1,
+          canon_proyectado:      String(newCanon),
+          descuento_proyectado:  String(newDescuento),
+          pronto_pago_proyectado: String(newPP),
         }))
 
-        await db
-          .insert(projections)
-          .values(rows)
-          .onConflictDoNothing() // unique (unit_id, year, month) — safe idempotent
+        const { error } = await supabaseAdmin
+          .from("projections")
+          .upsert(rows, { ignoreDuplicates: true })
+        if (error) throw new Error(error.message)
 
         created += 12
       } catch (e) {

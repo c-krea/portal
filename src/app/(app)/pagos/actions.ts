@@ -1,8 +1,6 @@
 "use server"
 
-import { db } from "@/lib/db/client"
-import { payments } from "@/lib/db/schema"
-import { sql } from "drizzle-orm"
+import { execute, supabaseAdmin } from "@/lib/db/executor"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { reconcilePayment } from "@/lib/reconciliation"
@@ -41,24 +39,25 @@ export async function registrarPago(
   const { tenantId, fechaRecaudo, valorAplicado, concepto, notes } = parsed.data
 
   try {
-    const companies = await db.execute(sql`SELECT id FROM companies LIMIT 1`)
+    const companies = await execute(`SELECT id FROM companies LIMIT 1`)
     const companyId = String(companies[0].id)
 
     // Insert payment record
-    const inserted = await db
-      .insert(payments)
-      .values({
-        companyId,
-        tenantId,
-        fechaRecaudo,
-        valorAplicado: String(valorAplicado),
-        valorFinal: String(valorAplicado),
-        concepto: concepto ?? null,
-        notes: notes ?? null,
+    const { data: insertedData, error: insertError } = await supabaseAdmin
+      .from("payments")
+      .insert({
+        company_id:     companyId,
+        tenant_id:      tenantId,
+        fecha_recaudo:  fechaRecaudo,
+        valor_aplicado: String(valorAplicado),
+        valor_final:    String(valorAplicado),
+        concepto:       concepto ?? null,
+        notes:          notes ?? null,
       })
-      .returning({ id: payments.id })
+      .select("id")
+    if (insertError) throw new Error(insertError.message)
 
-    const paymentId = inserted[0].id
+    const paymentId = String((insertedData as Array<Record<string, unknown>>)[0].id)
 
     // Reconcile: invoices FIFO (with PP) then cartera FIFO
     const reconciliation = await reconcilePayment(tenantId, paymentId, valorAplicado, fechaRecaudo)

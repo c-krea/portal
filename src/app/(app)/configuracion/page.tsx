@@ -3,11 +3,10 @@ export const dynamic = "force-dynamic"
 import { PageHeader } from "@/components/layout/page-header"
 import { RuleForm } from "@/components/configuracion/rule-form"
 import { getFinancialRules, RULE_LABELS } from "@/lib/data/configuracion"
-import { db } from "@/lib/db/client"
-import { sql } from "drizzle-orm"
+import { execute } from "@/lib/db/executor"
 
 export default async function ConfiguracionPage() {
-  const companies = await db.execute(sql`SELECT id FROM companies LIMIT 1`)
+  const companies = await execute(`SELECT id FROM companies LIMIT 1`)
   const companyId = String(companies[0].id)
   const rules = await getFinancialRules(companyId)
 

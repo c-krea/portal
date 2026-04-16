@@ -1,5 +1,4 @@
-import { db } from "@/lib/db/client"
-import { sql } from "drizzle-orm"
+import { execute } from "@/lib/db/executor"
 import { getGracePeriod } from "@/lib/data/configuracion"
 
 const MONTH_LABELS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
@@ -36,7 +35,7 @@ export type ReporteSummary = {
 }
 
 export async function getAgingBuckets(): Promise<AgingBucket[]> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       CASE
         WHEN dias_mora <= 0  THEN '0'
@@ -77,7 +76,7 @@ export async function getAgingBuckets(): Promise<AgingBucket[]> {
 }
 
 export async function getMonthlyCollections(year = 2026): Promise<MonthlyCollection[]> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       EXTRACT(MONTH FROM fecha_recaudo)::int AS month,
       COALESCE(SUM(valor_final), 0)::numeric AS recaudado,
@@ -102,7 +101,7 @@ export async function getMonthlyCollections(year = 2026): Promise<MonthlyCollect
 
 export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal[]> {
   const [proyRows, recRows] = await Promise.all([
-    db.execute(sql`
+    execute(`
       SELECT
         month,
         ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado - pronto_pago_proyectado), 0) * 1.19)::numeric AS proyectado
@@ -111,7 +110,7 @@ export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal
       GROUP BY month
       ORDER BY month
     `),
-    db.execute(sql`
+    execute(`
       SELECT
         EXTRACT(MONTH FROM fecha_recaudo)::int AS month,
         COALESCE(SUM(valor_final), 0)::numeric AS recaudado
@@ -137,14 +136,14 @@ export async function getReporteSummary(year = 2026): Promise<ReporteSummary> {
   const grace = await getGracePeriod()
 
   const [carteraRow, pagosRow] = await Promise.all([
-    db.execute(sql`
+    execute(`
       SELECT
         COALESCE(SUM(saldo), 0)::numeric             AS total_cartera,
         COALESCE(SUM(valor_vencido) FILTER (WHERE dias_mora > ${grace}), 0)::numeric AS total_vencido,
         COALESCE(SUM(interes_acumulado), 0)::numeric AS total_interes
       FROM cartera
     `),
-    db.execute(sql`
+    execute(`
       SELECT COALESCE(SUM(valor_final), 0)::numeric AS total_recaudado
       FROM payments
       WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}

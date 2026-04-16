@@ -1,5 +1,4 @@
-import { db } from "@/lib/db/client"
-import { sql } from "drizzle-orm"
+import { execute } from "@/lib/db/executor"
 import { getGracePeriod } from "@/lib/data/configuracion"
 
 export type MoraRow = {
@@ -24,18 +23,18 @@ export async function getMoraSummary(): Promise<MoraSummary> {
   const grace = await getGracePeriod()
 
   const [carteraRes, invoiceRes, accrualRes] = await Promise.all([
-    db.execute(sql`
+    execute(`
       SELECT COALESCE(SUM(valor_vencido), 0)::numeric AS total
       FROM cartera WHERE valor_vencido > 0 AND dias_mora > ${grace}
     `),
-    db.execute(sql`
+    execute(`
       SELECT
         COALESCE(SUM(subtotal_interes), 0)::numeric AS total_interes,
         COUNT(*)::int                               AS count_vencidas
       FROM invoices
       WHERE status = 'vencida' AND saldo::numeric > 0
     `),
-    db.execute(sql`
+    execute(`
       SELECT MAX(accrual_date)::text AS last_date FROM interest_accruals
     `),
   ])
@@ -53,7 +52,7 @@ export async function getMoraSummary(): Promise<MoraSummary> {
 export async function getMoraRows(): Promise<MoraRow[]> {
   const grace = await getGracePeriod()
 
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       t.id                                         AS tenant_id,
       COALESCE(t.nombre_corto, t.razon_social)     AS cliente,

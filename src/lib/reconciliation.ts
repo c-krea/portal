@@ -9,9 +9,7 @@
  * PP: if payment date ≤ invoice.fecha_pronto_pago → deduct subtotal_pronto_pago from saldo.
  */
 
-import { db } from "@/lib/db/client"
-import { cartera, invoices, paymentApplications } from "@/lib/db/schema"
-import { eq, asc, sql } from "drizzle-orm"
+import { execute, supabaseAdmin } from "@/lib/db/executor"
 
 export type AllocationResult = {
   source: "cartera" | "invoice"
@@ -37,39 +35,38 @@ export async function reconcilePayment(
   fechaRecaudo: string,
 ): Promise<ReconciliationSummary> {
   // 1. Open portal invoices (borrador/emitida/parcial/vencida), oldest first
-  const openInvoices = await db
-    .select({
-      id: invoices.id,
-      periodo: invoices.periodo,
-      fechaEmision: invoices.fechaEmision,
-      fechaProntoPago: invoices.fechaProntoPago,
-      subtotalProntoPago: invoices.subtotalProntoPago,
-      subtotalInteres: invoices.subtotalInteres,
-      saldo: invoices.saldo,
-      status: invoices.status,
-    })
-    .from(invoices)
-    .where(
-      sql`${invoices.tenantId} = ${tenantId}::uuid
-        AND (${invoices.saldo}::numeric > 0 OR ${invoices.subtotalInteres}::numeric > 0)
-        AND ${invoices.status} IN ('borrador', 'emitida', 'parcial', 'vencida')`,
-    )
-    .orderBy(asc(sql`${invoices.fechaEmision}`))
+  const openInvoicesRows = await execute(`
+    SELECT
+      id,
+      periodo,
+      fecha_emision,
+      fecha_pronto_pago,
+      subtotal_pronto_pago::numeric AS subtotal_pronto_pago,
+      subtotal_interes::numeric     AS subtotal_interes,
+      saldo::numeric                AS saldo,
+      status
+    FROM invoices
+    WHERE tenant_id = '${tenantId}'::uuid
+      AND (saldo::numeric > 0 OR subtotal_interes::numeric > 0)
+      AND status IN ('borrador', 'emitida', 'parcial', 'vencida')
+    ORDER BY fecha_emision ASC
+  `)
 
   // 2. Open cartera (Siesa snapshot), oldest first
-  const openCartera = await db
-    .select({
-      id: cartera.id,
-      siesaFactura: cartera.siesaFactura,
-      fechaFactura: cartera.fechaFactura,
-      saldo: cartera.saldo,
-      valorVencido: cartera.valorVencido,
-    })
-    .from(cartera)
-    .where(
-      sql`${cartera.tenantId} = ${tenantId}::uuid AND ${cartera.saldo}::numeric > 0`,
-    )
-    .orderBy(asc(sql`${cartera.fechaFactura} NULLS LAST`))
+  const openCarteraRows = await execute(`
+    SELECT
+      id,
+      siesa_factura,
+      fecha_factura,
+      saldo::numeric        AS saldo,
+      valor_vencido::numeric AS valor_vencido
+    FROM cartera
+    WHERE tenant_id = '${tenantId}'::uuid AND saldo::numeric > 0
+    ORDER BY fecha_factura ASC NULLS LAST
+  `)
+
+  const openInvoices = openInvoicesRows as Array<Record<string, unknown>>
+  const openCartera = openCarteraRows as Array<Record<string, unknown>>
 
   let remaining = paymentAmount
   const allocations: AllocationResult[] = []
@@ -80,14 +77,14 @@ export async function reconcilePayment(
     if (remaining <= 0) break
 
     const currentSaldo = Number(inv.saldo)
-    const currentInteres = Number(inv.subtotalInteres ?? 0)
-    const ppRef = Number(inv.subtotalProntoPago ?? 0)
+    const currentInteres = Number(inv.subtotal_interes ?? 0)
+    const ppRef = Number(inv.subtotal_pronto_pago ?? 0)
 
     // Check if payment is within pronto pago window
     const withinPP =
       ppRef > 0 &&
-      inv.fechaProntoPago != null &&
-      fechaRecaudo <= String(inv.fechaProntoPago)
+      inv.fecha_pronto_pago != null &&
+      fechaRecaudo <= String(inv.fecha_pronto_pago)
 
     // Spec §9.10: apply to accrued interest first, then principal
     // Apply payment to interest portion first
@@ -107,26 +104,30 @@ export async function reconcilePayment(
     // Determine new status
     const newStatus = newSaldo === 0 && newInteres === 0 ? "pagada" : "parcial"
 
-    await db
-      .update(invoices)
-      .set({
+    const { error: updateError } = await supabaseAdmin
+      .from("invoices")
+      .update({
         saldo:            String(Math.round(newSaldo)),
-        subtotalInteres:  String(Math.round(newInteres)),
+        subtotal_interes: String(Math.round(newInteres)),
         status:           newStatus,
       })
-      .where(eq(invoices.id, inv.id))
+      .eq("id", String(inv.id))
+    if (updateError) throw new Error(updateError.message)
 
     // Insert payment_application record
-    await db.insert(paymentApplications).values({
-      paymentId,
-      invoiceId: inv.id,
-      amountApplied: String(Math.round(totalAppliedThisInvoice + ppApplied)),
-    })
+    const { error: appError } = await supabaseAdmin
+      .from("payment_applications")
+      .insert({
+        payment_id:     paymentId,
+        invoice_id:     String(inv.id),
+        amount_applied: String(Math.round(totalAppliedThisInvoice + ppApplied)),
+      })
+    if (appError) throw new Error(appError.message)
 
     allocations.push({
       source: "invoice",
-      id: inv.id,
-      label: `Factura ${inv.periodo}`,
+      id: String(inv.id),
+      label: `Factura ${String(inv.periodo)}`,
       amountApplied: totalAppliedThisInvoice,
       ppApplied,
       saldoAfter: newSaldo,
@@ -141,24 +142,25 @@ export async function reconcilePayment(
     if (remaining <= 0) break
 
     const currentSaldo = Number(item.saldo)
-    const currentVencido = Number(item.valorVencido ?? 0)
+    const currentVencido = Number(item.valor_vencido ?? 0)
     const applied = Math.min(remaining, currentSaldo)
 
     const newSaldo = Math.max(0, currentSaldo - applied)
     const newVencido = Math.max(0, currentVencido - applied)
 
-    await db
-      .update(cartera)
-      .set({
-        saldo: String(newSaldo.toFixed(2)),
-        valorVencido: String(newVencido.toFixed(2)),
+    const { error: updateError } = await supabaseAdmin
+      .from("cartera")
+      .update({
+        saldo:         String(newSaldo.toFixed(2)),
+        valor_vencido: String(newVencido.toFixed(2)),
       })
-      .where(eq(cartera.id, item.id))
+      .eq("id", String(item.id))
+    if (updateError) throw new Error(updateError.message)
 
     allocations.push({
       source: "cartera",
-      id: item.id,
-      label: item.siesaFactura,
+      id: String(item.id),
+      label: item.siesa_factura ? String(item.siesa_factura) : null,
       amountApplied: applied,
       ppApplied: 0,
       saldoAfter: newSaldo,

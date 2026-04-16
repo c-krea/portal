@@ -7,8 +7,7 @@
  */
 
 import { NextResponse } from "next/server"
-import { db } from "@/lib/db/client"
-import { sql } from "drizzle-orm"
+import { execute } from "@/lib/db/executor"
 import { runInterestAccrual } from "@/lib/interest-engine"
 
 export const dynamic = "force-dynamic"
@@ -21,7 +20,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const companies = await db.execute(sql`SELECT id FROM companies`)
+    const companies = await execute(`SELECT id FROM companies`)
     const today = new Date().toISOString().slice(0, 10)
     const results = []
 

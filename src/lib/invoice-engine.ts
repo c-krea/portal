@@ -6,9 +6,7 @@
  * Falls back to contract.canon_base if no projection exists for the period.
  */
 
-import { db } from "@/lib/db/client"
-import { invoices, invoiceLineItems } from "@/lib/db/schema"
-import { sql } from "drizzle-orm"
+import { execute, supabaseAdmin } from "@/lib/db/executor"
 
 type LineItemType =
   | "canon" | "descuento" | "pronto_pago" | "iva" | "retencion" | "interes_mora"
@@ -102,7 +100,7 @@ export async function generateInvoicesForPeriod(
   const periodoStr = `${year}-${String(month).padStart(2, "0")}`
 
   // Fetch all active contracts for the company, joined with projections for the period
-  const contracts = await db.execute(sql`
+  const contracts = await execute(`
     SELECT
       c.id                                               AS contract_id,
       c.tenant_id,
@@ -128,16 +126,16 @@ export async function generateInvoicesForPeriod(
           AND p.month        = ${month}
     LEFT JOIN meter_readings mr
            ON mr.unit_id = u.id
-          AND mr.periodo  = ${periodoStr}
-    WHERE c.company_id = ${companyId}::uuid
+          AND mr.periodo  = '${periodoStr}'
+    WHERE c.company_id = '${companyId}'::uuid
       AND c.status IN ('activo', 'critico')
   `)
 
   // Check which contracts already have an invoice for this period
-  const existing = await db.execute(sql`
+  const existing = await execute(`
     SELECT contract_id FROM invoices
-    WHERE company_id = ${companyId}::uuid
-      AND periodo     = ${periodoStr}
+    WHERE company_id = '${companyId}'::uuid
+      AND periodo     = '${periodoStr}'
   `)
   const existingIds = new Set((existing as Array<Record<string, unknown>>).map((r) => String(r.contract_id)))
 
@@ -224,85 +222,96 @@ async function computeAndInsertInvoice(
   const fechaProntoPago = fechaVencimiento          // same window
 
   // Insert invoice
-  const inserted = await db
-    .insert(invoices)
-    .values({
-      companyId,
-      contractId:          r.contractId,
-      tenantId:            r.tenantId,
-      unitId:              r.unitId,
-      periodo:             periodoStr,
-      fechaEmision,
-      fechaVencimiento,
-      fechaProntoPago,
-      subtotalCanon:       String(roundCOP(canonEffective)),
-      subtotalDescuentos:  String(roundCOP(descuentoFase)),
-      subtotalProntoPago:  String(prontoPagoRef),
-      subtotalGastos:      String(subtotalGastos),
-      subtotalInteres:     "0",
-      iva:                 String(iva),
-      retenciones:         "0",
-      total:               String(total),
-      saldo:               String(total),
-      status:              "borrador",
+  const { data: insertedData, error: invoiceError } = await supabaseAdmin
+    .from("invoices")
+    .insert({
+      company_id:           companyId,
+      contract_id:          r.contractId,
+      tenant_id:            r.tenantId,
+      unit_id:              r.unitId,
+      periodo:              periodoStr,
+      fecha_emision:        fechaEmision,
+      fecha_vencimiento:    fechaVencimiento,
+      fecha_pronto_pago:    fechaProntoPago,
+      subtotal_canon:       String(roundCOP(canonEffective)),
+      subtotal_descuentos:  String(roundCOP(descuentoFase)),
+      subtotal_pronto_pago: String(prontoPagoRef),
+      subtotal_gastos:      String(subtotalGastos),
+      subtotal_interes:     "0",
+      iva:                  String(iva),
+      retenciones:          "0",
+      total:                String(total),
+      saldo:                String(total),
+      status:               "borrador",
     })
-    .returning({ id: invoices.id })
+    .select("id")
+  if (invoiceError) throw new Error(invoiceError.message)
 
-  const invoiceId = inserted[0].id
+  const invoiceId = (insertedData as Array<Record<string, unknown>>)[0].id as string
 
   // Insert line items
-  const lineItems: LineItemInsert[] = [
+  const lineItems: Array<{
+    invoice_id: string
+    type: LineItemType
+    description: string
+    amount: string
+    tax_amount: string
+    sort_order: number
+  }> = [
     {
-      invoiceId,
-      type: "canon",
+      invoice_id:  invoiceId,
+      type:        "canon",
       description: `Arrendamiento ${periodoStr}`,
-      amount: String(roundCOP(canonEffective)),
-      taxAmount: "0",
-      sortOrder: 1,
+      amount:      String(roundCOP(canonEffective)),
+      tax_amount:  "0",
+      sort_order:  1,
     },
   ]
 
   if (descuentoFase > 0) {
     lineItems.push({
-      invoiceId,
-      type: "descuento" ,
+      invoice_id:  invoiceId,
+      type:        "descuento",
       description: `Descuento fase contrato`,
-      amount: String(-roundCOP(descuentoFase)),
-      taxAmount: "0",
-      sortOrder: 2,
+      amount:      String(-roundCOP(descuentoFase)),
+      tax_amount:  "0",
+      sort_order:  2,
     })
   }
 
   lineItems.push({
-    invoiceId,
-    type: "iva" ,
+    invoice_id:  invoiceId,
+    type:        "iva",
     description: `IVA 19%`,
-    amount: String(iva),
-    taxAmount: String(iva),
-    sortOrder: 3,
+    amount:      String(iva),
+    tax_amount:  String(iva),
+    sort_order:  3,
   })
 
   if (prontoPagoRef > 0) {
     lineItems.push({
-      invoiceId,
-      type: "pronto_pago" ,
+      invoice_id:  invoiceId,
+      type:        "pronto_pago",
       description: `Descuento pronto pago ${r.prontoPagoPct}% (si paga antes de ${fechaProntoPago})`,
-      amount: String(-prontoPagoRef),
-      taxAmount: "0",
-      sortOrder: 4,
+      amount:      String(-prontoPagoRef),
+      tax_amount:  "0",
+      sort_order:  4,
     })
   }
 
   if (electricidad > 0 && r.energiaKwh != null) {
     lineItems.push({
-      invoiceId,
-      type: "gasto_energia",
+      invoice_id:  invoiceId,
+      type:        "gasto_energia",
       description: `Energía eléctrica ${r.energiaKwh.toLocaleString("es-CO")} kWh`,
-      amount: String(electricidad),
-      taxAmount: "0",
-      sortOrder: 5,
+      amount:      String(electricidad),
+      tax_amount:  "0",
+      sort_order:  5,
     })
   }
 
-  await db.insert(invoiceLineItems).values(lineItems)
+  const { error: lineError } = await supabaseAdmin
+    .from("invoice_line_items")
+    .insert(lineItems)
+  if (lineError) throw new Error(lineError.message)
 }

@@ -1,9 +1,6 @@
 "use server"
 
-import { db } from "@/lib/db/client"
-import { invoices } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
-import { sql } from "drizzle-orm"
+import { execute, supabaseAdmin } from "@/lib/db/executor"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { generateInvoicesForPeriod } from "@/lib/invoice-engine"
@@ -17,13 +14,14 @@ export type EmitState = { success?: boolean; error?: string }
 
 export async function emitirFactura(id: string): Promise<EmitState> {
   try {
-    const updated = await db
-      .update(invoices)
-      .set({ status: "emitida" })
-      .where(eq(invoices.id, id))
-      .returning({ id: invoices.id, status: invoices.status })
+    const { data: updated, error } = await supabaseAdmin
+      .from("invoices")
+      .update({ status: "emitida" })
+      .eq("id", id)
+      .select("id, status")
 
-    if (updated.length === 0) return { error: "Factura no encontrada" }
+    if (error) throw new Error(error.message)
+    if (!updated || updated.length === 0) return { error: "Factura no encontrada" }
 
     revalidatePath("/facturas")
     revalidatePath(`/facturas/${id}`)
@@ -59,7 +57,7 @@ export async function generarFacturas(
   const { year, month } = parsed.data
 
   try {
-    const companies = await db.execute(sql`SELECT id FROM companies LIMIT 1`)
+    const companies = await execute(`SELECT id FROM companies LIMIT 1`)
     const companyId = String(companies[0].id)
 
     const result = await generateInvoicesForPeriod(companyId, { year, month })

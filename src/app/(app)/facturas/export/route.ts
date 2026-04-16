@@ -1,5 +1,4 @@
-import { db } from "@/lib/db/client"
-import { sql } from "drizzle-orm"
+import { execute } from "@/lib/db/executor"
 import { NextRequest, NextResponse } from "next/server"
 
 /**
@@ -14,7 +13,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const periodo = searchParams.get("periodo")
 
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       COALESCE(i.siesa_documento, '001-FVS-' || UPPER(SUBSTRING(i.id::text, 1, 8))) AS documento,
       REPLACE(i.periodo, '-', '')                                                     AS periodo_siesa,
@@ -26,7 +25,7 @@ export async function GET(req: NextRequest) {
     FROM invoices i
     JOIN tenants t ON i.tenant_id = t.id
     WHERE i.status IN ('emitida', 'pagada', 'parcial', 'vencida')
-      ${periodo ? sql`AND i.periodo = ${periodo}` : sql``}
+      ${periodo ? `AND i.periodo = '${periodo}'` : ``}
     ORDER BY i.periodo DESC, t.nit
   `)
 

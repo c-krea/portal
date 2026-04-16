@@ -1,5 +1,4 @@
-import { db } from "@/lib/db/client"
-import { sql } from "drizzle-orm"
+import { execute } from "@/lib/db/executor"
 
 export type ClienteRow = {
   unitId: string
@@ -34,7 +33,7 @@ function deriveStatus(row: Omit<ClienteRow, "status">): ClienteRow["status"] {
 }
 
 export async function getClienteRows(): Promise<ClienteRow[]> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       u.id                                           AS unit_id,
       u.unit_number,

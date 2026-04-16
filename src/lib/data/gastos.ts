@@ -1,5 +1,4 @@
-import { db } from "@/lib/db/client"
-import { sql } from "drizzle-orm"
+import { execute } from "@/lib/db/executor"
 
 export type GastoRow = {
   id: string
@@ -21,7 +20,7 @@ export type GastoSummary = {
 }
 
 export async function getGastoRows(): Promise<GastoRow[]> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       g.id, g.periodo,
       gt.name                                     AS gasto_type_name,
@@ -47,7 +46,7 @@ export async function getGastoRows(): Promise<GastoRow[]> {
 }
 
 export async function getGastoSummary(): Promise<GastoSummary> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       COALESCE(SUM(total_amount), 0)::numeric                                     AS total_gastos,
       COALESCE(SUM(total_amount) FILTER (WHERE is_allocated = true), 0)::numeric  AS total_allocated,

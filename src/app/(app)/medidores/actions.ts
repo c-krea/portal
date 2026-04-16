@@ -1,8 +1,6 @@
 "use server"
 
-import { db } from "@/lib/db/client"
-import { meterReadings } from "@/lib/db/schema"
-import { sql } from "drizzle-orm"
+import { execute, supabaseAdmin } from "@/lib/db/executor"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -48,33 +46,26 @@ export async function registrarLectura(
   const totalEnergia = Math.round(kwh * tarifaKwh)
 
   try {
-    const companies = await db.execute(sql`SELECT id FROM companies LIMIT 1`)
+    const companies = await execute(`SELECT id FROM companies LIMIT 1`)
     const companyId = String(companies[0].id)
 
-    await db
-      .insert(meterReadings)
-      .values({
-        companyId,
-        unitId,
-        periodo,
-        lecturaAnterior: String(lecturaAnterior),
-        lecturaActual:   String(lecturaActual),
-        kwh:             String(kwh),
-        tarifaKwh:       String(tarifaKwh),
-        totalEnergia:    String(totalEnergia),
-        notas:           notas ?? null,
-      })
-      .onConflictDoUpdate({
-        target: [meterReadings.unitId, meterReadings.periodo],
-        set: {
-          lecturaAnterior: String(lecturaAnterior),
-          lecturaActual:   String(lecturaActual),
-          kwh:             String(kwh),
-          tarifaKwh:       String(tarifaKwh),
-          totalEnergia:    String(totalEnergia),
-          notas:           notas ?? null,
+    const { error } = await supabaseAdmin
+      .from("meter_readings")
+      .upsert(
+        {
+          company_id:       companyId,
+          unit_id:          unitId,
+          periodo,
+          lectura_anterior: String(lecturaAnterior),
+          lectura_actual:   String(lecturaActual),
+          kwh:              String(kwh),
+          tarifa_kwh:       String(tarifaKwh),
+          total_energia:    String(totalEnergia),
+          notas:            notas ?? null,
         },
-      })
+        { onConflict: "unit_id,periodo" },
+      )
+    if (error) throw new Error(error.message)
 
     revalidatePath("/medidores")
     revalidatePath("/facturas")

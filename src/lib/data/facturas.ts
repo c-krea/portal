@@ -1,5 +1,4 @@
-import { db } from "@/lib/db/client"
-import { sql } from "drizzle-orm"
+import { execute } from "@/lib/db/executor"
 
 export type FacturaRow = {
   id: string
@@ -28,7 +27,7 @@ export type FacturaSummary = {
 }
 
 export async function getFacturas(periodo?: string): Promise<FacturaRow[]> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       i.id,
       i.contract_id,
@@ -50,7 +49,7 @@ export async function getFacturas(periodo?: string): Promise<FacturaRow[]> {
     JOIN contracts c ON i.contract_id = c.id
     JOIN tenants t   ON i.tenant_id   = t.id
     JOIN units u     ON i.unit_id     = u.id
-    ${periodo ? sql`WHERE i.periodo = ${periodo}` : sql``}
+    ${periodo ? `WHERE i.periodo = '${periodo}'` : ``}
     ORDER BY i.periodo DESC, u.unit_number
   `)
 
@@ -75,7 +74,7 @@ export async function getFacturas(periodo?: string): Promise<FacturaRow[]> {
 }
 
 export async function getFacturaSummary(periodo?: string): Promise<FacturaSummary> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       COUNT(*)::int                                       AS total_facturas,
       COALESCE(SUM(total), 0)::numeric                    AS total_bruto,
@@ -83,7 +82,7 @@ export async function getFacturaSummary(periodo?: string): Promise<FacturaSummar
       status,
       COUNT(*)::int                                       AS count_by_status
     FROM invoices
-    ${periodo ? sql`WHERE periodo = ${periodo}` : sql``}
+    ${periodo ? `WHERE periodo = '${periodo}'` : ``}
     GROUP BY status
   `)
 
@@ -101,13 +100,13 @@ export async function getFacturaSummary(periodo?: string): Promise<FacturaSummar
   }
 
   // Re-query totals without group by for accuracy
-  const totals = await db.execute(sql`
+  const totals = await execute(`
     SELECT
       COUNT(*)::int                    AS total_facturas,
       COALESCE(SUM(total), 0)::numeric AS total_bruto,
       COALESCE(SUM(saldo), 0)::numeric AS total_saldo
     FROM invoices
-    ${periodo ? sql`WHERE periodo = ${periodo}` : sql``}
+    ${periodo ? `WHERE periodo = '${periodo}'` : ``}
   `)
 
   const t = (totals as Array<Record<string, unknown>>)[0] ?? {}
@@ -120,7 +119,7 @@ export async function getFacturaSummary(periodo?: string): Promise<FacturaSummar
 }
 
 export async function getAvailablePeriodos(): Promise<string[]> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT DISTINCT periodo FROM invoices ORDER BY periodo DESC
   `)
   return (rows as Array<Record<string, unknown>>).map((r) => String(r.periodo))
@@ -150,7 +149,7 @@ export type FacturaDetalle = FacturaRow & {
 }
 
 export async function getFacturaById(id: string): Promise<FacturaDetalle | null> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       i.id,
       i.contract_id,
@@ -180,7 +179,7 @@ export async function getFacturaById(id: string): Promise<FacturaDetalle | null>
     JOIN tenants t   ON i.tenant_id   = t.id
     JOIN units u     ON i.unit_id     = u.id
     JOIN companies co ON i.company_id = co.id
-    WHERE i.id = ${id}::uuid
+    WHERE i.id = '${id}'::uuid
     LIMIT 1
   `)
 
@@ -188,13 +187,13 @@ export async function getFacturaById(id: string): Promise<FacturaDetalle | null>
 
   const r = (rows as Array<Record<string, unknown>>)[0]
 
-  const lineRows = await db.execute(sql`
+  const lineRows = await execute(`
     SELECT id, type, description,
            amount::numeric AS amount,
            COALESCE(tax_amount, 0)::numeric AS tax_amount,
            COALESCE(sort_order, 0) AS sort_order
     FROM invoice_line_items
-    WHERE invoice_id = ${id}::uuid
+    WHERE invoice_id = '${id}'::uuid
     ORDER BY sort_order
   `)
 

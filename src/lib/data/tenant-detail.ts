@@ -1,5 +1,4 @@
-import { db } from "@/lib/db/client"
-import { sql } from "drizzle-orm"
+import { execute } from "@/lib/db/executor"
 
 export type TenantDetail = {
   id: string
@@ -61,7 +60,7 @@ export type ContractPhaseItem = {
 }
 
 export async function getTenantDetail(tenantId: string): Promise<TenantDetail | null> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       t.id, t.razon_social, t.nombre_corto, t.nit,
       t.email, t.telefono, t.contacto_nombre, t.condicion_pago,
@@ -80,7 +79,7 @@ export async function getTenantDetail(tenantId: string): Promise<TenantDetail | 
       ON c.tenant_id = t.id
       AND c.status IN ('activo', 'critico', 'vencido', 'terminado')
     LEFT JOIN units u ON c.unit_id = u.id
-    WHERE t.id = ${tenantId}
+    WHERE t.id = '${tenantId}'
     ORDER BY c.created_at DESC NULLS LAST
     LIMIT 1
   `)
@@ -111,7 +110,7 @@ export async function getTenantDetail(tenantId: string): Promise<TenantDetail | 
 }
 
 export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       id, siesa_factura, fecha_factura, fecha_vence,
       COALESCE(dias_mora, 0)                      AS dias_mora,
@@ -120,7 +119,7 @@ export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]>
       COALESCE(interes_acumulado, 0)::numeric     AS interes_acumulado,
       observacion
     FROM cartera
-    WHERE tenant_id = ${tenantId}
+    WHERE tenant_id = '${tenantId}'
     ORDER BY fecha_vence DESC NULLS LAST
   `)
   return rows.map((r) => ({
@@ -137,7 +136,7 @@ export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]>
 }
 
 export async function getTenantPayments(tenantId: string): Promise<PagoHistorialItem[]> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       id, fecha_recaudo,
       COALESCE(valor_aplicado, 0)::numeric        AS valor_aplicado,
@@ -145,7 +144,7 @@ export async function getTenantPayments(tenantId: string): Promise<PagoHistorial
       COALESCE(valor_final, 0)::numeric           AS valor_final,
       concepto, siesa_docto, siesa_cruce, siesa_clasificacion, status
     FROM payments
-    WHERE tenant_id = ${tenantId}
+    WHERE tenant_id = '${tenantId}'
     ORDER BY fecha_recaudo DESC
     LIMIT 50
   `)
@@ -164,14 +163,14 @@ export async function getTenantPayments(tenantId: string): Promise<PagoHistorial
 }
 
 export async function getContractPhases(contractId: string): Promise<ContractPhaseItem[]> {
-  const rows = await db.execute(sql`
+  const rows = await execute(`
     SELECT
       id, phase_number, name, start_date, end_date,
       COALESCE(descuento_pct, 0)::numeric    AS descuento_pct,
       COALESCE(pronto_pago_pct, 0)::numeric  AS pronto_pago_pct,
       is_active
     FROM contract_phases
-    WHERE contract_id = ${contractId}
+    WHERE contract_id = '${contractId}'
     ORDER BY phase_number
   `)
   return rows.map((r) => ({
