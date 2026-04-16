@@ -2,6 +2,28 @@
 
 ---
 
+## 2026-04-16 — Vercel DB Fix (IPv6 root cause) + Demo Prep
+
+### Problem
+Site showed "application error: client-side exception" on every page after login. Spent several attempts debugging connection strings before finding the real root cause.
+
+### Root cause (confirmed via exhaustive testing)
+Supabase DB host `db.bosylehvmtwtqkrlievy.supabase.co` resolves to **IPv6 only** (`2600:1f18:2e13:9d5a:...`). Vercel Lambda is **IPv4 only** — physically no TCP path exists. All 4 pooler variants also failed (shared pooler `aws-0-us-east-1` returned "Tenant or user not found" even locally, meaning this project isn't registered in the shared pool).
+
+Key diagnostic command that revealed it: `node -e "const dns=require('dns').promises; dns.lookup('db.bosylehvmtwtqkrlievy.supabase.co').then(r=>console.log(r.address))"` → showed IPv6 address.
+
+### Fix
+Created `exec_sql(q text) returns jsonb` Postgres function (service_role only, SECURITY DEFINER). Created `src/lib/db/executor.ts` that calls this via Supabase JS admin client over HTTPS (`bosylehvmtwtqkrlievy.supabase.co` = Cloudflare IPv4). Migrated all 29 files.
+
+### Lessons
+- Always check if the DB host resolves to IPv4 or IPv6 before assuming pooler issues
+- `echo "..." | vercel env add` appends `\n` — always use `printf`. Bit us twice this session.
+- Supabase free tier projects may not be registered in shared Supavisor pooler — don't assume pooler works
+- The `exec_sql` RPC pattern is the correct long-term approach for this Supabase project on Vercel
+
+### Also added this session
+- `loading.tsx` + `error.tsx` at `(app)/` layout level — covers all 11 pages with spinner + graceful error boundary
+
 ## 2026-04-16 — Mora Polish, Cartera Import, Grace Period, Auth Fix
 
 ### What happened

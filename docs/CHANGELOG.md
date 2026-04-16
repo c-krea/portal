@@ -8,6 +8,15 @@ Format: [YYYY-MM-DD] — description
 
 ## [Unreleased]
 
+## [1.9.0] — 2026-04-16
+### Fixed
+- DB connection on Vercel: Supabase DB host is IPv6-only, Vercel Lambda is IPv4-only — no TCP path exists
+- Replaced postgres.js + Drizzle runtime with Supabase HTTP executor (`exec_sql` RPC + `supabase-js` admin client)
+- All 29 data/action/engine files migrated — site now connects via HTTPS (IPv4/Cloudflare), works from Vercel
+### Added
+- `src/app/(app)/loading.tsx` — spinner shown on all pages while data loads (no more blank screen)
+- `src/app/(app)/error.tsx` — graceful error boundary for all pages (no more white crash screen)
+
 ## [1.8.0] — 2026-04-16
 ### Added
 - Mora grace period: `grace_period_days` set to 30 in financial_rules — all mora KPIs now exclude invoices < 30 days overdue
