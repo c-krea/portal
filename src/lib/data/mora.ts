@@ -1,6 +1,15 @@
 import { db } from "@/lib/db/client"
 import { sql } from "drizzle-orm"
 
+async function getGracePeriod(): Promise<number> {
+  const rows = await db.execute(sql`
+    SELECT rule_value::numeric FROM financial_rules
+    WHERE rule_key = 'grace_period_days'
+    LIMIT 1
+  `)
+  return Number((rows as Array<Record<string, unknown>>)[0]?.rule_value ?? 0)
+}
+
 export type MoraRow = {
   tenantId: string
   cliente: string
@@ -20,10 +29,12 @@ export type MoraSummary = {
 }
 
 export async function getMoraSummary(): Promise<MoraSummary> {
+  const grace = await getGracePeriod()
+
   const [carteraRes, invoiceRes, accrualRes] = await Promise.all([
     db.execute(sql`
       SELECT COALESCE(SUM(valor_vencido), 0)::numeric AS total
-      FROM cartera WHERE valor_vencido > 0
+      FROM cartera WHERE valor_vencido > 0 AND dias_mora > ${grace}
     `),
     db.execute(sql`
       SELECT
@@ -48,6 +59,8 @@ export async function getMoraSummary(): Promise<MoraSummary> {
 }
 
 export async function getMoraRows(): Promise<MoraRow[]> {
+  const grace = await getGracePeriod()
+
   const rows = await db.execute(sql`
     SELECT
       t.id                                         AS tenant_id,
@@ -69,7 +82,7 @@ export async function getMoraRows(): Promise<MoraRow[]> {
       ORDER BY con.fecha_inicio DESC
       LIMIT 1
     ) u ON true
-    WHERE c.valor_vencido > 0
+    WHERE c.valor_vencido > 0 AND c.dias_mora > ${grace}
     GROUP BY t.id, t.razon_social, t.nombre_corto, u.unit_number
     ORDER BY MAX(c.dias_mora) DESC NULLS LAST
   `)

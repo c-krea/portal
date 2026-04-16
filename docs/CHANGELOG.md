@@ -8,6 +8,17 @@ Format: [YYYY-MM-DD] — description
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-04-16
+### Added
+- Cartera: 118 rows imported from ckrea.xlsx Cartera sheet (was empty after payments import)
+- Mora table: clickable rows → `/clientes/[id]`, unit badge, separate Vencido + Saldo columns
+- Mora bucket cards: show saldo pendiente (replacing $0 interest KPI — interest runs via cron)
+- Clientes `[id]` payments: Recibo (RK-XXXX) + Factura (FVS-XXXXX) columns, clasificación badge, totals footer row
+- Payment query: adds `siesa_cruce` + `siesa_clasificacion`, limit raised 30 → 50
+### Fixed
+- NaN `valor_vencido` in cartera (blank cells from not-yet-due invoices) → set to 0
+- Negative `dias_mora` rows excluded from mora view
+
 ## [1.6.0] — 2026-04-16
 ### Added
 - Tenant NITs: all 65 tenants updated with real NIT/Documento values from Siesa Ocupacion + Recaudo sheets (replaced `IMPORT-XXX` placeholders)
