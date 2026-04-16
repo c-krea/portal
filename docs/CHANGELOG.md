@@ -8,6 +8,16 @@ Format: [YYYY-MM-DD] — description
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-04-16
+### Added
+- Mora grace period: `grace_period_days` set to 30 in financial_rules — all mora KPIs now exclude invoices < 30 days overdue
+- Grace period is runtime-configurable in Configuración (no deploy needed)
+- `getGracePeriod()` shared utility in `configuracion.ts` — used by dashboard, mora, and reportes
+- User account: operaciones@reymon.com.co (role: finance)
+### Fixed
+- Dashboard + reportes: `totalVencido` KPIs now apply grace period (were showing $156M, now $67.6M matching Power BI)
+- Vercel CRON_SECRET env var had trailing space — fixed, redeploy successful
+
 ## [1.7.0] — 2026-04-16
 ### Added
 - Cartera: 118 rows imported from ckrea.xlsx Cartera sheet (was empty after payments import)
