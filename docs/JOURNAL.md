@@ -393,3 +393,60 @@ Build a **Projection Generator** UI inside the portal (Phase 4):
 - Auth + RLS working
 - v1.2.1 in CHANGELOG
 - DB clean: 0 invoices, 78 contracts, 85 units, 59 tenants, 2026 projections 100% covered
+
+## 2026-04-16 — Phase 4 + Vercel Deployment Session
+
+### What happened
+- Built Phase 4 items: /configuracion, /proyecciones, /api/cron/accrual, vercel.json
+- Connected GitHub repo: https://github.com/Gburg293/Ckrea-Portal.git
+- Fought through Vercel deployment — 4 separate blockers resolved
+- v1.3.0 now LIVE on Vercel
+
+### Phase 4 delivered
+- `/configuracion` — inline editor for 5 financial rules (IVA, PP window, mora rate, grace period, IPC%)
+- `/proyecciones` — IPC projection generator: coverage table + pending contracts preview + generate form
+- `/api/cron/accrual` — Vercel Cron route (daily 01:00 COT = 06:00 UTC), CRON_SECRET protected
+- `vercel.json` — cron schedule `0 6 * * *`
+- `src/lib/data/configuracion.ts`, `src/lib/data/proyecciones.ts` — data layers
+- Sidebar: added Proyecciones (TrendingUp) + Configuración (Settings)
+
+### Vercel deployment — bugs hit and fixed
+
+**Bug 1: Export error on /proyecciones, /reportes, etc.**
+- Cause: Next.js tries to statically render pages at build time on Vercel even when they have async DB calls
+- Fix: `export const dynamic = "force-dynamic"` on ALL 12 (app) pages
+- Pattern: every page with DB queries needs this
+
+**Bug 2: Vercel Hobby commit author block**
+- Cause: Hobby plan requires commit author email = Vercel account owner email
+- Vercel account: germanwarfare07@gmail.com
+- Fix: `git config user.email "germanwarfare07@gmail.com"` — must be set before every commit
+- Saved to memory: feedback_vercel_commit_author.md
+
+**Bug 3: Wrong env var name**
+- Cause: NEXT_PUBLIC_SUPABASE_ANON_KEY was saved in Vercel as NEXT_PUBLIC_SUPABASE_ANON (missing _KEY)
+- Effect: Supabase client init failed on every request → 500 on all pages
+- Fix: removed wrong var, added correct NEXT_PUBLIC_SUPABASE_ANON_KEY via CLI
+- Lesson: always verify env var names with `vercel env ls` after adding
+
+**Bug 4: Env vars added after build**
+- NEXT_PUBLIC_ vars baked at build time — adding after deploy doesn't help
+- Fix: push new commit to trigger fresh build after adding/fixing env vars
+
+### Vercel env vars (all 4 required)
+- `NEXT_PUBLIC_SUPABASE_URL` — https://bosylehvmtwtqkrlievy.supabase.co
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` — anon JWT (208 chars)
+- `SUPABASE_SERVICE_ROLE_KEY` — service role JWT
+- `DATABASE_URL` — direct DB host (NOT pooler)
+- `CRON_SECRET` — any random string (needed for /api/cron/accrual)
+
+### Decisions made
+- Projection formula: `new_canon = round(last_canon * (1 + ipc/100))`, descuento carries forward as same %
+- `onConflictDoNothing` on projection inserts — idempotent, safe to re-run
+- force-dynamic on all (app) pages — no static pre-rendering attempted
+
+### Next session
+- Walk live site end-to-end (all 18 routes)
+- Create admin user in Supabase Auth (germanwarfare07@gmail.com + raw_user_meta_data role:admin)
+- Fix any bugs found in live testing
+- Then: Linear cleanup, mobile nav, CRON_SECRET env var add
