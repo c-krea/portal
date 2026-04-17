@@ -32,7 +32,7 @@ export type GastoChartRow = {
   total: number
 }
 
-export async function getGastoRows(): Promise<GastoRow[]> {
+export async function getGastoRows(periodo?: string): Promise<GastoRow[]> {
   const rows = await execute(`
     SELECT
       g.id, g.periodo,
@@ -44,6 +44,7 @@ export async function getGastoRows(): Promise<GastoRow[]> {
       g.is_allocated
     FROM gastos g
     JOIN gasto_types gt ON gt.id = g.gasto_type_id
+    ${periodo ? `WHERE g.periodo = '${periodo}'` : ""}
     ORDER BY g.periodo DESC, gt.category, gt.name
   `)
   return rows.map((r) => ({
@@ -89,7 +90,7 @@ const MES_LABEL: Record<string, string> = {
   '2026-10': 'Oct', '2026-11': 'Nov', '2026-12': 'Dic',
 }
 
-export async function getGastosChartData(): Promise<GastoChartRow[]> {
+export async function getGastosForPeriodo(periodo: string): Promise<GastoChartRow> {
   const rows = await execute(`
     SELECT
       g.periodo,
@@ -104,19 +105,23 @@ export async function getGastosChartData(): Promise<GastoChartRow[]> {
       COALESCE(SUM(g.total_amount),                                                  0)::numeric AS total
     FROM gastos g
     JOIN gasto_types gt ON gt.id = g.gasto_type_id
+    WHERE g.periodo = '${periodo}'
     GROUP BY g.periodo
-    ORDER BY g.periodo
   `)
-  return (rows as Array<Record<string, unknown>>).map((r) => ({
-    periodo:           MES_LABEL[String(r.periodo)] ?? String(r.periodo),
-    vigilancia:        Number(r.vigilancia        ?? 0),
-    reparaciones:      Number(r.reparaciones      ?? 0),
-    nomina:            Number(r.nomina            ?? 0),
-    servicios_publicos:Number(r.servicios_publicos?? 0),
-    aseo_cafeteria:    Number(r.aseo_cafeteria    ?? 0),
-    publicidad:        Number(r.publicidad        ?? 0),
-    impuestos:         Number(r.impuestos         ?? 0),
-    otros:             Number(r.otros             ?? 0),
-    total:             Number(r.total             ?? 0),
-  }))
+  if (!rows.length) {
+    return { periodo: MES_LABEL[periodo] ?? periodo, vigilancia: 0, reparaciones: 0, nomina: 0, servicios_publicos: 0, aseo_cafeteria: 0, publicidad: 0, impuestos: 0, otros: 0, total: 0 }
+  }
+  const r = rows[0] as Record<string, unknown>
+  return {
+    periodo:            MES_LABEL[String(r.periodo)] ?? String(r.periodo),
+    vigilancia:         Number(r.vigilancia         ?? 0),
+    reparaciones:       Number(r.reparaciones       ?? 0),
+    nomina:             Number(r.nomina             ?? 0),
+    servicios_publicos: Number(r.servicios_publicos ?? 0),
+    aseo_cafeteria:     Number(r.aseo_cafeteria     ?? 0),
+    publicidad:         Number(r.publicidad         ?? 0),
+    impuestos:          Number(r.impuestos          ?? 0),
+    otros:              Number(r.otros              ?? 0),
+    total:              Number(r.total              ?? 0),
+  }
 }

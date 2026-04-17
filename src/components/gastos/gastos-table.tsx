@@ -10,7 +10,11 @@ import {
   type SortingState,
 } from "@tanstack/react-table"
 import { useState } from "react"
-import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
+
+function fmtPeriodo(p: string) {
+  const [year, month] = p.split("-")
+  return `${month}/${year?.slice(2)}`
+}
 import { formatCOP } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
 import type { GastoRow } from "@/lib/data/gastos"
@@ -39,7 +43,7 @@ const columns: ColumnDef<GastoRow>[] = [
     header: "Período",
     size: 100,
     cell: ({ getValue }) => (
-      <span className="font-medium text-slate-700">{getValue<string>()}</span>
+      <span className="font-mono text-sm font-medium text-slate-700">{fmtPeriodo(getValue<string>())}</span>
     ),
   },
   {
@@ -86,7 +90,7 @@ const columns: ColumnDef<GastoRow>[] = [
   },
 ]
 
-export function GastosTable({ data }: { data: GastoRow[] }) {
+export function GastosTable({ data, embedded = false }: { data: GastoRow[]; embedded?: boolean }) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "periodo", desc: true },
   ])
@@ -115,7 +119,7 @@ export function GastosTable({ data }: { data: GastoRow[] }) {
         />
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className={embedded ? "overflow-x-auto" : "overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm"}>
         <table className="w-full text-sm">
           <thead>
             {table.getHeaderGroups().map((hg) => (
@@ -131,17 +135,7 @@ export function GastosTable({ data }: { data: GastoRow[] }) {
                         "cursor-pointer select-none hover:text-slate-700",
                     )}
                   >
-                    <div className="flex items-center gap-1">
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                      {header.column.getCanSort() &&
-                        (header.column.getIsSorted() === "asc" ? (
-                          <ArrowUp className="h-3 w-3 text-slate-500" />
-                        ) : header.column.getIsSorted() === "desc" ? (
-                          <ArrowDown className="h-3 w-3 text-slate-500" />
-                        ) : (
-                          <ArrowUpDown className="h-3 w-3 text-slate-300" />
-                        ))}
-                    </div>
+                    {flexRender(header.column.columnDef.header, header.getContext())}
                   </th>
                 ))}
               </tr>
