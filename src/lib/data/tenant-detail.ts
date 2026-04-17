@@ -59,7 +59,8 @@ export type ContractPhaseItem = {
   isActive: boolean
 }
 
-export async function getTenantDetail(tenantId: string): Promise<TenantDetail | null> {
+export async function getTenantDetail(tenantId: string, unitNumber?: string): Promise<TenantDetail | null> {
+  const unitFilter = unitNumber ? `AND u.unit_number = '${unitNumber}'` : ""
   const rows = await execute(`
     SELECT
       t.id, t.razon_social, t.nombre_corto, t.nit,
@@ -79,7 +80,7 @@ export async function getTenantDetail(tenantId: string): Promise<TenantDetail | 
       ON c.tenant_id = t.id
       AND c.status IN ('activo', 'critico', 'vencido', 'terminado')
     LEFT JOIN units u ON c.unit_id = u.id
-    WHERE t.id = '${tenantId}'
+    WHERE t.id = '${tenantId}' ${unitFilter}
     ORDER BY c.created_at DESC NULLS LAST
     LIMIT 1
   `)
@@ -107,6 +108,55 @@ export async function getTenantDetail(tenantId: string): Promise<TenantDetail | 
     areaM2: r.area_m2 !== null && r.area_m2 !== undefined ? Number(r.area_m2) : null,
     clasificacion: r.clasificacion ? String(r.clasificacion) : null,
   }
+}
+
+export type TenantContract = {
+  contractId: string
+  contractStatus: string
+  unitNumber: string | null
+  entrada: string | null
+  areaM2: number | null
+  clasificacion: string | null
+  fechaInicio: string | null
+  fechaFin: string | null
+  canonBase: number
+  descuentoPct: number
+  prontoPagoPct: number
+  descripcionDescuentos: string | null
+}
+
+export async function getTenantContracts(tenantId: string): Promise<TenantContract[]> {
+  const rows = await execute(`
+    SELECT
+      c.id AS contract_id, c.status AS contract_status,
+      c.fecha_inicio, c.fecha_fin,
+      COALESCE(c.canon_base, 0)::numeric        AS canon_base,
+      COALESCE(c.descuento_pct, 0)::numeric     AS descuento_pct,
+      COALESCE(c.pronto_pago_pct, 0)::numeric   AS pronto_pago_pct,
+      c.descripcion_descuentos,
+      u.unit_number, u.entrada,
+      u.area_m2::numeric AS area_m2,
+      u.clasificacion
+    FROM contracts c
+    LEFT JOIN units u ON c.unit_id = u.id
+    WHERE c.tenant_id = '${tenantId}'
+      AND c.status IN ('activo', 'critico', 'vencido', 'terminado')
+    ORDER BY c.status = 'activo' DESC, c.status = 'critico' DESC, c.fecha_inicio DESC
+  `)
+  return rows.map((r) => ({
+    contractId: String(r.contract_id),
+    contractStatus: String(r.contract_status),
+    unitNumber: r.unit_number ? String(r.unit_number) : null,
+    entrada: r.entrada ? String(r.entrada) : null,
+    areaM2: r.area_m2 !== null ? Number(r.area_m2) : null,
+    clasificacion: r.clasificacion ? String(r.clasificacion) : null,
+    fechaInicio: r.fecha_inicio ? String(r.fecha_inicio) : null,
+    fechaFin: r.fecha_fin ? String(r.fecha_fin) : null,
+    canonBase: Number(r.canon_base ?? 0),
+    descuentoPct: Number(r.descuento_pct ?? 0),
+    prontoPagoPct: Number(r.pronto_pago_pct ?? 0),
+    descripcionDescuentos: r.descripcion_descuentos ? String(r.descripcion_descuentos) : null,
+  }))
 }
 
 export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]> {

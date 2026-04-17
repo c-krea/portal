@@ -9,7 +9,7 @@ export default async function ClientesPage() {
 
   return (
     <>
-      <PageHeader title="Clientes" />
+      <PageHeader title="Locales" />
       <ClientesTable data={rows} />
     </>
   )

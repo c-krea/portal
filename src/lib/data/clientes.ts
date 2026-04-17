@@ -1,86 +1,87 @@
 import { execute } from "@/lib/db/executor"
 
 export type ClienteRow = {
-  unitId: string
-  unitNumber: string
-  entrada: string
-  unitStatus: string
   tenantId: string | null
   cliente: string | null
   nit: string | null
-  contractId: string | null
-  contractStatus: string | null
-  canonBase: number
-  descuentoPct: number
-  prontoPagoPct: number
+  unitNumbers: string[]
+  canonTotal: number
   saldoVencido: number
   maxDiasMora: number
-  // derived
   status: "al_dia" | "en_mora" | "critico" | "inactivo"
-}
-
-function deriveStatus(row: Omit<ClienteRow, "status">): ClienteRow["status"] {
-  if (
-    row.unitStatus === "disponible" ||
-    !row.contractId ||
-    row.contractStatus === "terminado" ||
-    row.contractStatus === "vencido"
-  )
-    return "inactivo"
-  if (row.saldoVencido > 0 && row.maxDiasMora > 90) return "critico"
-  if (row.saldoVencido > 0) return "en_mora"
-  return "al_dia"
+  isVacant?: boolean
 }
 
 export async function getClienteRows(): Promise<ClienteRow[]> {
   const rows = await execute(`
     SELECT
-      u.id                                           AS unit_id,
-      u.unit_number,
-      u.entrada,
-      u.status                                       AS unit_status,
-      t.id                                           AS tenant_id,
-      COALESCE(t.nombre_corto, t.razon_social)       AS cliente,
+      t.id                                                                AS tenant_id,
+      COALESCE(t.nombre_corto, t.razon_social)                           AS cliente,
       t.nit,
-      con.id                                         AS contract_id,
-      con.status                                     AS contract_status,
-      COALESCE(con.canon_base, 0)::numeric           AS canon_base,
-      COALESCE(con.descuento_pct, 0)::numeric        AS descuento_pct,
-      COALESCE(con.pronto_pago_pct, 0)::numeric      AS pronto_pago_pct,
-      COALESCE(SUM(c.valor_vencido), 0)::numeric     AS saldo_vencido,
-      COALESCE(MAX(c.dias_mora), 0)                  AS max_dias_mora
-    FROM units u
+      ARRAY_AGG(DISTINCT u.unit_number ORDER BY u.unit_number)
+        FILTER (WHERE u.unit_number IS NOT NULL)                         AS unit_numbers,
+      COALESCE((
+        SELECT SUM(c2.canon_base) FROM contracts c2
+        WHERE c2.tenant_id = t.id AND c2.status IN ('activo', 'critico')
+      ), 0)::numeric                                                     AS canon_total,
+      COALESCE((
+        SELECT SUM(ca.valor_vencido) FROM cartera ca
+        WHERE ca.tenant_id = t.id AND ca.valor_vencido > 0
+      ), 0)::numeric                                                     AS saldo_vencido,
+      COALESCE((
+        SELECT MAX(ca.dias_mora) FROM cartera ca
+        WHERE ca.tenant_id = t.id AND ca.valor_vencido > 0
+      ), 0)                                                              AS max_dias_mora,
+      CASE
+        WHEN bool_or(con.status = 'critico') THEN 'critico'
+        WHEN bool_or(con.status IN ('activo', 'critico'))
+          AND (SELECT COALESCE(SUM(ca.valor_vencido), 0) FROM cartera ca WHERE ca.tenant_id = t.id) > 0
+          THEN 'en_mora'
+        WHEN bool_or(con.status IN ('activo', 'critico')) THEN 'al_dia'
+        ELSE 'inactivo'
+      END                                                                AS status
+    FROM tenants t
     LEFT JOIN contracts con
-      ON con.unit_id = u.id
+      ON con.tenant_id = t.id
       AND con.status IN ('activo', 'critico', 'vencido', 'terminado')
-    LEFT JOIN tenants t ON con.tenant_id = t.id
-    LEFT JOIN cartera c
-      ON c.tenant_id = t.id
-      AND c.valor_vencido > 0
-    GROUP BY
-      u.id, u.unit_number, u.entrada, u.status,
-      t.id, t.razon_social, t.nombre_corto, t.nit,
-      con.id, con.status, con.canon_base, con.descuento_pct, con.pronto_pago_pct
+    LEFT JOIN units u ON con.unit_id = u.id
+    WHERE t.juridica = false
+    GROUP BY t.id, t.razon_social, t.nombre_corto, t.nit
+    ORDER BY COALESCE(t.nombre_corto, t.razon_social)
+  `)
+
+  return rows.map((r) => ({
+    tenantId: String(r.tenant_id),
+    cliente: String(r.cliente),
+    nit: r.nit ? String(r.nit) : null,
+    unitNumbers: Array.isArray(r.unit_numbers) ? r.unit_numbers.map(String) : [],
+    canonTotal: Number(r.canon_total ?? 0),
+    saldoVencido: Number(r.saldo_vencido ?? 0),
+    maxDiasMora: Number(r.max_dias_mora ?? 0),
+    status: r.status as ClienteRow["status"],
+  }))
+}
+
+export async function getVacantUnitRows(): Promise<ClienteRow[]> {
+  const rows = await execute(`
+    SELECT u.unit_number, u.entrada
+    FROM units u
+    WHERE NOT EXISTS (
+      SELECT 1 FROM contracts c
+      WHERE c.unit_id = u.id AND c.status IN ('activo', 'critico')
+    )
     ORDER BY u.unit_number
   `)
 
-  return rows.map((r) => {
-    const base = {
-      unitId: String(r.unit_id),
-      unitNumber: String(r.unit_number),
-      entrada: String(r.entrada ?? "—"),
-      unitStatus: String(r.unit_status),
-      tenantId: r.tenant_id ? String(r.tenant_id) : null,
-      cliente: r.cliente ? String(r.cliente) : null,
-      nit: r.nit ? String(r.nit) : null,
-      contractId: r.contract_id ? String(r.contract_id) : null,
-      contractStatus: r.contract_status ? String(r.contract_status) : null,
-      canonBase: Number(r.canon_base ?? 0),
-      descuentoPct: Number(r.descuento_pct ?? 0),
-      prontoPagoPct: Number(r.pronto_pago_pct ?? 0),
-      saldoVencido: Number(r.saldo_vencido ?? 0),
-      maxDiasMora: Number(r.max_dias_mora ?? 0),
-    }
-    return { ...base, status: deriveStatus(base) }
-  })
+  return rows.map((r) => ({
+    tenantId: null,
+    cliente: null,
+    nit: null,
+    unitNumbers: [String(r.unit_number)],
+    canonTotal: 0,
+    saldoVencido: 0,
+    maxDiasMora: 0,
+    status: "inactivo" as const,
+    isVacant: true,
+  }))
 }

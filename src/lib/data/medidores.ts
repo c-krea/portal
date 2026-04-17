@@ -24,6 +24,72 @@ export type MeterReadingRow = {
   notas: string | null
 }
 
+export type MedidorAdminRow = {
+  unitId: string
+  unitNumber: string
+  tenantName: string | null
+  kwh: number | null
+  promedio3m: number | null
+  desvPct: number | null
+  totalEnergia: number | null
+  status: "registrada" | "sin_lectura"
+  readingId: string | null
+}
+
+export async function getMedidoresAdmin(
+  companyId: string,
+  periodo: string,
+): Promise<MedidorAdminRow[]> {
+  const rows = await execute(`
+    SELECT
+      u.id                                               AS unit_id,
+      u.unit_number,
+      COALESCE(t.nombre_corto, t.razon_social)           AS tenant_name,
+      mr.id                                              AS reading_id,
+      mr.kwh::numeric                                    AS kwh,
+      mr.total_energia::numeric                          AS total_energia,
+      avg3.promedio_3m
+    FROM units u
+    LEFT JOIN contracts c
+           ON c.unit_id = u.id
+          AND c.company_id = '${companyId}'::uuid
+          AND c.status IN ('activo', 'critico')
+    LEFT JOIN tenants t ON c.tenant_id = t.id
+    LEFT JOIN meter_readings mr
+           ON mr.unit_id = u.id
+          AND mr.periodo = '${periodo}'
+    LEFT JOIN LATERAL (
+      SELECT ROUND(AVG(mr2.kwh), 0) AS promedio_3m
+      FROM (
+        SELECT kwh FROM meter_readings
+        WHERE unit_id = u.id AND periodo < '${periodo}'
+        ORDER BY periodo DESC LIMIT 3
+      ) mr2
+    ) avg3 ON true
+    WHERE u.company_id = '${companyId}'::uuid
+    ORDER BY u.unit_number
+  `)
+
+  return (rows as Array<Record<string, unknown>>).map((r) => {
+    const kwh = r.kwh != null ? Number(r.kwh) : null
+    const p3m = r.promedio_3m != null ? Number(r.promedio_3m) : null
+    const desv = kwh != null && p3m != null && p3m > 0
+      ? Math.round(((kwh - p3m) / p3m) * 100)
+      : null
+    return {
+      unitId:      String(r.unit_id),
+      unitNumber:  String(r.unit_number),
+      tenantName:  r.tenant_name ? String(r.tenant_name) : null,
+      readingId:   r.reading_id ? String(r.reading_id) : null,
+      kwh,
+      promedio3m:  p3m,
+      desvPct:     desv,
+      totalEnergia: r.total_energia != null ? Number(r.total_energia) : null,
+      status:      r.reading_id ? "registrada" : "sin_lectura",
+    }
+  })
+}
+
 export async function getUnitsWithMeters(companyId: string): Promise<UnitWithMeter[]> {
   const rows = await execute(`
     SELECT
@@ -48,7 +114,6 @@ export async function getUnitsWithMeters(companyId: string): Promise<UnitWithMet
       LIMIT 1
     ) mr_last ON true
     WHERE u.company_id = '${companyId}'::uuid
-      AND u.has_electricity_meter = true
     ORDER BY u.unit_number
   `)
 

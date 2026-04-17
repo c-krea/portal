@@ -2,12 +2,12 @@ export const dynamic = "force-dynamic"
 
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import { BackButton } from "@/components/shared/back-button"
 import {
   getTenantDetail,
+  getTenantContracts,
   getTenantCartera,
   getTenantPayments,
-  getContractPhases,
 } from "@/lib/data/tenant-detail"
 import { PageHeader } from "@/components/layout/page-header"
 import { CarteraTable } from "@/components/clientes/cartera-table"
@@ -61,20 +61,22 @@ function KpiCard({
 
 export default async function ClienteDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ unit?: string }>
 }) {
   const { id } = await params
+  const { unit } = await searchParams
 
-  const [detail, cartera, pagos] = await Promise.all([
-    getTenantDetail(id),
+  const [detail, contracts, cartera, pagos] = await Promise.all([
+    getTenantDetail(id, unit),
+    getTenantContracts(id),
     getTenantCartera(id),
     getTenantPayments(id),
   ])
 
   if (!detail) notFound()
-
-  const phases = detail.contractId ? await getContractPhases(detail.contractId) : []
 
   const saldoTotal = cartera.reduce((s, c) => s + c.saldo, 0)
   const valorVencidoTotal = cartera.reduce((s, c) => s + c.valorVencido, 0)
@@ -86,13 +88,7 @@ export default async function ClienteDetailPage({
   return (
     <>
       <PageHeader title={displayName}>
-        <Link
-          href="/clientes"
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Clientes
-        </Link>
+        <BackButton label="Locales" />
       </PageHeader>
 
       <div className="space-y-6">
@@ -149,85 +145,50 @@ export default async function ClienteDetailPage({
             </div>
           </div>
 
-          {/* Contract + unit */}
+          {/* Contracts */}
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Contrato Vigente
+              Locales ({contracts.length})
             </h2>
-            {detail.contractId ? (
-              <div className="space-y-3">
-                <div>
-                  {(() => {
-                    const cfg =
-                      CONTRACT_STATUS_CONFIG[
-                        detail.contractStatus as keyof typeof CONTRACT_STATUS_CONFIG
-                      ] ?? { cls: "bg-slate-100 text-slate-500", label: detail.contractStatus }
-                    return (
-                      <span
-                        className={cn(
-                          "inline-block rounded-full px-2.5 py-0.5 text-xs font-medium",
-                          cfg.cls,
-                        )}
-                      >
-                        {cfg.label}
-                      </span>
-                    )
-                  })()}
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-xs text-slate-400">Local</p>
-                    <p className="text-lg font-bold text-slate-900">
-                      {detail.unitNumber ?? "—"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Entrada</p>
-                    <p className="text-slate-700">{detail.entrada ?? "—"}</p>
-                  </div>
-                  {detail.clasificacion && (
-                    <div>
-                      <p className="text-xs text-slate-400">Clasificación</p>
-                      <p className="text-slate-700">{detail.clasificacion}</p>
-                    </div>
-                  )}
-                  {detail.areaM2 && (
-                    <div>
-                      <p className="text-xs text-slate-400">Área</p>
-                      <p className="text-slate-700">{detail.areaM2} m²</p>
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-xs text-slate-400">Inicio</p>
-                    <p className="text-slate-700">{detail.fechaInicio ?? "—"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400">Fin</p>
-                    <p className="text-slate-700">{detail.fechaFin ?? "Indefinido"}</p>
-                  </div>
-                </div>
-                <div className="border-t border-slate-100 pt-3">
-                  <p className="text-xs text-slate-400">Canon Base</p>
-                  <p className="mt-0.5 text-xl font-bold text-slate-900">
-                    {formatCOP(detail.canonBase)}
-                  </p>
-                  <div className="mt-1 flex flex-wrap gap-4 text-xs text-slate-500">
-                    {detail.descuentoPct > 0 && (
-                      <span>Descuento fase: {formatPercent(detail.descuentoPct)}</span>
-                    )}
-                    {detail.prontoPagoPct > 0 && (
-                      <span>Pronto pago: {formatPercent(detail.prontoPagoPct)}</span>
-                    )}
-                  </div>
-                  {detail.descripcionDescuentos && (
-                    <p className="mt-2 text-xs text-slate-400">
-                      {detail.descripcionDescuentos}
-                    </p>
-                  )}
-                </div>
-              </div>
+            {contracts.length === 0 ? (
+              <p className="text-sm text-slate-400">Sin contratos</p>
             ) : (
-              <p className="text-sm text-slate-400">Sin contrato activo</p>
+              <div className="space-y-3">
+                {contracts.map((con) => {
+                  const cfg =
+                    CONTRACT_STATUS_CONFIG[con.contractStatus as keyof typeof CONTRACT_STATUS_CONFIG]
+                    ?? { cls: "bg-slate-100 text-slate-500", label: con.contractStatus }
+                  return (
+                    <div key={con.contractId} className="rounded-lg border border-slate-100 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-lg font-bold text-slate-900">
+                          Local {con.unitNumber ?? "—"}
+                        </p>
+                        <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", cfg.cls)}>
+                          {cfg.label}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
+                        {con.entrada && <span>Entrada: {con.entrada}</span>}
+                        {con.areaM2 && <span>Área: {con.areaM2} m²</span>}
+                        <span>Inicio: {con.fechaInicio ?? "—"}</span>
+                        <span>Fin: {con.fechaFin ?? "Indefinido"}</span>
+                      </div>
+                      <div className="mt-2 border-t border-slate-100 pt-2">
+                        <span className="font-semibold text-slate-800">{formatCOP(con.canonBase)}</span>
+                        <span className="ml-1 text-xs text-slate-400">/ mes</span>
+                        {(con.descuentoPct > 0 || con.prontoPagoPct > 0) && (
+                          <span className="ml-3 text-xs text-slate-400">
+                            {con.descuentoPct > 0 && `Dto: ${formatPercent(con.descuentoPct)}`}
+                            {con.descuentoPct > 0 && con.prontoPagoPct > 0 && " · "}
+                            {con.prontoPagoPct > 0 && `PP: ${formatPercent(con.prontoPagoPct)}`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </div>
         </div>
@@ -267,41 +228,6 @@ export default async function ClienteDetailPage({
           </div>
         )}
 
-        {/* Contract phases */}
-        {phases.length > 0 && (
-          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-5 py-4">
-              <h2 className="font-semibold text-slate-800">Fases del Contrato</h2>
-            </div>
-            <div className="divide-y divide-slate-50">
-              {phases.map((phase) => (
-                <div key={phase.id} className="flex items-center gap-4 px-5 py-3">
-                  <span
-                    className={cn(
-                      "h-2 w-2 shrink-0 rounded-full",
-                      phase.isActive ? "bg-emerald-500" : "bg-slate-300",
-                    )}
-                  />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-slate-800">{phase.name}</p>
-                    <p className="text-xs text-slate-400">
-                      {phase.startDate} — {phase.endDate ?? "vigente"}
-                      {phase.descuentoPct > 0 &&
-                        ` · Dto: ${formatPercent(phase.descuentoPct)}`}
-                      {phase.prontoPagoPct > 0 &&
-                        ` · PP: ${formatPercent(phase.prontoPagoPct)}`}
-                    </p>
-                  </div>
-                  {phase.isActive && (
-                    <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-                      Activa
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Payment history */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm">

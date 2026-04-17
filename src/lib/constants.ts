@@ -13,7 +13,7 @@ export const NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Resumen",       href: "/" },
   { icon: TrendingUp,      label: "Proyecciones",  href: "/proyecciones" },
   { icon: AlertTriangle,   label: "Mora",          href: "/mora" },
-  { icon: Users,           label: "Clientes",      href: "/clientes" },
+  { icon: Users,           label: "Locales",       href: "/clientes" },
   { icon: FileText,        label: "Facturas",      href: "/facturas" },
   { icon: CreditCard,      label: "Pagos",         href: "/pagos" },
   { icon: Receipt,         label: "Gastos",        href: "/gastos" },
