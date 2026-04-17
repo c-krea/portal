@@ -30,9 +30,7 @@ export default async function ProyeccionesPage() {
   const ipcRule  = rules.find((r) => r.ruleKey === "ipc_increment_pct")
   const defaultIpc = ipcRule ? ipcRule.ruleValue : 5.1
 
-  // Pct shares of canon bruto
   const descPct = breakdown.canonBruto > 0 ? (breakdown.totalDescuentos / breakdown.canonBruto) * 100 : 0
-  const ppPct   = breakdown.canonBruto > 0 ? (breakdown.totalPP         / breakdown.canonBruto) * 100 : 0
 
   return (
     <>
@@ -47,12 +45,12 @@ export default async function ProyeccionesPage() {
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Descuentos + PP</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Descuentos de fase</p>
           <p className="mt-1 text-xl font-bold text-rose-500">
-            − {formatCOP(breakdown.totalDescuentos + breakdown.totalPP)}
+            − {formatCOP(breakdown.totalDescuentos)}
           </p>
           <p className="mt-0.5 text-xs text-slate-400">
-            Fase {formatPercent(descPct, 1)} · PP {formatPercent(ppPct, 1)}
+            {formatPercent(descPct, 1)} del canon bruto
           </p>
         </div>
 
@@ -75,9 +73,9 @@ export default async function ProyeccionesPage() {
           <span className="font-medium text-slate-700">Cómo se calcula:</span>
           {" "}Canon bruto <span className="font-mono font-medium text-slate-900">{formatCOP(breakdown.canonBruto)}</span>
           {" "}− Descuentos fase <span className="font-mono font-medium text-rose-600">{formatCOP(breakdown.totalDescuentos)}</span>
-          {" "}− Pronto pago <span className="font-mono font-medium text-rose-600">{formatCOP(breakdown.totalPP)}</span>
-          {" "}= Base neta <span className="font-mono font-medium text-slate-900">{formatCOP(breakdown.canonBruto - breakdown.totalDescuentos - breakdown.totalPP)}</span>
+          {" "}= Base neta <span className="font-mono font-medium text-slate-900">{formatCOP(breakdown.canonBruto - breakdown.totalDescuentos)}</span>
           {" "}× 1.19 IVA = <span className="font-mono font-bold text-blue-700">{formatCOP(breakdown.netoConIVA)}</span>
+          <span className="ml-3 text-slate-400">· Pronto pago se aplica solo si el cliente paga antes del día 10</span>
         </p>
       </div>
 

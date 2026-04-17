@@ -51,7 +51,7 @@ export async function generarProyecciones(
         const newCanon    = Math.round(c.lastCanon * multiplier)
         const descuentoPct = c.lastDescuentoPct > 0 ? c.lastDescuentoPct : c.descuentoPct
         const newDescuento = Math.round(newCanon * (descuentoPct / 100))
-        const newPP        = Math.round((newCanon - newDescuento) * (c.prontoPagoPct / 100))
+        const newPP        = 0  // PP never projected — applied only when client actually pays within 10 days
 
         const rows = Array.from({ length: 12 }, (_, i) => ({
           company_id:            companyId,

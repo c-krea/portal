@@ -57,7 +57,7 @@ export async function getProyeccionSummaries(companyId: string): Promise<Proyecc
       p.year,
       COUNT(DISTINCT p.contract_id)::int      AS contract_count,
       COUNT(DISTINCT p.unit_id)::int          AS unit_count,
-      ROUND(SUM(p.canon_proyectado - p.descuento_proyectado - p.pronto_pago_proyectado)::numeric * 1.19 / 12) AS total_canon_avg
+      ROUND(SUM(p.canon_proyectado - p.descuento_proyectado)::numeric * 1.19 / 12) AS total_canon_avg
     FROM projections p
     WHERE p.company_id = '${companyId}'::uuid
     GROUP BY p.year
@@ -80,8 +80,8 @@ export async function getProyeccionBreakdown(companyId: string, year: number): P
       ROUND(COALESCE(SUM(canon_proyectado), 0))::numeric           AS canon_bruto,
       ROUND(COALESCE(SUM(descuento_proyectado), 0))::numeric       AS total_descuentos,
       ROUND(COALESCE(SUM(pronto_pago_proyectado), 0))::numeric     AS total_pp,
-      ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado - pronto_pago_proyectado), 0) * 0.19)::numeric AS total_iva,
-      ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado - pronto_pago_proyectado), 0) * 1.19)::numeric AS neto_con_iva
+      ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado), 0) * 0.19)::numeric AS total_iva,
+      ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado), 0) * 1.19)::numeric AS neto_con_iva
     FROM projections
     WHERE year = ${year}
       AND company_id = '${companyId}'::uuid
@@ -120,7 +120,7 @@ export async function getProyeccionDetalle(companyId: string, year: number): Pro
            THEN 0::numeric
            ELSE COALESCE(c.pronto_pago_pct, 0)::numeric
       END                                               AS pronto_pago_pct,
-      ROUND(SUM(p.canon_proyectado - p.descuento_proyectado - p.pronto_pago_proyectado) * 1.19)::numeric AS neto_anual_iva,
+      ROUND(SUM(p.canon_proyectado - p.descuento_proyectado) * 1.19)::numeric AS neto_anual_iva,
       c.status
     FROM projections p
     JOIN contracts c ON p.contract_id = c.id
@@ -153,9 +153,9 @@ export async function getProyeccionMensual(companyId: string, year: number): Pro
       ROUND(COALESCE(SUM(canon_proyectado), 0))::numeric                                                         AS canon_bruto,
       ROUND(COALESCE(SUM(descuento_proyectado), 0))::numeric                                                     AS descuentos,
       ROUND(COALESCE(SUM(pronto_pago_proyectado), 0))::numeric                                                   AS pronto_pago,
-      ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado - pronto_pago_proyectado), 0))::numeric         AS base_neta,
-      ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado - pronto_pago_proyectado), 0) * 0.19)::numeric  AS iva,
-      ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado - pronto_pago_proyectado), 0) * 1.19)::numeric  AS proyectado
+      ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado), 0))::numeric         AS base_neta,
+      ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado), 0) * 0.19)::numeric  AS iva,
+      ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado), 0) * 1.19)::numeric  AS proyectado
     FROM projections
     WHERE year = ${year}
       AND company_id = '${companyId}'::uuid

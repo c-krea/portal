@@ -41,7 +41,7 @@ const COLS: { key: SortKey; label: string; align: "left" | "right" | "center" }[
   { key: "mesesTranscurridos", label: "Meses",           align: "right" },
   { key: "canonMensual",       label: "Canon / mes",     align: "right" },
   { key: "descuentoPct",       label: "Dcto %",          align: "right" },
-  { key: "prontoPagoPct",      label: "PP %",            align: "right" },
+  { key: "prontoPagoPct",      label: "PP elegible",     align: "right" },
   { key: "netoAnualIVA",       label: "Neto anual c/IVA",align: "right" },
   { key: "status",             label: "Estado",          align: "center" },
 ]
