@@ -12,11 +12,24 @@ export type GastoRow = {
 }
 
 export type GastoSummary = {
-  totalGastos: number
-  totalAllocated: number
-  totalPending: number
-  countAllocated: number
-  countPending: number
+  totalYtd: number
+  avgMensual: number
+  totalMeses: number
+  lastPeriodo: string
+  lastTotal: number
+}
+
+export type GastoChartRow = {
+  periodo: string          // "Ene", "Feb" …
+  vigilancia: number
+  reparaciones: number
+  nomina: number
+  servicios_publicos: number
+  aseo_cafeteria: number
+  publicidad: number
+  impuestos: number
+  otros: number
+  total: number
 }
 
 export async function getGastoRows(): Promise<GastoRow[]> {
@@ -47,20 +60,63 @@ export async function getGastoRows(): Promise<GastoRow[]> {
 
 export async function getGastoSummary(): Promise<GastoSummary> {
   const rows = await execute(`
+    WITH monthly AS (
+      SELECT periodo, SUM(total_amount)::numeric AS total
+      FROM gastos GROUP BY periodo
+    )
     SELECT
-      COALESCE(SUM(total_amount), 0)::numeric                                     AS total_gastos,
-      COALESCE(SUM(total_amount) FILTER (WHERE is_allocated = true), 0)::numeric  AS total_allocated,
-      COALESCE(SUM(total_amount) FILTER (WHERE is_allocated = false), 0)::numeric AS total_pending,
-      COUNT(*) FILTER (WHERE is_allocated = true)                                  AS count_allocated,
-      COUNT(*) FILTER (WHERE is_allocated = false)                                 AS count_pending
-    FROM gastos
+      SUM(total)::numeric                          AS total_ytd,
+      ROUND(AVG(total), 0)::numeric                AS avg_mensual,
+      COUNT(*)::int                                AS total_meses,
+      (SELECT periodo FROM monthly ORDER BY periodo DESC LIMIT 1) AS last_periodo,
+      (SELECT total  FROM monthly ORDER BY periodo DESC LIMIT 1) AS last_total
+    FROM monthly
   `)
-  const r = rows[0]
+  const r = rows[0] as Record<string, unknown>
   return {
-    totalGastos: Number(r?.total_gastos ?? 0),
-    totalAllocated: Number(r?.total_allocated ?? 0),
-    totalPending: Number(r?.total_pending ?? 0),
-    countAllocated: Number(r?.count_allocated ?? 0),
-    countPending: Number(r?.count_pending ?? 0),
+    totalYtd:    Number(r?.total_ytd   ?? 0),
+    avgMensual:  Number(r?.avg_mensual ?? 0),
+    totalMeses:  Number(r?.total_meses ?? 0),
+    lastPeriodo: String(r?.last_periodo ?? ''),
+    lastTotal:   Number(r?.last_total  ?? 0),
   }
+}
+
+const MES_LABEL: Record<string, string> = {
+  '2026-01': 'Ene', '2026-02': 'Feb', '2026-03': 'Mar',
+  '2026-04': 'Abr', '2026-05': 'May', '2026-06': 'Jun',
+  '2026-07': 'Jul', '2026-08': 'Ago', '2026-09': 'Sep',
+  '2026-10': 'Oct', '2026-11': 'Nov', '2026-12': 'Dic',
+}
+
+export async function getGastosChartData(): Promise<GastoChartRow[]> {
+  const rows = await execute(`
+    SELECT
+      g.periodo,
+      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'vigilancia'),        0)::numeric AS vigilancia,
+      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'reparaciones'),      0)::numeric AS reparaciones,
+      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'nomina'),            0)::numeric AS nomina,
+      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'servicios_publicos'),0)::numeric AS servicios_publicos,
+      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'aseo_cafeteria'),    0)::numeric AS aseo_cafeteria,
+      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'publicidad'),        0)::numeric AS publicidad,
+      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'impuestos'),         0)::numeric AS impuestos,
+      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'otros'),             0)::numeric AS otros,
+      COALESCE(SUM(g.total_amount),                                                  0)::numeric AS total
+    FROM gastos g
+    JOIN gasto_types gt ON gt.id = g.gasto_type_id
+    GROUP BY g.periodo
+    ORDER BY g.periodo
+  `)
+  return (rows as Array<Record<string, unknown>>).map((r) => ({
+    periodo:           MES_LABEL[String(r.periodo)] ?? String(r.periodo),
+    vigilancia:        Number(r.vigilancia        ?? 0),
+    reparaciones:      Number(r.reparaciones      ?? 0),
+    nomina:            Number(r.nomina            ?? 0),
+    servicios_publicos:Number(r.servicios_publicos?? 0),
+    aseo_cafeteria:    Number(r.aseo_cafeteria    ?? 0),
+    publicidad:        Number(r.publicidad        ?? 0),
+    impuestos:         Number(r.impuestos         ?? 0),
+    otros:             Number(r.otros             ?? 0),
+    total:             Number(r.total             ?? 0),
+  }))
 }

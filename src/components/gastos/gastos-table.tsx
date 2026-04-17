@@ -12,7 +12,6 @@ import {
 import { useState } from "react"
 import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
 import { formatCOP } from "@/lib/formatters"
-import { cn } from "@/lib/utils"
 import type { GastoRow } from "@/lib/data/gastos"
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -83,26 +82,6 @@ const columns: ColumnDef<GastoRow>[] = [
     cell: ({ getValue }) => (
       <span className="text-xs text-slate-500">{getValue<string | null>() ?? "—"}</span>
     ),
-  },
-  {
-    accessorKey: "isAllocated",
-    header: "Estado",
-    size: 110,
-    cell: ({ getValue }) => {
-      const allocated = getValue<boolean>()
-      return (
-        <span
-          className={cn(
-            "rounded-full px-2.5 py-1 text-xs font-medium",
-            allocated
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-amber-50 text-amber-700",
-          )}
-        >
-          {allocated ? "Asignado" : "Pendiente"}
-        </span>
-      )
-    },
   },
 ]
 
