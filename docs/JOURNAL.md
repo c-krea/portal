@@ -2,6 +2,131 @@
 
 ---
 
+## 2026-04-17 — Session 17: PP Reconciliation Model + Dashboard Tab Toggle (v2.1.0)
+
+### What happened
+
+**Pronto pago fix (projections):**
+- Root cause found: `pronto_pago_proyectado` was pre-applied to all 899 projection rows, assuming 100% of clients would pay within 10 days. Wrong.
+- PP is conditional — only granted when a client actually pays ≤ day 10 of the month.
+- Fixed: zeroed all 899 rows in DB via Supabase MCP. Set `newPP = 0` in `actions.ts`. Removed PP from all SQL formulas in `proyecciones.ts`, `reportes.ts`, `dashboard.ts`.
+- Impact: ~8M (Feb) and ~9M (Mar) gap between projected and recaudado is now correctly explained as PP actually granted to early payers — visible as dark emerald in the chart.
+
+**PP reconciliation model (Option B chosen):**
+- Projection stays immutable. PP tracked on payment records (`pronto_pago_aplicado` column).
+- Reconciliation formula: Proyectado = Recaudo neto + PP otorgado + Pendiente.
+- Dashboard chart now shows 3 stacked segments: emerald (cash received) / dark emerald (PP granted) / navy (truly unpaid).
+- Saved as architectural decision in memory: `decision_pp_visualization.md`.
+
+**Dashboard RecaudoCard:**
+- Inline chart div replaced with `RecaudoCard` client component.
+- Tab toggle (Gráfica / Tabla) in same h-[480px] fixed-height card — no scroll added.
+- Table view: compact monthly breakdown (Mes | Proyectado | Recaudo neto | PP otorgado | Pendiente | %) with color badges (✓ emerald ≥100%, amber ≥80%, rose <80%, — future).
+- Footer totals removed from card — already visible in KPI cards above.
+
+**Gastos page redesign:**
+- Month tabs (ENE/FEB/MAR/ABR) added, matching Medidores pattern. URL: `?periodo=2026-01`.
+- Bar chart replaced with filled pie chart (8 categories). Legend + % below, COP on hover only.
+- Layout: 70/30 split — table card left, pie card right. Sort icons removed. Date as MM/YY.
+
+### Key decisions
+- PP never deducted in projections or invoices. Only applied at actual payment time.
+- RecaudoCard tab toggle preferred over scroll or separate page section — keeps dashboard compact.
+- Reconciliation table removed from proyecciones page (wrong context — it's a dashboard view, not a projections view).
+- Ficha cliente PP phase deferred — payment history table already shows PP per row. No new KPI card added yet.
+
+### Files changed
+- `src/lib/data/proyecciones.ts`, `reportes.ts`, `dashboard.ts`
+- `src/app/(app)/proyecciones/actions.ts`, `proyecciones/page.tsx`
+- `src/components/dashboard/rendimiento-chart.tsx`, `recaudo-card.tsx` (new)
+- `src/app/(app)/page.tsx`
+- `src/lib/data/gastos.ts`, `src/app/(app)/gastos/page.tsx`
+- `src/components/gastos/gastos-chart.tsx`, `gastos-table.tsx`
+
+---
+
+## 2026-04-16 — Session 16: Mora + Locales UX Overhaul (v2.0.0)
+
+### What happened
+
+**Cartera Jurídica:**
+- Added `tenants.juridica boolean` column. Tenants flagged `juridica=true` excluded from all mora KPIs and appear in separate "Cartera Jurídica" table below mora table.
+- Magda Pedraza (unit 503) flagged. PUNTO ACRILICO created manually with $4.818.675 balance, NIT='PENDIENTE'. WOR-46 in Linear to fill missing data.
+- Why: legal cases distort operational mora KPIs.
+
+**Locales tab (renamed from Clientes):**
+- One row per client (not per unit). Unit badges as chips. Canon = sum of active contracts.
+- Inactivos tab: shows vacant units (no active contract) via `getVacantUnitRows()`. Non-clickable "Vacante" rows.
+- Default sort: Al Día → canon desc, Mora/Críticos/Todos → saldo pendiente desc.
+- Tab filter in URL (`?tab=en_mora`) — browser back preserves filter.
+
+**BackButton:** `router.back()` replaces hardcoded `/clientes` href. Always returns to correct previous URL.
+
+**Multi-unit contract fix:** `getTenantDetail(unitNumber?)` now filters by unit. Mora + Locales links pass `?unit=XXX`.
+
+**Cartera per-business confirmed:** Siesa invoices the business not the unit. Detail page shows all cartera at tenant level — correct behavior.
+
+### Key decisions
+- `juridica` flag is tenant-level (not contract-level)
+- Inactivos = vacant units (operational question: which spaces are free?), not inactive tenant history
+- Cartera stays tenant-level — don't attempt per-unit split
+
+### Files changed
+- `src/lib/data/mora.ts`, `dashboard.ts`, `clientes.ts`, `tenant-detail.ts`
+- `src/components/mora/mora-table.tsx`, `clientes/clientes-table.tsx`
+- `src/components/shared/back-button.tsx` (new)
+- `src/app/(app)/mora/page.tsx`, `clientes/[id]/page.tsx`
+
+---
+
+## 2026-04-16 — Session 15: Gastos import, dashboard polish, medidores OCR prototype
+
+### What happened
+
+**Dashboard:** Removed "Saldo Pendiente" KPI (4→3). Renamed "Desglose de Cartera" → "Desglose de Mora" with meaningful buckets: Mora Crítica (>60d), Mora Activa (31-60d), Intereses, Promedio Días. SQL computes both buckets in a single CASE query — no extra round trip.
+
+**Mora table dup key:** React warning "Encountered two children with the same key" — root cause: tenants with multiple units each appeared once per unit, all sharing the same `tenantId` as React key. Fixed with composite `tenantId-unitNumber`.
+
+**Gastos import from ERP:**
+- Jan 2026 ($69.8M): from C-KREA GB.xlsx "4. GASTOS" sheet — 15 line items
+- Feb/Mar/Apr 2026 ($142.2M): from ckrea.xlsx "Estado de resultados" sheet — Siesa journal entries grouped by account family → mapped to 11 gasto_types
+- Total: 40 rows, $212M. Power BI shows $214.18M — $2.2M gap = April still in progress
+- Reconciliation confirmed: Jan ERP total = Jan manual sheet total = $69.8M ✓
+- Account code family mapping: 5205x→nómina, 52352501→acueducto, 52353001→energía, 52350506→vigilancia, 52501501→reparaciones, etc.
+
+**Gastos page redesign:**
+- KPIs: Total YTD / Promedio mensual / Último mes / Total registros (replaced asignado/pendiente — never used)
+- Stacked Recharts bar chart: month on X, 8 category colors stacked. Custom tooltip shows all categories + total.
+- Key learning: `is_allocated` flag was designed for cost allocation to units — but ALL gastos are building-level operating costs (only electricity allocated per unit via medidores). Flag is irrelevant; removed from UI.
+
+**WOR-47 Medidores OCR — feature design + prototype:**
+
+Business logic confirmed:
+- All 84 units have electricity meters (updated in DB)
+- Validation: compare new reading vs AVG of last 3 months ±10% → auto-approve or flag
+- No photo by day 10 → charge promedio_3m × 1.5 (incentive to submit)
+- Channel: same portal, tenant login (Supabase Auth role), ruta (tenant)/
+- Storage: Google Drive API + Cloud Vision OCR (needs GCP service account from IT)
+
+Admin prototype built (Phase 1):
+- Period tabs (Ene/Feb/Mar/Abr)
+- KPI strip: Total / Registradas / Sin lectura / Total kWh
+- Table: 84 units with sort, filter, desviación% vs promedio 3m, status badges
+- Blue banner showing WOR-47 params for awareness
+
+### Decisions made
+- Gastos are NOT allocated to individual units (only electricity is, via medidores)
+- Medidores OCR feature: Linear WOR-47, spec at docs/features/WOR-47-medidores-ocr.md
+- ±10% tolerance, 1.5× factor high, 10-day deadline — all confirmed
+
+### Pending (next session)
+- WOR-47 Phase 2: schema update + auto-validation logic
+- WOR-47 Phase 3/4: OCR + tenant portal (needs GCP account from IT first)
+- CKR-13: SOLORZANO payment + NEOGRAFICK tenant still open
+- Interest rate confirm: 2%/month in DB vs 1.5%/month in spec
+
+---
+
 ## 2026-04-16 — Vercel DB Fix (IPv6 root cause) + Demo Prep
 
 ### Problem

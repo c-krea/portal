@@ -8,6 +8,53 @@ Format: [YYYY-MM-DD] — description
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-04-17
+### Changed
+- Proyecciones: removed pronto pago (PP) from ALL projection formulas — PP was wrongly pre-applied to 100% of contracts. PP is conditional and applies only when a client actually pays within 10 days. Zeroed out 899 `pronto_pago_proyectado` rows in DB.
+- Proyecciones: renamed "PP elegible" (was "PP %") in detalle table — informational label, not a deduction.
+- Proyecciones: formula explainer updated to show Canon − Descuentos fase = Base neta × 1.19, with note that PP applies only at payment time.
+- Proyecciones: removed reconciliation table from proyecciones page (wrong context — lives on dashboard now).
+### Added
+- Dashboard: stacked bar chart now shows 3 segments — Recaudo neto (emerald) / PP otorgado (dark emerald) / Pendiente (navy). PP segment shows real discount actually granted at payment.
+- Dashboard: RecaudoCard with Gráfica/Tabla toggle. Same h-[480px] card, button switches between stacked bar chart and compact monthly reconciliation table (Proyectado | Recaudo neto | PP otorgado | Pendiente | %).
+- Gastos: month tabs (ENE/FEB/MAR/ABR) matching Medidores pattern.
+- Gastos: pie chart (filled, 8 categories) replaces bar chart — legend below with % per category, tooltip shows COP on hover.
+- Gastos: two-card layout — table card (70%) left, pie card (30%) right.
+- Gastos: date format MM/YY (was YYYY-MM). Sort icons removed (sorting still works on click).
+### Fixed
+- `getProyectadoVsReal`: proyectado formula now uses `canon - descuento` only (was including pp). Added `pp_otorgado` and `pendiente` fields to ProyectadoVsReal type.
+- Dashboard portfolio stat: cleaned `canon - descuento - pronto_pago_proyectado` → `canon - descuento`.
+
+## [2.0.0] — 2026-04-16
+### Added
+- Cartera Jurídica: second table below Mora table for tenants in legal proceedings (`tenants.juridica = true`). Excluded from all mora KPIs and dashboard totals. PUNTO ACRILICO + Magda Pedraza (503) flagged.
+- `getJuridicaRows()`, `getVacantUnitRows()`, `getTenantContracts()` data functions
+- `BackButton` shared component using `router.back()` — preserves tab/filter on navigation
+- Locales tab: filter persisted in URL (`?tab=en_mora`) — survives client navigation
+- Locales tab: default sort per tab (Al Día→canon desc, Mora/Críticos/Todos→saldo pendiente desc)
+- Locales tab: Inactivos shows vacant units (no active contract) as non-clickable "Vacante" rows
+- Detail page: all contracts listed per tenant (not just one), unit badge + dates per card
+- Mora links: `?unit=XXX` param loads correct contract on multi-unit tenants
+### Changed
+- Locales tab: one row per client (not per unit); all unit numbers shown as badges
+- Sidebar + page title: "Clientes" → "Locales"
+- Cartera on detail page is per-business (correct — Siesa bills the business, not per unit)
+
+## [2.0.0] — 2026-04-16
+### Added
+- Dashboard: "Desglose de Mora" — 4 buckets: Mora Crítica (>60d), Mora Activa (31-60d), Intereses, Promedio Días. SQL adds `mora_critica` + `mora_activa` CASE columns in single query.
+- Dashboard: KPI strip reduced 4→3 (removed "Saldo Pendiente")
+- Gastos: 40 rows imported for Jan–Apr 2026 ($212M) from C-KREA GB.xlsx "4. GASTOS" + ckrea.xlsx "Estado de resultados"
+- Gastos: stacked Recharts bar chart by month × 8 categories (Vigilancia/Reparaciones/Nómina/ServPublicos/Aseo/Publicidad/Impuestos/Otros)
+- Gastos: KPIs replaced (Total YTD / Promedio mensual / Último mes / Total registros)
+- Medidores: WOR-47 admin prototype — period tabs, KPI strip, 84-unit table with status + promedio 3m + desviación%
+- Medidores: `getMedidoresAdmin()` — all units + reading for period + 3-month average LATERAL subquery
+- All 84 units set `has_electricity_meter = true` in DB
+- WOR-47 Linear issue + `docs/features/WOR-47-medidores-ocr.md` spec (params: ±10% tolerance, 1.5× factor, 10-day deadline)
+### Fixed
+- Mora table: duplicate React key for multi-unit tenants (`key={tenantId}` → `key={tenantId-unitNumber}`)
+- Gastos table: removed "Estado" (asignado/pendiente) column — gastos are building-level costs, not unit-allocated
+
 ## [1.9.0] — 2026-04-16
 ### Fixed
 - DB connection on Vercel: Supabase DB host is IPv6-only, Vercel Lambda is IPv4-only — no TCP path exists
