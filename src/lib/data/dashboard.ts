@@ -37,6 +37,7 @@ async function getMoraStats() {
       COALESCE(SUM(CASE WHEN dias_mora BETWEEN ${grace + 1} AND 60 THEN valor_vencido ELSE 0 END), 0)::numeric AS mora_activa
     FROM cartera
     WHERE valor_vencido > 0 AND dias_mora > ${grace}
+      AND tenant_id NOT IN (SELECT id FROM tenants WHERE juridica = true)
   `)
 
   const r = (rows as Array<Record<string, unknown>>)[0] ?? {}

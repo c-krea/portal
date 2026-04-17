@@ -2,12 +2,12 @@ export const dynamic = "force-dynamic"
 
 import { PageHeader } from "@/components/layout/page-header"
 import { MoraTable } from "@/components/mora/mora-table"
-import { getMoraRows, getMoraSummary } from "@/lib/data/mora"
+import { getMoraRows, getMoraSummary, getJuridicaRows } from "@/lib/data/mora"
 import { formatCOP } from "@/lib/formatters"
 import { AlertTriangle, Users, Clock, TrendingUp } from "lucide-react"
 
 export default async function MoraPage() {
-  const [rows, summary] = await Promise.all([getMoraRows(), getMoraSummary()])
+  const [rows, summary, juridicaRows] = await Promise.all([getMoraRows(), getMoraSummary(), getJuridicaRows()])
 
   const avgDias =
     rows.length > 0
@@ -135,6 +135,19 @@ export default async function MoraPage() {
       <div className="mt-4">
         <MoraTable data={rows} />
       </div>
+
+      {/* ── Cartera Jurídica ── */}
+      {juridicaRows.length > 0 && (
+        <div className="mt-8">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="inline-block rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-slate-600">
+              Cartera Jurídica
+            </span>
+            <span className="text-xs text-slate-400">No incluida en totales de mora</span>
+          </div>
+          <MoraTable data={juridicaRows} />
+        </div>
+      )}
     </>
   )
 }

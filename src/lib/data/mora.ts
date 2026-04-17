@@ -25,7 +25,9 @@ export async function getMoraSummary(): Promise<MoraSummary> {
   const [carteraRes, invoiceRes, accrualRes] = await Promise.all([
     execute(`
       SELECT COALESCE(SUM(valor_vencido), 0)::numeric AS total
-      FROM cartera WHERE valor_vencido > 0 AND dias_mora > ${grace}
+      FROM cartera
+      WHERE valor_vencido > 0 AND dias_mora > ${grace}
+        AND tenant_id NOT IN (SELECT id FROM tenants WHERE juridica = true)
     `),
     execute(`
       SELECT
@@ -73,7 +75,45 @@ export async function getMoraRows(): Promise<MoraRow[]> {
       ORDER BY con.fecha_inicio DESC
       LIMIT 1
     ) u ON true
-    WHERE c.valor_vencido > 0 AND c.dias_mora > ${grace}
+    WHERE c.valor_vencido > 0 AND c.dias_mora > ${grace} AND t.juridica = false
+    GROUP BY t.id, t.razon_social, t.nombre_corto, u.unit_number
+    ORDER BY MAX(c.dias_mora) DESC NULLS LAST
+  `)
+
+  return rows.map((r) => ({
+    tenantId: String(r.tenant_id),
+    cliente: String(r.cliente),
+    unitNumber: r.unit_number ? String(r.unit_number) : null,
+    diasMora: Number(r.dias_mora ?? 0),
+    mesesPendientes: Number(r.meses_pendientes ?? 0),
+    saldoVencido: Number(r.saldo_vencido ?? 0),
+    interesAcumulado: Number(r.interes_acumulado ?? 0),
+    saldoTotal: Number(r.saldo_total ?? 0),
+  }))
+}
+
+export async function getJuridicaRows(): Promise<MoraRow[]> {
+  const rows = await execute(`
+    SELECT
+      t.id                                         AS tenant_id,
+      COALESCE(t.nombre_corto, t.razon_social)     AS cliente,
+      u.unit_number,
+      MAX(c.dias_mora)                             AS dias_mora,
+      COUNT(c.id)::int                             AS meses_pendientes,
+      SUM(c.valor_vencido)::numeric                AS saldo_vencido,
+      SUM(c.interes_acumulado)::numeric            AS interes_acumulado,
+      SUM(c.saldo)::numeric                        AS saldo_total
+    FROM cartera c
+    JOIN tenants t ON c.tenant_id = t.id AND t.juridica = true
+    LEFT JOIN LATERAL (
+      SELECT u2.unit_number
+      FROM contracts con
+      JOIN units u2 ON con.unit_id = u2.id
+      WHERE con.tenant_id = t.id
+      ORDER BY con.fecha_inicio DESC
+      LIMIT 1
+    ) u ON true
+    WHERE c.valor_vencido > 0
     GROUP BY t.id, t.razon_social, t.nombre_corto, u.unit_number
     ORDER BY MAX(c.dias_mora) DESC NULLS LAST
   `)
