@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { PageHeader } from "@/components/layout/page-header"
-import { RendimientoChart } from "@/components/dashboard/rendimiento-chart"
+import { RecaudoCard } from "@/components/dashboard/recaudo-card"
 import { getDashboardData } from "@/lib/data/dashboard"
 import { formatCOP, formatPercent } from "@/lib/formatters"
 import { AlertTriangle, TrendingUp, Clock, Flame } from "lucide-react"
@@ -140,32 +140,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Chart — fills remaining width */}
-        <div className="flex h-[480px] flex-1 flex-col rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-sm font-semibold text-slate-900">Proyectado vs. Recaudado 2026</p>
-          <div className="min-h-0 flex-1">
-            <RendimientoChart data={chart} />
-          </div>
-          <div className="mt-3 flex gap-6 border-t border-slate-100 pt-3 shrink-0">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Prom. Proyectado / Mes</p>
-              <p className="mt-0.5 text-sm font-bold text-slate-900">
-                {formatCOP(chart.length > 0 ? chart.reduce((s, r) => s + r.proyectado, 0) / chart.length : 0)}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Total Proyectado</p>
-              <p className="mt-0.5 text-sm font-bold text-slate-900">
-                {formatCOP(chart.reduce((s, r) => s + r.proyectado, 0))}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Total Recaudado</p>
-              <p className="mt-0.5 text-sm font-bold text-emerald-600">
-                {formatCOP(totalRecaudado)}
-              </p>
-            </div>
-          </div>
-        </div>
+        <RecaudoCard data={chart} />
       </div>
     </>
   )
