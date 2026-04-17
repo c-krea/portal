@@ -9,9 +9,6 @@ import type { ProyectadoVsReal } from "@/lib/data/reportes"
 export function RecaudoCard({ data }: { data: ProyectadoVsReal[] }) {
   const [tab, setTab] = useState<"grafica" | "tabla">("grafica")
 
-  const totalProy = data.reduce((s, r) => s + r.proyectado, 0)
-  const totalRec  = data.reduce((s, r) => s + r.recaudado, 0)
-  const promMens  = data.length > 0 ? Math.round(totalProy / data.length) : 0
 
   return (
     <div className="flex h-[480px] flex-1 flex-col rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -103,21 +100,6 @@ export function RecaudoCard({ data }: { data: ProyectadoVsReal[] }) {
         )}
       </div>
 
-      {/* Footer — always visible */}
-      <div className="mt-3 flex gap-6 border-t border-slate-100 pt-3 shrink-0">
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Prom. Proyectado / Mes</p>
-          <p className="mt-0.5 text-sm font-bold text-slate-900">{formatCOP(promMens)}</p>
-        </div>
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Total Proyectado</p>
-          <p className="mt-0.5 text-sm font-bold text-slate-900">{formatCOP(totalProy)}</p>
-        </div>
-        <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Total Recaudado</p>
-          <p className="mt-0.5 text-sm font-bold text-emerald-600">{formatCOP(totalRec)}</p>
-        </div>
-      </div>
     </div>
   )
 }
