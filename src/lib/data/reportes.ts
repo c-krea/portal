@@ -23,8 +23,10 @@ export type ProyectadoVsReal = {
   mes: string
   month: number
   proyectado: number
-  recaudado: number
-  diferencia: number
+  recaudado: number   // cash recibido (valor_final)
+  ppOtorgado: number  // descuento PP concedido (pronto_pago_aplicado)
+  pendiente: number   // proyectado - recaudado - ppOtorgado (realmente sin pagar)
+  diferencia: number  // recaudado - proyectado (kept for compat)
 }
 
 export type ReporteSummary = {
@@ -104,7 +106,7 @@ export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal
     execute(`
       SELECT
         month,
-        ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado - pronto_pago_proyectado), 0) * 1.19)::numeric AS proyectado
+        ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado), 0) * 1.19)::numeric AS proyectado
       FROM projections
       WHERE year = ${year}
       GROUP BY month
@@ -112,8 +114,9 @@ export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal
     `),
     execute(`
       SELECT
-        EXTRACT(MONTH FROM fecha_recaudo)::int AS month,
-        COALESCE(SUM(valor_final), 0)::numeric AS recaudado
+        EXTRACT(MONTH FROM fecha_recaudo)::int          AS month,
+        COALESCE(SUM(valor_final), 0)::numeric          AS recaudado,
+        COALESCE(SUM(pronto_pago_aplicado), 0)::numeric AS pp_otorgado
       FROM payments
       WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
         AND status != 'anulado'
@@ -126,9 +129,11 @@ export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal
     const m = i + 1
     const pRow = (proyRows as Array<Record<string, unknown>>).find((r) => Number(r.month) === m)
     const rRow = (recRows as Array<Record<string, unknown>>).find((r) => Number(r.month) === m)
-    const proyectado = Number(pRow?.proyectado ?? 0)
-    const recaudado  = Number(rRow?.recaudado ?? 0)
-    return { mes: label, month: m, proyectado, recaudado, diferencia: recaudado - proyectado }
+    const proyectado  = Number(pRow?.proyectado  ?? 0)
+    const recaudado   = Number(rRow?.recaudado   ?? 0)
+    const ppOtorgado  = Number(rRow?.pp_otorgado ?? 0)
+    const pendiente   = Math.max(proyectado - recaudado - ppOtorgado, 0)
+    return { mes: label, month: m, proyectado, recaudado, ppOtorgado, pendiente, diferencia: recaudado - proyectado }
   })
 }
 

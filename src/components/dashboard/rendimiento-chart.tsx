@@ -15,17 +15,21 @@ type Row = {
   mes: string
   proyectado: number
   recaudado: number
+  ppOtorgado: number
+  pendiente: number
 }
 
 type ChartRow = {
   mes: string
-  proyectado: number   // kept for tooltip
-  recaudado: number    // emerald bottom slice
-  resto: number        // navy top slice  = proyectado - recaudado
+  proyectado: number    // tooltip reference only
+  recaudado: number     // emerald bottom  — cash recibido
+  ppOtorgado: number    // dark emerald middle — PP descuento concedido
+  pendiente: number     // navy top — realmente sin pagar
 }
 
-const NAVY    = "#1e3a5f"
-const EMERALD = "#10b981"
+const EMERALD      = "#10b981"
+const EMERALD_DARK = "#059669"
+const NAVY         = "#1e3a5f"
 
 function CustomTooltip({
   active,
@@ -38,10 +42,11 @@ function CustomTooltip({
 }) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload
-  const pct = d.proyectado > 0 ? Math.round((d.recaudado / d.proyectado) * 100) : 0
+  const totalCobrado = d.recaudado + d.ppOtorgado
+  const pct = d.proyectado > 0 ? Math.round((totalCobrado / d.proyectado) * 100) : 0
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl" style={{ width: 210 }}>
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl" style={{ width: 230 }}>
       <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
       <div className="space-y-1 text-xs">
         <div className="flex justify-between">
@@ -54,10 +59,25 @@ function CustomTooltip({
         <div className="flex justify-between">
           <span className="flex items-center gap-1.5 text-slate-500">
             <span className="inline-block h-2 w-2 rounded-sm" style={{ background: EMERALD }} />
-            Recaudado
+            Recaudo neto
           </span>
           <span className="font-mono font-medium text-emerald-700">{formatCOP(d.recaudado)}</span>
         </div>
+        {d.ppOtorgado > 0 && (
+          <div className="flex justify-between">
+            <span className="flex items-center gap-1.5 text-slate-500">
+              <span className="inline-block h-2 w-2 rounded-sm" style={{ background: EMERALD_DARK }} />
+              PP otorgado
+            </span>
+            <span className="font-mono font-medium text-emerald-900">{formatCOP(d.ppOtorgado)}</span>
+          </div>
+        )}
+        {d.pendiente > 0 && (
+          <div className="flex justify-between">
+            <span className="text-slate-400">Sin cobrar</span>
+            <span className="font-mono text-slate-500">{formatCOP(d.pendiente)}</span>
+          </div>
+        )}
         <div className="flex justify-between border-t border-slate-100 pt-1">
           <span className={pct >= 100 ? "text-emerald-600" : "text-slate-400"}>Cumplimiento</span>
           <span className={`font-mono font-semibold ${pct >= 100 ? "text-emerald-600" : "text-slate-600"}`}>
@@ -73,12 +93,16 @@ function CustomLegend() {
   return (
     <div className="mt-1 flex justify-center gap-5 text-xs text-slate-500">
       <span className="flex items-center gap-1.5">
-        <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: NAVY }} />
-        Proyectado
+        <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: EMERALD }} />
+        Recaudo neto
       </span>
       <span className="flex items-center gap-1.5">
-        <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: EMERALD }} />
-        Recaudado
+        <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: EMERALD_DARK }} />
+        PP otorgado
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: NAVY }} />
+        Pendiente
       </span>
     </div>
   )
@@ -88,8 +112,9 @@ export function RendimientoChart({ data }: { data: Row[] }) {
   const chartData: ChartRow[] = data.map((r) => ({
     mes:        r.mes,
     proyectado: r.proyectado,
-    recaudado:  Math.min(r.recaudado, r.proyectado),
-    resto:      Math.max(r.proyectado - r.recaudado, 0),
+    recaudado:  r.recaudado,
+    ppOtorgado: r.ppOtorgado,
+    pendiente:  r.pendiente,
   }))
 
   const max = Math.max(...data.map((d) => d.proyectado), 1)
@@ -116,9 +141,10 @@ export function RendimientoChart({ data }: { data: Row[] }) {
               domain={[0, max * 1.12]}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f8fafc", radius: 6 }} />
-            {/* Stacked: emerald (recaudado) fills from bottom, navy (resto) sits on top */}
-            <Bar dataKey="recaudado" stackId="a" fill={EMERALD} radius={[0, 0, 4, 4]} maxBarSize={40} />
-            <Bar dataKey="resto"     stackId="a" fill={NAVY}    radius={[4, 4, 0, 0]} maxBarSize={40} />
+            {/* Stacked bottom → top: cash · PP · pendiente */}
+            <Bar dataKey="recaudado"  stackId="a" fill={EMERALD}      radius={[0, 0, 4, 4]} maxBarSize={40} />
+            <Bar dataKey="ppOtorgado" stackId="a" fill={EMERALD_DARK} radius={[0, 0, 0, 0]} maxBarSize={40} />
+            <Bar dataKey="pendiente"  stackId="a" fill={NAVY}         radius={[4, 4, 0, 0]} maxBarSize={40} />
           </BarChart>
         </ResponsiveContainer>
       </div>
