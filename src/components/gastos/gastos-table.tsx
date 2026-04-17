@@ -12,6 +12,7 @@ import {
 import { useState } from "react"
 import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
 import { formatCOP } from "@/lib/formatters"
+import { cn } from "@/lib/utils"
 import type { GastoRow } from "@/lib/data/gastos"
 
 const CATEGORY_LABELS: Record<string, string> = {
