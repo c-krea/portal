@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr"
+import { createClient } from "@supabase/supabase-js"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function proxy(request: NextRequest) {
@@ -47,6 +48,33 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     return NextResponse.redirect(url)
+  }
+
+  // Role-based routing: tenant → /portal, admin/others → /(app)
+  const admin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  const role = profile?.role
+
+  if (role === "tenant") {
+    if (!pathname.startsWith("/portal")) {
+      const url = request.nextUrl.clone()
+      url.pathname = "/portal"
+      return NextResponse.redirect(url)
+    }
+  } else {
+    if (pathname.startsWith("/portal")) {
+      const url = request.nextUrl.clone()
+      url.pathname = "/"
+      return NextResponse.redirect(url)
+    }
   }
 
   return supabaseResponse

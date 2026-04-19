@@ -34,6 +34,7 @@ export type MedidorAdminRow = {
   totalEnergia: number | null
   status: "registrada" | "sin_lectura"
   readingId: string | null
+  validationStatus: "pendiente" | "aprobado" | "revision" | "sin_lectura" | null
 }
 
 export async function getMedidoresAdmin(
@@ -48,6 +49,7 @@ export async function getMedidoresAdmin(
       mr.id                                              AS reading_id,
       mr.kwh::numeric                                    AS kwh,
       mr.total_energia::numeric                          AS total_energia,
+      mr.validation_status,
       avg3.promedio_3m
     FROM units u
     LEFT JOIN contracts c
@@ -85,7 +87,10 @@ export async function getMedidoresAdmin(
       promedio3m:  p3m,
       desvPct:     desv,
       totalEnergia: r.total_energia != null ? Number(r.total_energia) : null,
-      status:      r.reading_id ? "registrada" : "sin_lectura",
+      status:           r.reading_id ? "registrada" : "sin_lectura",
+      validationStatus: r.reading_id
+        ? ((r.validation_status as string | null) ?? "pendiente") as MedidorAdminRow["validationStatus"]
+        : "sin_lectura",
     }
   })
 }

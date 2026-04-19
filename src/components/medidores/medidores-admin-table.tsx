@@ -10,16 +10,28 @@ import { X } from "lucide-react"
 type SortKey = "unitNumber" | "tenantName" | "kwh" | "desvPct" | "totalEnergia"
 type SortDir = "asc" | "desc"
 
-function StatusBadge({ status }: { status: MedidorAdminRow["status"] }) {
-  if (status === "registrada")
+function ValidationBadge({ vs }: { vs: MedidorAdminRow["validationStatus"] }) {
+  if (vs === "aprobado")
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-        ✓ Registrada
+        ✓ Aprobado
+      </span>
+    )
+  if (vs === "revision")
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+        ⚠ En Revisión
+      </span>
+    )
+  if (vs === "sin_lectura")
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-600">
+        — Sin Lectura
       </span>
     )
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
-      ⏳ Sin lectura
+      ⏳ Pendiente
     </span>
   )
 }
@@ -165,7 +177,7 @@ export function MedidoresAdminTable({
                   {row.totalEnergia != null ? formatCOP(row.totalEnergia) : <span className="text-slate-300">—</span>}
                 </td>
                 <td className="px-4 py-3">
-                  <StatusBadge status={row.status} />
+                  <ValidationBadge vs={row.validationStatus} />
                 </td>
               </tr>
             ))}
