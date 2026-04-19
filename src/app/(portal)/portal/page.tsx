@@ -134,7 +134,7 @@ export default async function PortalPage() {
             ? "border-rose-200 bg-rose-50"
             : "border-amber-200 bg-amber-50"
         }`}>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <Zap className={`h-5 w-5 shrink-0 mt-0.5 ${
                 medidorDeadlineDays <= 1 ? "text-rose-500" : "text-amber-500"
@@ -156,7 +156,7 @@ export default async function PortalPage() {
             </div>
             <Link
               href="/portal/medidor"
-              className={`shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors ${
+              className={`self-start sm:self-auto shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors ${
                 medidorDeadlineDays <= 1
                   ? "bg-rose-600 hover:bg-rose-700"
                   : "bg-amber-600 hover:bg-amber-700"
@@ -177,7 +177,7 @@ export default async function PortalPage() {
         const warning = daysToPayment > 5 && daysToPayment <= 10
         const overdue = daysToPayment < 0
         return (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 
             {/* 1 — Countdown */}
             {/* 1 — Countdown */}
@@ -343,7 +343,7 @@ export default async function PortalPage() {
             <thead>
               <tr className="border-b border-slate-100 text-xs font-medium uppercase tracking-wider text-slate-500">
                 <th className="px-5 py-3 text-left">Fecha</th>
-                <th className="px-5 py-3 text-left">Concepto</th>
+                <th className="hidden sm:table-cell px-5 py-3 text-left">Concepto</th>
                 <th className="px-5 py-3 text-right">Valor</th>
                 <th className="px-5 py-3 text-left">Estado</th>
               </tr>
@@ -361,7 +361,7 @@ export default async function PortalPage() {
                     <td className="px-5 py-3 font-medium text-slate-700">
                       {formatDate(p.fechaRecaudo)}
                     </td>
-                    <td className="px-5 py-3 text-slate-500">
+                    <td className="hidden sm:table-cell px-5 py-3 text-slate-500">
                       {p.concepto ?? "—"}
                     </td>
                     <td className="px-5 py-3 text-right font-medium text-slate-900">

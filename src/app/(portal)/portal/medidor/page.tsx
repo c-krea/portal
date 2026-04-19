@@ -68,7 +68,7 @@ export default async function MedidorPage() {
       {/* Already submitted — full layout, locked */}
       {medidor.exists ? (
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Left: photo or placeholder */}
             <div className="flex flex-col gap-3">
               <p className="text-sm font-medium text-slate-700">Foto del contador</p>
@@ -123,7 +123,7 @@ export default async function MedidorPage() {
       ) : !withinDeadline ? (
         /* Outside submission window — same layout, locked/empty */
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {/* Left: no photo */}
             <div className="flex flex-col gap-3">
               <p className="text-sm font-medium text-slate-700">Foto del contador</p>

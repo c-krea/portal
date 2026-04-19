@@ -48,7 +48,7 @@ export function MedidorForm({
   if (state.success) {
     return (
       <div className="space-y-5">
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Left: photo preview or checkmark */}
           <div className="flex flex-col gap-3">
             <p className="text-sm font-medium text-slate-700">Foto del contador</p>
@@ -107,7 +107,7 @@ export function MedidorForm({
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
           {/* ── Left: photo card ── */}
           <div className="flex flex-col gap-3">
