@@ -35,19 +35,23 @@ async function getOrCreateFolder(
   return folder.data.id!
 }
 
-async function toPdf(buffer: ArrayBuffer, mimeType: string): Promise<Buffer> {
-  if (mimeType === "application/pdf") return Buffer.from(buffer)
-
-  const pdfDoc = await PDFDocument.create()
-  let image
-  if (mimeType === "image/png") {
-    image = await pdfDoc.embedPng(buffer)
-  } else {
-    image = await pdfDoc.embedJpg(buffer)
+async function toPdf(buffer: ArrayBuffer, mimeType: string): Promise<{ data: Buffer; mime: string; ext: string }> {
+  if (mimeType === "application/pdf") {
+    return { data: Buffer.from(buffer), mime: "application/pdf", ext: "pdf" }
   }
-  const page = pdfDoc.addPage([image.width, image.height])
-  page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height })
-  return Buffer.from(await pdfDoc.save())
+  try {
+    const pdfDoc = await PDFDocument.create()
+    const image = mimeType === "image/png"
+      ? await pdfDoc.embedPng(buffer)
+      : await pdfDoc.embedJpg(buffer)
+    const page = pdfDoc.addPage([image.width, image.height])
+    page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height })
+    return { data: Buffer.from(await pdfDoc.save()), mime: "application/pdf", ext: "pdf" }
+  } catch {
+    // Unsupported format (WebP, HEIC, etc.) — upload raw
+    const ext = mimeType.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg"
+    return { data: Buffer.from(buffer), mime: mimeType, ext }
+  }
 }
 
 export async function uploadMeterPhoto(
@@ -61,16 +65,16 @@ export async function uploadMeterPhoto(
 
   const unitFolderId = await getOrCreateFolder(drive, `Local ${unitNumber}`, rootFolderId)
 
-  const pdfBuffer = await toPdf(buffer, mimeType)
-  const stream = Readable.from(pdfBuffer)
+  const { data: fileData, mime: fileMime, ext: fileExt } = await toPdf(buffer, mimeType)
+  const stream = Readable.from(fileData)
 
   const file = await drive.files.create({
     requestBody: {
-      name: `${periodo}.pdf`,
+      name: `${periodo}.${fileExt}`,
       parents: [unitFolderId],
     },
     media: {
-      mimeType: "application/pdf",
+      mimeType: fileMime,
       body: stream,
     },
     fields: "id",
