@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { execute, supabaseAdmin } from "@/lib/db/executor"
 import { getPortalProfile } from "@/lib/data/portal"
+import { uploadMeterPhoto } from "@/lib/google-drive"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -80,21 +81,23 @@ export async function submitLectura(
     validationStatus = pct <= 0.1 ? "aprobado" : "revision"
   }
 
-  // Foto upload
+  // Foto upload → Google Drive
   let fotoUrl: string | null = null
+  let fotoDriveId: string | null = null
   const foto = formData.get("foto") as File | null
   if (foto && foto.size > 0) {
-    const buffer = await foto.arrayBuffer()
-    const { data: uploadData, error: uploadError } = await supabaseAdmin.storage
-      .from("medidores")
-      .upload(`${unitId}/${periodo}.jpg`, buffer, {
-        contentType: foto.type || "image/jpeg",
-        upsert: true,
-      })
-    if (uploadError) {
-      console.error("Photo upload error:", uploadError.message)
-    } else {
-      fotoUrl = uploadData.path
+    try {
+      const buffer = await foto.arrayBuffer()
+      const { fileId, url } = await uploadMeterPhoto(
+        buffer,
+        foto.type || "image/jpeg",
+        profile.unitNumber,
+        periodo,
+      )
+      fotoDriveId = fileId
+      fotoUrl = url
+    } catch (err) {
+      console.error("Drive upload error:", err)
     }
   }
 
@@ -112,6 +115,7 @@ export async function submitLectura(
         total_energia:     String(totalEnergia),
         notas:             notas ?? null,
         foto_url:          fotoUrl,
+        foto_drive_id:     fotoDriveId,
         submitted_by:      user.id,
         validation_status: validationStatus,
       },

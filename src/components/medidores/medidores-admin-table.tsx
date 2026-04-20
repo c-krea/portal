@@ -5,7 +5,7 @@ import { formatCOP } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
 import type { MedidorAdminRow, UnitWithMeter } from "@/lib/data/medidores"
 import { LecturaForm } from "@/components/medidores/lectura-form"
-import { X } from "lucide-react"
+import { X, ImageIcon } from "lucide-react"
 
 type SortKey = "unitNumber" | "tenantName" | "kwh" | "desvPct" | "totalEnergia"
 type SortDir = "asc" | "desc"
@@ -152,6 +152,9 @@ export function MedidoresAdminTable({
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                 Estado
               </th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                Foto
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
@@ -179,6 +182,21 @@ export function MedidoresAdminTable({
                 </td>
                 <td className="px-4 py-3">
                   <ValidationBadge vs={row.validationStatus} />
+                </td>
+                <td className="hidden sm:table-cell px-4 py-3">
+                  {row.fotoUrl ? (
+                    <a
+                      href={row.fotoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                    >
+                      <ImageIcon className="h-3.5 w-3.5" />
+                      Ver
+                    </a>
+                  ) : (
+                    <span className="text-slate-300">—</span>
+                  )}
                 </td>
               </tr>
             ))}
