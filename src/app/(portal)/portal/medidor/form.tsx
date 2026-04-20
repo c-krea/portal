@@ -26,20 +26,22 @@ export function MedidorForm({
   const [state, action, pending] = useActionState(submitLectura, initial)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<string | null>(null)
+  const [fotoBase64, setFotoBase64] = useState<string | null>(null)
+  const [fotoMime, setFotoMime] = useState<string>("image/jpeg")
   const [dragging, setDragging] = useState(false)
   const [submittedReading, setSubmittedReading] = useState<string>("")
 
   function applyFile(file: File) {
-    const dt = new DataTransfer()
-    dt.items.add(file)
-    if (fileInputRef.current) fileInputRef.current.files = dt.files
     setPreview(URL.createObjectURL(file))
+    setFotoMime(file.type || "image/jpeg")
+    const reader = new FileReader()
+    reader.onload = (e) => setFotoBase64(e.target?.result as string)
+    reader.readAsDataURL(file)
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    if (!file) return
-    applyFile(file)
+    if (file) applyFile(file)
   }
 
   function handleDragOver(e: React.DragEvent) {
@@ -55,12 +57,12 @@ export function MedidorForm({
     e.preventDefault()
     setDragging(false)
     const file = e.dataTransfer.files?.[0]
-    if (!file) return
-    applyFile(file)
+    if (file) applyFile(file)
   }
 
   function clearPhoto() {
     setPreview(null)
+    setFotoBase64(null)
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
@@ -74,7 +76,6 @@ export function MedidorForm({
     return (
       <div className="space-y-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* Left: photo preview or checkmark */}
           <div className="flex flex-col gap-3">
             <p className="text-sm font-medium text-slate-700">Foto del contador</p>
             <div className="relative flex min-h-[260px] items-center justify-center rounded-xl border-2 border-dashed overflow-hidden border-emerald-200 bg-emerald-50">
@@ -91,7 +92,6 @@ export function MedidorForm({
             <p className="text-xs text-emerald-600 font-medium">{state.message}</p>
           </div>
 
-          {/* Right: submitted reading read-only */}
           <div className="flex flex-col gap-4">
             <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
               Lectura anterior:{" "}
@@ -123,8 +123,10 @@ export function MedidorForm({
   /* ── Form ── */
   return (
     <div className="space-y-5">
-      <form action={action} encType="multipart/form-data" onSubmit={handleSubmit}>
+      <form action={action} onSubmit={handleSubmit}>
         <input type="hidden" name="periodo" value={periodo} />
+        {fotoBase64 && <input type="hidden" name="fotoBase64" value={fotoBase64} />}
+        {fotoBase64 && <input type="hidden" name="fotoMime" value={fotoMime} />}
 
         {state.error && (
           <div className="mb-4 rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -141,7 +143,6 @@ export function MedidorForm({
             <input
               ref={fileInputRef}
               type="file"
-              name="foto"
               accept="image/*,application/pdf"
               className="hidden"
               onChange={handleFileChange}

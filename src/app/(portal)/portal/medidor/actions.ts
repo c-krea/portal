@@ -81,16 +81,18 @@ export async function submitLectura(
     validationStatus = pct <= 0.1 ? "aprobado" : "revision"
   }
 
-  // Foto upload → Google Drive
+  // Foto upload → Google Drive (base64 from client)
   let fotoUrl: string | null = null
   let fotoDriveId: string | null = null
-  const foto = formData.get("foto") as File | null
-  if (foto && foto.size > 0) {
+  const fotoBase64 = formData.get("fotoBase64") as string | null
+  const fotoMime = (formData.get("fotoMime") as string | null) ?? "image/jpeg"
+  if (fotoBase64) {
     try {
-      const buffer = await foto.arrayBuffer()
+      const base64Data = fotoBase64.includes(",") ? fotoBase64.split(",")[1] : fotoBase64
+      const buffer = Buffer.from(base64Data, "base64")
       const { fileId, url } = await uploadMeterPhoto(
-        buffer,
-        foto.type || "image/jpeg",
+        buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+        fotoMime,
         profile.unitNumber,
         periodo,
       )
