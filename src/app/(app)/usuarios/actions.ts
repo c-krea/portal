@@ -35,3 +35,27 @@ export async function updatePortalEmail(tenantId: string, email: string) {
   revalidatePath("/usuarios")
   return { success: true }
 }
+
+export async function updateAdminUser(
+  userId: string,
+  data: { fullName: string; email: string; role: string }
+) {
+  const email = data.email.trim().toLowerCase()
+  if (!email.includes("@")) return { error: "Email inválido" }
+  if (!data.fullName.trim()) return { error: "El nombre es obligatorio" }
+
+  const { error: profileError } = await supabaseAdmin
+    .from("profiles")
+    .update({ full_name: data.fullName.trim(), email, role: data.role })
+    .eq("id", userId)
+  if (profileError) return { error: profileError.message }
+
+  const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+    userId,
+    { email }
+  )
+  if (authError) return { error: `Perfil guardado, pero no se pudo actualizar auth: ${authError.message}` }
+
+  revalidatePath("/usuarios")
+  return { success: true }
+}

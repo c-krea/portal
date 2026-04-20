@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Building2, ShieldCheck, CheckCircle2, CircleDashed, Mail, UserCheck } from "lucide-react"
 import { EmailEditor } from "./email-editor"
+import { EditAdminModal } from "./edit-admin-modal"
 import type { PortalTenantRow, UsuarioRow } from "@/lib/data/usuarios"
 
 function lastSignInLabel(iso: string | null): string {
@@ -121,7 +122,7 @@ export function TabSwitcher({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100">
-                  {["Nombre", "Email", "Rol", "Último Acceso", "Creado"].map(h => (
+                  {["Nombre", "Email", "Rol", "Último Acceso", "Creado", ""].map(h => (
                     <th key={h} className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                       {h}
                     </th>
@@ -155,6 +156,9 @@ export function TabSwitcher({
                           {new Date(u.createdAt).toLocaleDateString("es-CO", {
                             day: "2-digit", month: "short", year: "numeric",
                           })}
+                        </td>
+                        <td className="px-3 py-3">
+                          <EditAdminModal user={u} />
                         </td>
                       </tr>
                     )
