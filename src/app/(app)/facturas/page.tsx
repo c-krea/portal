@@ -145,33 +145,17 @@ export default async function FacturasPage({
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-slate-100">
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                        Local
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                        Cliente
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                        Período
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                        Emisión
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">
-                        Canon
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">
-                        Total
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">
-                        Saldo
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                        Estado
-                      </th>
+                      <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Local</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Cliente</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Período</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Emisión</th>
+                      <th className="hidden lg:table-cell px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Canon</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Total</th>
+                      <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Saldo</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Estado</th>
                       <th className="px-4 py-3" />
                     </tr>
                   </thead>
@@ -180,21 +164,21 @@ export default async function FacturasPage({
                       const cfg = STATUS_CONFIG[f.status] ?? { label: f.status, cls: "bg-slate-100 text-slate-500" }
                       return (
                         <tr key={f.id} className="border-b border-slate-50 hover:bg-slate-50">
-                          <td className="px-4 py-3 font-mono text-sm text-slate-700">{f.unitNumber}</td>
+                          <td className="hidden sm:table-cell px-4 py-3 font-mono text-slate-700">{f.unitNumber}</td>
                           <td className="px-4 py-3">
-                            <p className="max-w-[180px] truncate font-medium text-slate-900">
+                            <p className="max-w-[160px] truncate font-medium text-slate-900">
                               {f.clienteName}
                             </p>
                           </td>
-                          <td className="px-4 py-3 text-slate-600">{f.periodo}</td>
-                          <td className="px-4 py-3 text-slate-500">{f.fechaEmision}</td>
-                          <td className="px-4 py-3 text-right text-slate-700">
+                          <td className="hidden md:table-cell px-4 py-3 text-slate-600">{f.periodo}</td>
+                          <td className="hidden md:table-cell px-4 py-3 text-slate-500">{f.fechaEmision}</td>
+                          <td className="hidden lg:table-cell px-4 py-3 text-right text-slate-700">
                             {formatCOP(f.subtotalCanon)}
                           </td>
                           <td className="px-4 py-3 text-right font-semibold text-slate-900">
                             {formatCOP(f.total)}
                           </td>
-                          <td className="px-4 py-3 text-right font-semibold text-rose-600">
+                          <td className="hidden sm:table-cell px-4 py-3 text-right font-semibold text-rose-600">
                             {f.saldo > 0 ? formatCOP(f.saldo) : <span className="text-emerald-600">Pagado</span>}
                           </td>
                           <td className="px-4 py-3">
@@ -203,19 +187,9 @@ export default async function FacturasPage({
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex gap-3">
-                              <Link
-                                href={`/facturas/${f.id}`}
-                                className="text-xs text-blue-600 hover:underline"
-                              >
-                                Ver
-                              </Link>
-                              <Link
-                                href={`/locales/${f.tenantId}`}
-                                className="text-xs text-slate-500 hover:underline"
-                              >
-                                Cliente
-                              </Link>
+                            <div className="flex gap-2">
+                              <Link href={`/facturas/${f.id}`} className="text-blue-600 hover:underline">Ver</Link>
+                              <Link href={`/locales/${f.tenantId}`} className="hidden sm:inline text-slate-500 hover:underline">Cliente</Link>
                             </div>
                           </td>
                         </tr>
