@@ -19,6 +19,8 @@ async function getOrCreateFolder(
   const res = await drive.files.list({
     q: `name='${name}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
     fields: "files(id)",
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
   })
   if (res.data.files && res.data.files.length > 0) {
     return res.data.files[0].id!
@@ -30,6 +32,7 @@ async function getOrCreateFolder(
       parents: [parentId],
     },
     fields: "id",
+    supportsAllDrives: true,
   })
   return folder.data.id!
 }
@@ -65,7 +68,6 @@ export async function uploadMeterPhoto(
 
   const { data: fileData, mime: fileMime, ext: fileExt } = await toPdf(buffer, mimeType)
 
-  // Use Buffer directly — Readable streams can be unreliable in serverless
   const { Readable } = await import("stream")
   const stream = new Readable()
   stream.push(fileData)
@@ -81,6 +83,7 @@ export async function uploadMeterPhoto(
       body: stream,
     },
     fields: "id",
+    supportsAllDrives: true,
   })
 
   const fileId = file.data.id!
@@ -88,6 +91,7 @@ export async function uploadMeterPhoto(
   await drive.permissions.create({
     fileId,
     requestBody: { role: "reader", type: "anyone" },
+    supportsAllDrives: true,
   })
 
   return {
