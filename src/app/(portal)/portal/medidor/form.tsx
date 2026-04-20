@@ -1,8 +1,9 @@
 "use client"
 
-import { useActionState, useRef, useState } from "react"
+import { useActionState, useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { submitLectura, type MedidorPortalState } from "./actions"
-import { Camera, CheckCircle2, X } from "lucide-react"
+import { Camera, X } from "lucide-react"
 import type { PortalMedidorHistoryRow } from "@/lib/data/portal"
 import { HistorialChart } from "./chart"
 
@@ -23,13 +24,17 @@ export function MedidorForm({
   lecturaAnteriorRef: number
   history: PortalMedidorHistoryRow[]
 }) {
+  const router = useRouter()
   const [state, action, pending] = useActionState(submitLectura, initial)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (state.success) router.refresh()
+  }, [state.success, router])
   const [preview, setPreview] = useState<string | null>(null)
   const [fotoBase64, setFotoBase64] = useState<string | null>(null)
   const [fotoMime, setFotoMime] = useState<string>("image/jpeg")
   const [dragging, setDragging] = useState(false)
-  const [submittedReading, setSubmittedReading] = useState<string>("")
 
   function applyFile(file: File) {
     setPreview(URL.createObjectURL(file))
@@ -66,73 +71,11 @@ export function MedidorForm({
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    const fd = new FormData(e.currentTarget)
-    setSubmittedReading(fd.get("lecturaActual") as string)
-  }
-
-  /* ── Success / locked state ── */
-  if (state.success) {
-    return (
-      <div className="space-y-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <div className="flex flex-col gap-3">
-            <p className="text-sm font-medium text-slate-700">Foto del contador</p>
-            <div className="relative flex min-h-[260px] items-center justify-center rounded-xl border-2 border-dashed overflow-hidden border-emerald-200 bg-emerald-50">
-              <div className="flex flex-col items-center gap-3 p-6 text-center">
-                <CheckCircle2 className="h-12 w-12 text-emerald-400" />
-                {state.fotoUrl ? (
-                  <>
-                    <p className="text-sm text-emerald-700">Foto guardada correctamente</p>
-                    <a
-                      href={state.fotoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-medium text-blue-600 underline"
-                    >
-                      Ver foto enviada →
-                    </a>
-                  </>
-                ) : (
-                  <p className="text-sm text-emerald-700">Sin foto adjunta</p>
-                )}
-              </div>
-            </div>
-            <p className="text-xs text-emerald-600 font-medium">{state.message}</p>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Lectura anterior:{" "}
-              <span className="font-semibold text-slate-900">
-                {lecturaAnteriorRef.toLocaleString("es-CO")} kWh
-              </span>
-            </div>
-            <div className="rounded-lg border border-emerald-200 bg-white px-4 py-4">
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                <p className="text-xs font-medium text-emerald-600">Lectura enviada este mes</p>
-              </div>
-              <p className="text-3xl font-bold tabular-nums text-slate-900">
-                {submittedReading ? Number(submittedReading).toLocaleString("es-CO") : "—"}{" "}
-                <span className="text-base font-normal text-slate-400">kWh</span>
-              </p>
-            </div>
-            <div className="mt-auto rounded-lg bg-slate-100 py-3 text-center text-sm font-medium text-slate-400">
-              Podrás enviar una nueva lectura al inicio del próximo mes
-            </div>
-          </div>
-        </div>
-
-        <HistorialChart history={history} />
-      </div>
-    )
-  }
 
   /* ── Form ── */
   return (
     <div className="space-y-5">
-      <form action={action} onSubmit={handleSubmit}>
+      <form action={action}>
         <input type="hidden" name="periodo" value={periodo} />
         {fotoBase64 && <input type="hidden" name="fotoBase64" value={fotoBase64} />}
         {fotoBase64 && <input type="hidden" name="fotoMime" value={fotoMime} />}

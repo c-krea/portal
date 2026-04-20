@@ -73,19 +73,27 @@ export default async function MedidorPage() {
             <div className="flex flex-col gap-3">
               <p className="text-sm font-medium text-slate-700">Foto del contador</p>
               <div className="relative flex min-h-[260px] items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden">
-                {medidor.fotoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={medidor.fotoUrl}
-                    alt="Foto enviada"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex flex-col items-center gap-3 p-6 text-center">
-                    <Camera className="h-10 w-10 text-slate-200" />
-                    <p className="text-sm text-slate-400">Sin foto adjunta</p>
-                  </div>
-                )}
+                <div className="flex flex-col items-center gap-3 p-6 text-center">
+                  {medidor.fotoUrl ? (
+                    <>
+                      <CheckCircle2 className="h-10 w-10 text-emerald-400" />
+                      <p className="text-sm font-medium text-slate-600">Foto enviada</p>
+                      <a
+                        href={medidor.fotoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-blue-600 underline"
+                      >
+                        Ver foto en Drive →
+                      </a>
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="h-10 w-10 text-slate-200" />
+                      <p className="text-sm text-slate-400">Sin foto adjunta</p>
+                    </>
+                  )}
+                </div>
               </div>
               <p className="text-xs text-slate-400">
                 Para corregir la lectura, contacte al administrador.
