@@ -92,41 +92,41 @@ export default async function MedidoresPage({
       </div>
 
       {/* KPI strip */}
-      <div className="mb-5 grid grid-cols-4 gap-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
           <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-slate-400" />
+            <Zap className="h-4 w-4 shrink-0 text-slate-400" />
             <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Total Unidades</p>
           </div>
-          <p className="mt-2 text-2xl font-bold text-slate-900">{rows.length}</p>
+          <p className="mt-2 text-xl sm:text-2xl font-bold text-slate-900">{rows.length}</p>
           <p className="mt-0.5 text-xs text-slate-400">Con medidor eléctrico</p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
           <div className="flex items-center gap-2">
-            <CheckCircle className="h-4 w-4 text-emerald-500" />
+            <CheckCircle className="h-4 w-4 shrink-0 text-emerald-500" />
             <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Registradas</p>
           </div>
-          <p className="mt-2 text-2xl font-bold text-emerald-600">{registradas.length}</p>
+          <p className="mt-2 text-xl sm:text-2xl font-bold text-emerald-600">{registradas.length}</p>
           <p className="mt-0.5 text-xs text-slate-400">de {rows.length} unidades</p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
           <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4 text-slate-400" />
+            <Clock className="h-4 w-4 shrink-0 text-slate-400" />
             <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Sin Lectura</p>
           </div>
-          <p className="mt-2 text-2xl font-bold text-slate-500">{sinLectura.length}</p>
+          <p className="mt-2 text-xl sm:text-2xl font-bold text-slate-500">{sinLectura.length}</p>
           <p className="mt-0.5 text-xs text-slate-400">{periodoLabel} 2026</p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
           <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-blue-400" />
+            <AlertCircle className="h-4 w-4 shrink-0 text-blue-400" />
             <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Total kWh</p>
           </div>
-          <p className="mt-2 text-2xl font-bold text-slate-900">{totalKwh.toLocaleString("es-CO")}</p>
-          <p className="mt-0.5 text-xs text-slate-400">{formatCOP(totalEnergia)}</p>
+          <p className="mt-2 text-xl sm:text-2xl font-bold text-slate-900">{totalKwh.toLocaleString("es-CO")}</p>
+          <p className="mt-0.5 text-xs text-slate-400 truncate">{formatCOP(totalEnergia)}</p>
         </div>
       </div>
 

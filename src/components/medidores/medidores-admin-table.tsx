@@ -80,18 +80,18 @@ export function MedidoresAdminTable({
     return (av - bv) * sign
   })
 
-  const COLS: { key: SortKey; label: string; align: "left" | "right" }[] = [
-    { key: "unitNumber",   label: "Local",         align: "left" },
-    { key: "tenantName",   label: "Arrendatario",  align: "left" },
-    { key: "kwh",          label: "kWh",           align: "right" },
-    { key: "desvPct",      label: "vs Prom.3m",    align: "right" },
-    { key: "totalEnergia", label: "Total",          align: "right" },
+  const COLS: { key: SortKey; label: string; align: "left" | "right"; hide?: string }[] = [
+    { key: "unitNumber",   label: "Local",        align: "left" },
+    { key: "tenantName",   label: "Arrendatario", align: "left",  hide: "hidden sm:table-cell" },
+    { key: "kwh",          label: "kWh",          align: "right" },
+    { key: "desvPct",      label: "vs Prom.3m",   align: "right", hide: "hidden md:table-cell" },
+    { key: "totalEnergia", label: "Total",         align: "right", hide: "hidden sm:table-cell" },
   ]
 
   return (
     <div>
       {/* Controls row */}
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1 text-xs">
           {(["all", "registrada", "sin_lectura"] as const).map((f) => (
             <button
@@ -131,7 +131,7 @@ export function MedidoresAdminTable({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50">
-              {COLS.map(({ key, label, align }) => {
+              {COLS.map(({ key, label, align, hide }) => {
                 const active = sortKey === key
                 const ind = active ? (sortDir === "asc" ? " ↑" : " ↓") : ""
                 return (
@@ -142,6 +142,7 @@ export function MedidoresAdminTable({
                       "cursor-pointer select-none px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 hover:text-slate-800",
                       align === "right" ? "text-right" : "text-left",
                       active && "text-slate-800",
+                      hide,
                     )}
                   >
                     {label}{ind}
@@ -159,13 +160,13 @@ export function MedidoresAdminTable({
                 <td className="px-4 py-3 font-mono text-sm font-medium text-slate-700">
                   {row.unitNumber}
                 </td>
-                <td className="px-4 py-3 text-slate-700">
+                <td className="hidden sm:table-cell px-4 py-3 text-slate-700">
                   {row.tenantName ?? <span className="text-slate-300">—</span>}
                 </td>
                 <td className="px-4 py-3 text-right font-mono text-slate-900">
                   {row.kwh != null ? row.kwh.toLocaleString("es-CO") : <span className="text-slate-300">—</span>}
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="hidden md:table-cell px-4 py-3 text-right">
                   <DesvBadge pct={row.desvPct} />
                   {row.promedio3m != null && (
                     <span className="ml-1 text-[10px] text-slate-400">
@@ -173,7 +174,7 @@ export function MedidoresAdminTable({
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-right font-medium text-slate-900">
+                <td className="hidden sm:table-cell px-4 py-3 text-right font-medium text-slate-900">
                   {row.totalEnergia != null ? formatCOP(row.totalEnergia) : <span className="text-slate-300">—</span>}
                 </td>
                 <td className="px-4 py-3">
