@@ -1,5 +1,6 @@
 import { google } from "googleapis"
 import { Readable } from "stream"
+import { PDFDocument } from "pdf-lib"
 
 function getDriveClient() {
   const key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n")
@@ -34,6 +35,21 @@ async function getOrCreateFolder(
   return folder.data.id!
 }
 
+async function toPdf(buffer: ArrayBuffer, mimeType: string): Promise<Buffer> {
+  if (mimeType === "application/pdf") return Buffer.from(buffer)
+
+  const pdfDoc = await PDFDocument.create()
+  let image
+  if (mimeType === "image/png") {
+    image = await pdfDoc.embedPng(buffer)
+  } else {
+    image = await pdfDoc.embedJpg(buffer)
+  }
+  const page = pdfDoc.addPage([image.width, image.height])
+  page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height })
+  return Buffer.from(await pdfDoc.save())
+}
+
 export async function uploadMeterPhoto(
   buffer: ArrayBuffer,
   mimeType: string,
@@ -45,14 +61,16 @@ export async function uploadMeterPhoto(
 
   const unitFolderId = await getOrCreateFolder(drive, `Local ${unitNumber}`, rootFolderId)
 
-  const stream = Readable.from(Buffer.from(buffer))
+  const pdfBuffer = await toPdf(buffer, mimeType)
+  const stream = Readable.from(pdfBuffer)
+
   const file = await drive.files.create({
     requestBody: {
-      name: `${periodo}.jpg`,
+      name: `${periodo}.pdf`,
       parents: [unitFolderId],
     },
     media: {
-      mimeType: mimeType || "image/jpeg",
+      mimeType: "application/pdf",
       body: stream,
     },
     fields: "id",
@@ -67,6 +85,6 @@ export async function uploadMeterPhoto(
 
   return {
     fileId,
-    url: `https://drive.google.com/uc?id=${fileId}`,
+    url: `https://drive.google.com/file/d/${fileId}/view`,
   }
 }

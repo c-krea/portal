@@ -26,12 +26,37 @@ export function MedidorForm({
   const [state, action, pending] = useActionState(submitLectura, initial)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<string | null>(null)
+  const [dragging, setDragging] = useState(false)
   const [submittedReading, setSubmittedReading] = useState<string>("")
+
+  function applyFile(file: File) {
+    const dt = new DataTransfer()
+    dt.items.add(file)
+    if (fileInputRef.current) fileInputRef.current.files = dt.files
+    setPreview(URL.createObjectURL(file))
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setPreview(URL.createObjectURL(file))
+    applyFile(file)
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault()
+    setDragging(true)
+  }
+
+  function handleDragLeave() {
+    setDragging(false)
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragging(false)
+    const file = e.dataTransfer.files?.[0]
+    if (!file) return
+    applyFile(file)
   }
 
   function clearPhoto() {
@@ -117,18 +142,22 @@ export function MedidorForm({
               ref={fileInputRef}
               type="file"
               name="foto"
-              accept="image/*"
-              capture="environment"
+              accept="image/*,application/pdf"
               className="hidden"
               onChange={handleFileChange}
             />
 
             <div
               onClick={() => fileInputRef.current?.click()}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
               className={`relative flex flex-1 min-h-[260px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed transition-colors ${
-                preview
-                  ? "border-transparent p-0 overflow-hidden"
-                  : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white p-6"
+                dragging
+                  ? "border-blue-400 bg-blue-50"
+                  : preview
+                    ? "border-transparent p-0 overflow-hidden"
+                    : "border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white p-6"
               }`}
             >
               {preview ? (
@@ -142,9 +171,9 @@ export function MedidorForm({
               ) : (
                 <>
                   <Camera className="h-10 w-10 text-slate-300 mb-3" />
-                  <p className="text-sm font-medium text-slate-600">Tomar foto del contador</p>
+                  <p className="text-sm font-medium text-slate-600">Foto o archivo del contador</p>
                   <p className="mt-1 text-xs text-slate-400 text-center">
-                    Toque aquí para abrir la cámara o seleccionar imagen
+                    Arrastra aquí o toque para seleccionar · JPG, PNG, PDF
                   </p>
                 </>
               )}
