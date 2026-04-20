@@ -7,6 +7,7 @@ import {
   FileText,
   Zap,
   TrendingUp,
+  UserCog,
 } from "lucide-react"
 
 export const NAV_ITEMS = [
@@ -18,6 +19,7 @@ export const NAV_ITEMS = [
   { icon: CreditCard,      label: "Pagos",         href: "/pagos" },
   { icon: Receipt,         label: "Gastos",        href: "/gastos" },
   { icon: Zap,             label: "Medidores",     href: "/medidores" },
+  { icon: UserCog,         label: "Usuarios",      href: "/usuarios" },
 ] as const
 
 export const STATUS_COLORS = {
