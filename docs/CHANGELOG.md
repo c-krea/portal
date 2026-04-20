@@ -6,6 +6,25 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [2.3.0] — 2026-04-19
+
+### Added
+- Tenant account creation: "Crear cuenta" button in Usuarios/Inquilinos for tenants with email but no auth account
+- Portal Total a Pagar: now computes canon × (1−descuento%) × 1.19 + electricidad
+- "Ver detalle" modal on portal dashboard with full charge line-item breakdown
+- Admin medidores year switcher (2025/2026) — all 1,180 imported readings now accessible
+- Mobile hamburger nav with slide-out drawer for all admin pages
+- Horizontal bar chart on dashboard (better mobile readability)
+
+### Fixed
+- Portal Total a Pagar was showing raw canon only (no IVA, no discounts, no electricity)
+- Recharts chart invisible on mobile — switched to explicit pixel height container
+- Desglose de Mora items crowded on mobile — added proper padding
+- Admin sidebar crushing content on mobile — now hidden on mobile (lg:flex only)
+- Dashboard KPI grid, gastos 70/30 layout, mora aging buckets — all stack on mobile
+- Portal pagos table: hides Vencimiento/Concepto columns on small screens
+- Portal perfil: cards stack on mobile, row label width responsive
+
 ## [Unreleased]
 
 ## [2.2.0] — 2026-04-19
