@@ -180,10 +180,10 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
       <div className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm" onClick={() => !pending && setOpen(false)} />
 
       <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
-        <div className="my-auto w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div className="my-auto w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-xl overflow-y-auto max-h-[90vh]">
 
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 sm:px-6 py-4">
             <div>
               <h2 className="text-base font-semibold text-slate-900">{tenant.nombre}</h2>
               <p className="text-xs text-slate-400 mt-0.5">Local {tenant.units}</p>
@@ -195,7 +195,7 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
           </div>
 
           {confirming ? (
-            <div className="px-6 py-6">
+            <div className="px-4 py-4 sm:px-6 sm:py-6">
               <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500 mt-0.5" />
                 <div>
@@ -221,10 +221,10 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
               </div>
             </div>
           ) : (
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {error && <p className="mb-4 rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-700">{error}</p>}
 
-              <div className="grid grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
 
                 {/* ── Left: Contact ── */}
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
