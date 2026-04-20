@@ -41,8 +41,14 @@ export async function updateTenantUser(
   unitIds: string[],
   data: {
     nombre: string
+    razonSocial: string
+    nit: string
+    telefono: string
+    contactoNombre: string
     portalEmail: string
+    businessEmail: string
     unitNumber: string
+    entrada: string
     contractId?: string
     canonBase?: number
     descuentoPct?: number | null
@@ -53,18 +59,28 @@ export async function updateTenantUser(
   }
 ) {
   if (!data.nombre.trim()) return { error: "El nombre es obligatorio" }
-  const email = data.portalEmail.trim().toLowerCase()
-  if (email && !email.includes("@")) return { error: "Email inválido" }
+  const portalEmail = data.portalEmail.trim().toLowerCase()
+  if (portalEmail && !portalEmail.includes("@")) return { error: "Email portal inválido" }
+  const bizEmail = data.businessEmail.trim().toLowerCase()
+  if (bizEmail && !bizEmail.includes("@")) return { error: "Email de contacto inválido" }
 
-  // Update tenant name + portal email
+  // Update tenant fields
   const { error: tenantError } = await supabaseAdmin
     .from("tenants")
-    .update({ nombre_corto: data.nombre.trim(), portal_email: email || null })
+    .update({
+      nombre_corto:    data.nombre.trim() || null,
+      razon_social:    data.razonSocial.trim(),
+      nit:             data.nit.trim() || null,
+      telefono:        data.telefono.trim() || null,
+      contacto_nombre: data.contactoNombre.trim() || null,
+      email:           bizEmail || null,
+      portal_email:    portalEmail || null,
+    })
     .eq("id", tenantId)
   if (tenantError) return { error: tenantError.message }
 
-  // Sync email to auth if account exists
-  if (email) {
+  // Sync portal email to auth if account exists
+  if (portalEmail) {
     const { data: profile } = await supabaseAdmin
       .from("profiles")
       .select("id")
@@ -74,20 +90,24 @@ export async function updateTenantUser(
     if (profile?.id) {
       const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
         profile.id,
-        { email }
+        { email: portalEmail }
       )
       if (authError) return { error: `Guardado, pero error en auth: ${authError.message}` }
     }
   }
 
-  // Update unit number — only if single unit to avoid ambiguity
-  const unitNum = data.unitNumber.trim()
-  if (unitNum && unitIds.length === 1) {
-    const { error: unitError } = await supabaseAdmin
-      .from("units")
-      .update({ unit_number: unitNum })
-      .eq("id", unitIds[0])
-    if (unitError) return { error: `Tenant actualizado, pero error en local: ${unitError.message}` }
+  // Update unit fields — only if single unit to avoid ambiguity
+  if (unitIds.length === 1) {
+    const unitUpdate: Record<string, string> = {}
+    if (data.unitNumber.trim()) unitUpdate.unit_number = data.unitNumber.trim()
+    if (data.entrada.trim()) unitUpdate.entrada = data.entrada.trim()
+    if (Object.keys(unitUpdate).length > 0) {
+      const { error: unitError } = await supabaseAdmin
+        .from("units")
+        .update(unitUpdate)
+        .eq("id", unitIds[0])
+      if (unitError) return { error: `Tenant actualizado, pero error en local: ${unitError.message}` }
+    }
   }
 
   // Update contract fields if provided

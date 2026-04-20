@@ -15,8 +15,14 @@ export type UsuarioRow = {
 export type PortalTenantRow = {
   tenantId: string
   nombre: string
+  razonSocial: string
+  nit: string | null
+  telefono: string | null
+  contactoNombre: string | null
+  tipoCliente: string | null
   units: string
   unitIds: string[]
+  entrada: string | null
   portalEmail: string | null
   businessEmail: string | null
   authUserId: string | null
@@ -36,10 +42,16 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
     SELECT
       t.id,
       COALESCE(t.nombre_corto, t.razon_social) AS nombre,
+      t.razon_social,
+      t.nit,
+      t.telefono,
+      t.contacto_nombre,
+      t.tipo_cliente,
       t.portal_email,
       t.email AS business_email,
       STRING_AGG(u.unit_number, ', ' ORDER BY u.unit_number) AS units,
-      STRING_AGG(u.id::text, ',' ORDER BY u.unit_number) AS unit_ids,
+      STRING_AGG(u.id::text, ',' ORDER BY u.unit_number)     AS unit_ids,
+      MIN(u.entrada)                     AS entrada,
       p.id AS auth_user_id,
       MIN(c.id::text)                    AS contract_id,
       MIN(c.canon_base::numeric)         AS canon_base,
@@ -89,12 +101,18 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
     const authUserId  = r.auth_user_id ? String(r.auth_user_id) : null
     const authEmail   = authUserId ? (authEmailMap.get(authUserId) ?? null) : null
     return {
-      tenantId:      String(r.id),
-      nombre:        String(r.nombre),
-      units:         String(r.units),
-      unitIds:       String(r.unit_ids).split(","),
-      portalEmail:   authEmail ?? (r.portal_email ? String(r.portal_email) : null),
-      businessEmail: r.business_email ? String(r.business_email) : null,
+      tenantId:             String(r.id),
+      nombre:               String(r.nombre),
+      razonSocial:          String(r.razon_social),
+      nit:                  r.nit ? String(r.nit) : null,
+      telefono:             r.telefono ? String(r.telefono) : null,
+      contactoNombre:       r.contacto_nombre ? String(r.contacto_nombre) : null,
+      tipoCliente:          r.tipo_cliente ? String(r.tipo_cliente) : null,
+      units:                String(r.units),
+      unitIds:              String(r.unit_ids).split(","),
+      entrada:              r.entrada ? String(r.entrada) : null,
+      portalEmail:          authEmail ?? (r.portal_email ? String(r.portal_email) : null),
+      businessEmail:        r.business_email ? String(r.business_email) : null,
       authUserId,
       lastSignIn:           authUserId ? (lastSignInMap.get(authUserId) ?? null) : null,
       contractId:           r.contract_id ? String(r.contract_id) : null,
