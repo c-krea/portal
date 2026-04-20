@@ -60,7 +60,7 @@ export default async function DashboardPage() {
       <PageHeader title="Resumen del Portafolio" />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
             Recaudo Proyectado 2026
@@ -116,9 +116,9 @@ export default async function DashboardPage() {
       </div>
 
       {/* Bottom row */}
-      <div className="mt-4 flex gap-4">
-        {/* Desglose — fixed 350px wide */}
-        <div className="flex h-[480px] w-[350px] shrink-0 flex-col rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mt-4 flex flex-col lg:flex-row gap-4">
+        {/* Desglose */}
+        <div className="flex h-auto lg:h-[480px] w-full lg:w-[350px] shrink-0 flex-col rounded-xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
           <p className="shrink-0 text-sm font-semibold text-slate-900">Desglose de Mora</p>
           <div className="mt-3 flex min-h-0 flex-1 flex-col">
             {desglose.map(({ icon: Icon, iconBg, iconColor, label, value, subtext }, idx) => (

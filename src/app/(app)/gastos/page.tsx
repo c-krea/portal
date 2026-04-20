@@ -72,15 +72,15 @@ export default async function GastosPage({
       </div>
 
       {/* Two separate cards */}
-      <div className="flex gap-4">
+      <div className="flex flex-col lg:flex-row gap-4">
 
         {/* Left — table */}
-        <div className="w-[70%] rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="w-full lg:w-[70%] rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <GastosTable data={rows} embedded />
         </div>
 
         {/* Right — pie + legend */}
-        <div className="flex w-[30%] flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex w-full lg:w-[30%] flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="mb-2 shrink-0 text-sm font-semibold text-slate-900">
             Distribución — {mesLabel} 2026
           </p>

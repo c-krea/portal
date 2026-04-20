@@ -1,0 +1,1788 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C-Krea PayControl — Wireframes</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --sidebar-bg: #0F172A;
+    --sidebar-text: #CBD5E1;
+    --sidebar-active: #3B82F6;
+    --surface: #FFFFFF;
+    --bg: #F8FAFC;
+    --border: #E2E8F0;
+    --text-primary: #0F172A;
+    --text-secondary: #64748B;
+    --text-muted: #94A3B8;
+    --green: #10B981;
+    --amber: #F59E0B;
+    --red: #F43F5E;
+    --blue: #3B82F6;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #1e293b;
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
+
+  /* Screen selector */
+  .screen-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: #0F172A;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid #334155;
+    flex-wrap: wrap;
+  }
+  .screen-nav h1 {
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    margin-right: 16px;
+    white-space: nowrap;
+  }
+  .screen-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid #334155;
+    background: transparent;
+    color: #94A3B8;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .screen-btn:hover { background: #1e293b; color: #e2e8f0; }
+  .screen-btn.active { background: var(--sidebar-active); color: white; border-color: var(--sidebar-active); }
+
+  .screen-container {
+    display: none;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .screen-container.active { display: block; }
+
+  /* App frame */
+  .app-frame {
+    display: flex;
+    min-height: calc(100vh - 60px);
+    background: var(--bg);
+    border-radius: 0;
+    overflow: hidden;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 220px;
+    min-width: 220px;
+    background: var(--sidebar-bg);
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-logo {
+    padding: 0 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #1e293b;
+    margin-bottom: 12px;
+  }
+  .logo-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, #f43f5e, #f59e0b, #10b981, #3b82f6, #8b5cf6, #f43f5e);
+    flex-shrink: 0;
+  }
+  .logo-text {
+    color: white;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .logo-sub {
+    color: #64748B;
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .nav-items { flex: 1; padding: 4px 8px; }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    color: var(--sidebar-text);
+    font-size: 13.5px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 2px;
+  }
+  .nav-item:hover { background: #1e293b; }
+  .nav-item.active { background: var(--sidebar-active); color: white; }
+  .nav-item svg { width: 18px; height: 18px; opacity: 0.7; }
+  .nav-item.active svg { opacity: 1; }
+
+  .nav-badge {
+    margin-left: auto;
+    background: var(--red);
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 10px;
+  }
+
+  .sidebar-footer {
+    padding: 12px 16px;
+    border-top: 1px solid #1e293b;
+  }
+  .sync-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #64748B;
+  }
+  .sync-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+
+  /* Content */
+  .content {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    background: var(--bg);
+  }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .page-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.025em;
+  }
+  .page-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  /* Inputs & Buttons */
+  .btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: white;
+    color: var(--text-primary);
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn:hover { background: #f8fafc; }
+  .btn-primary { background: var(--blue); color: white; border-color: var(--blue); }
+  .btn-primary:hover { background: #2563eb; }
+
+  .select-input {
+    padding: 7px 32px 7px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text-primary);
+    background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;
+    appearance: none;
+    cursor: pointer;
+  }
+
+  .search-input {
+    padding: 7px 12px 7px 32px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text-primary);
+    width: 200px;
+    background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E") no-repeat 10px center;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+  }
+
+  /* KPI Cards */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .kpi-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .kpi-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.025em;
+    margin-bottom: 4px;
+  }
+  .kpi-sub {
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .kpi-sub.green { color: var(--green); }
+  .kpi-sub.blue { color: var(--blue); }
+  .kpi-sub.muted { color: var(--text-muted); }
+  .kpi-sub.red { color: var(--red); }
+
+  .kpi-bar {
+    height: 4px;
+    border-radius: 2px;
+    background: #E2E8F0;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  .kpi-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.5s;
+  }
+
+  /* Content grid */
+  .content-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 16px;
+  }
+  .content-grid.equal {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Metric rows */
+  .metric-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid #f1f5f9;
+  }
+  .metric-row:last-child { border-bottom: none; }
+  .metric-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .metric-icon.rose { background: #FFF1F2; color: var(--red); }
+  .metric-icon.emerald { background: #ECFDF5; color: var(--green); }
+  .metric-icon.amber { background: #FFFBEB; color: var(--amber); }
+  .metric-icon.blue { background: #EFF6FF; color: var(--blue); }
+  .metric-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+  }
+  .metric-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .metric-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  /* Chart area */
+  .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .chart-legend {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+  }
+
+  .bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 24px;
+    height: 180px;
+    padding: 0 8px;
+    margin-bottom: 12px;
+  }
+  .bar-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .bar-pair {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 150px;
+  }
+  .bar {
+    width: 24px;
+    border-radius: 4px 4px 0 0;
+    transition: height 0.4s;
+  }
+  .bar.received { background: #1e40af; }
+  .bar.projected { background: #e2e8f0; }
+  .bar-label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+  .bar-pct {
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 2px;
+  }
+  .bar-pct.good { color: var(--green); }
+  .bar-pct.warn { color: var(--amber); }
+  .bar-pct.bad { color: var(--red); }
+
+  .chart-stats {
+    display: flex;
+    gap: 40px;
+    padding-top: 16px;
+    border-top: 1px solid #f1f5f9;
+  }
+  .chart-stat-label {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-secondary);
+    margin-bottom: 2px;
+  }
+  .chart-stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  /* Table */
+  .table-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .table-header-bar {
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-bar {
+    display: flex;
+    gap: 0;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    background: white;
+  }
+  .tab-item {
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.15s;
+  }
+  .tab-item:hover { color: var(--text-secondary); }
+  .tab-item.active { color: var(--text-primary); border-bottom-color: var(--blue); }
+  .tab-count {
+    background: #f1f5f9;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 10px;
+    margin-left: 6px;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th {
+    text-align: left;
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    background: #FAFBFC;
+    border-bottom: 1px solid var(--border);
+  }
+  th.right, td.right { text-align: right; }
+  td {
+    padding: 12px 16px;
+    font-size: 13.5px;
+    color: var(--text-primary);
+    border-bottom: 1px solid #f1f5f9;
+  }
+  tr:hover td { background: #fafbfc; }
+  .td-sub {
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-top: 1px;
+  }
+
+  /* Badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+  .badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .badge.green { background: #ECFDF5; color: #059669; }
+  .badge.green .badge-dot { background: #10B981; }
+  .badge.amber { background: #FFFBEB; color: #D97706; }
+  .badge.amber .badge-dot { background: #F59E0B; }
+  .badge.red { background: #FFF1F2; color: #E11D48; }
+  .badge.red .badge-dot { background: #F43F5E; }
+  .badge.gray { background: #F1F5F9; color: #64748B; }
+  .badge.gray .badge-dot { background: #94A3B8; }
+  .badge.blue { background: #EFF6FF; color: #2563EB; }
+  .badge.blue .badge-dot { background: #3B82F6; }
+
+  .badge-lg {
+    padding: 6px 16px;
+    font-size: 14px;
+    border-radius: 8px;
+  }
+
+  /* Detail view */
+  .breadcrumb {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+  .breadcrumb a { color: var(--blue); text-decoration: none; }
+  .breadcrumb a:hover { text-decoration: underline; }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #f8fafc;
+  }
+  .detail-label { font-size: 13px; color: var(--text-secondary); }
+  .detail-value { font-size: 13px; font-weight: 500; color: var(--text-primary); }
+
+  .status-section {
+    text-align: center;
+    padding: 20px 0 16px;
+  }
+  .status-detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #f8fafc;
+    font-size: 13px;
+  }
+  .status-detail-row .label { color: var(--text-secondary); }
+  .status-detail-row .value { font-weight: 600; color: var(--text-primary); }
+  .total-row { border-top: 2px solid var(--border); padding-top: 12px; margin-top: 4px; }
+  .total-row .value { font-size: 18px; color: var(--blue); }
+
+  /* Timeline */
+  .timeline-container {
+    padding: 20px;
+    position: relative;
+  }
+  .timeline-bar {
+    display: flex;
+    align-items: center;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    position: relative;
+    margin: 24px 0;
+  }
+  .timeline-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--blue), #60a5fa);
+  }
+  .timeline-marker {
+    position: absolute;
+    top: -6px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: white;
+    border: 3px solid var(--blue);
+    z-index: 2;
+  }
+  .timeline-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .timeline-phase {
+    text-align: center;
+  }
+  .timeline-phase strong {
+    display: block;
+    color: var(--text-primary);
+    font-size: 12px;
+  }
+
+  /* Slide-over panel */
+  .slideover-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15,23,42,0.4);
+    z-index: 50;
+    display: none;
+  }
+  .slideover-overlay.active { display: block; }
+  .slideover {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 480px;
+    background: white;
+    z-index: 51;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+    transform: translateX(100%);
+    transition: transform 0.2s;
+  }
+  .slideover.active { transform: translateX(0); }
+  .slideover-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .slideover-title { font-size: 16px; font-weight: 600; }
+  .slideover-body { flex: 1; padding: 24px; overflow-y: auto; }
+  .slideover-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .form-group {
+    margin-bottom: 18px;
+  }
+  .form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .form-input {
+    width: 100%;
+    padding: 9px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13.5px;
+    color: var(--text-primary);
+  }
+  .form-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+
+  .summary-box {
+    background: #f8fafc;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 16px;
+  }
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 13px;
+  }
+  .summary-row .label { color: var(--text-secondary); }
+  .summary-row .value { font-weight: 500; }
+  .summary-row.total { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 6px; }
+  .summary-row.total .value { font-weight: 700; color: var(--blue); font-size: 16px; }
+
+  /* Pagination */
+  .table-footer {
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-muted);
+    border-top: 1px solid var(--border);
+  }
+  .pagination {
+    display: flex;
+    gap: 4px;
+  }
+  .page-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: white;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--text-secondary);
+  }
+  .page-btn.active { background: var(--blue); color: white; border-color: var(--blue); }
+
+  /* Screen label */
+  .screen-label {
+    background: #0f172a;
+    color: #94a3b8;
+    text-align: center;
+    padding: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+  }
+</style>
+</head>
+<body>
+
+<nav class="screen-nav">
+  <h1>C-Krea Wireframes</h1>
+  <button class="screen-btn active" onclick="showScreen('dashboard')">Dashboard</button>
+  <button class="screen-btn" onclick="showScreen('mora')">Mora</button>
+  <button class="screen-btn" onclick="showScreen('clientes')">Clientes</button>
+  <button class="screen-btn" onclick="showScreen('detail')">Detalle Cliente</button>
+  <button class="screen-btn" onclick="showScreen('pagos')">Pagos</button>
+  <button class="screen-btn" onclick="showScreen('gastos')">Gastos</button>
+</nav>
+
+<!-- ═══════════════════ DASHBOARD ═══════════════════ -->
+<div id="screen-dashboard" class="screen-container active">
+  <div class="screen-label">Dashboard — Resumen del Portafolio</div>
+  <div class="app-frame">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div>
+          <div class="logo-circle"></div>
+        </div>
+        <div>
+          <div class="logo-text">C-KREA</div>
+          <div class="logo-sub">PayControl</div>
+        </div>
+      </div>
+      <nav class="nav-items">
+        <div class="nav-item active">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          Dashboard
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Mora
+          <span class="nav-badge">32</span>
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          Clientes
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+          Pagos
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Gastos
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          Reportes
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Usuarios
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sync-indicator">
+          <span class="sync-dot"></span>
+          Siesa sincronizado
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="content">
+      <div class="page-header">
+        <h1 class="page-title">Resumen del Portafolio</h1>
+        <div class="page-actions">
+          <select class="select-input"><option>Todos</option></select>
+          <select class="select-input"><option>Todos los Estados</option></select>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Portafolio Total</div>
+          <div class="kpi-value">$ 7.662.800.001</div>
+          <div class="kpi-sub green">48 clientes activos</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Total Recaudado</div>
+          <div class="kpi-value">$ 1.618.722.737</div>
+          <div class="kpi-sub blue">21% de la meta alcanzada</div>
+          <div class="kpi-bar"><div class="kpi-bar-fill" style="width: 21%; background: var(--blue);"></div></div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Pendiente</div>
+          <div class="kpi-value">$ 87.799.331</div>
+          <div class="kpi-sub muted">Pagos sin clasificar</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Clientes en Mora</div>
+          <div class="kpi-value"><span style="color: var(--red);">32</span> <span style="font-size: 14px; font-weight: 500; color: var(--text-secondary);">de 48 clientes</span></div>
+          <div class="kpi-bar"><div class="kpi-bar-fill" style="width: 67%; background: var(--red);"></div></div>
+        </div>
+      </div>
+
+      <div class="content-grid">
+        <!-- Desglose -->
+        <div class="card">
+          <div class="card-title" style="display: flex; align-items: center; gap: 8px;">
+            <span style="width: 8px; height: 8px; background: var(--blue); border-radius: 50; display: inline-block;"></span>
+            Desglose de Recaudo
+          </div>
+
+          <div class="metric-row">
+            <div class="metric-icon rose">⚠</div>
+            <div>
+              <div class="metric-label">Cuotas Perdidas</div>
+              <div class="metric-value">$ 539.131.515</div>
+              <div class="metric-sub">130 cuotas</div>
+            </div>
+          </div>
+          <div class="metric-row">
+            <div class="metric-icon emerald">◉</div>
+            <div>
+              <div class="metric-label">Recargos</div>
+              <div class="metric-value">$ 39.808.231</div>
+              <div class="metric-sub">De 130 cuotas perdidas</div>
+            </div>
+          </div>
+          <div class="metric-row">
+            <div class="metric-icon amber">⏱</div>
+            <div>
+              <div class="metric-label">Prom. Días en Mora</div>
+              <div class="metric-value">108 días</div>
+              <div class="metric-sub">31 clientes en mora</div>
+            </div>
+          </div>
+          <div class="metric-row">
+            <div class="metric-icon blue">◐</div>
+            <div>
+              <div class="metric-label">Vencimiento Mes Próx.</div>
+              <div class="metric-value">$ 161.120.000</div>
+              <div class="metric-sub">48 clientes activos</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="card">
+          <div class="chart-header">
+            <div class="card-title" style="margin-bottom: 0;">Seguimiento de Rendimiento</div>
+            <div class="chart-legend">
+              <span><span class="legend-dot" style="background: #1e40af;"></span> Recibido</span>
+              <span><span class="legend-dot" style="background: #e2e8f0;"></span> Proyectado</span>
+            </div>
+          </div>
+
+          <div class="bar-chart">
+            <div class="bar-group">
+              <div class="bar-pct bad">57%</div>
+              <div class="bar-pair">
+                <div class="bar received" style="height: 57%;"></div>
+                <div class="bar projected" style="height: 100%;"></div>
+              </div>
+              <div class="bar-label">NOV</div>
+            </div>
+            <div class="bar-group">
+              <div class="bar-pct good">99%</div>
+              <div class="bar-pair">
+                <div class="bar received" style="height: 99%;"></div>
+                <div class="bar projected" style="height: 100%;"></div>
+              </div>
+              <div class="bar-label">DIC</div>
+            </div>
+            <div class="bar-group">
+              <div class="bar-pct warn">43%</div>
+              <div class="bar-pair">
+                <div class="bar received" style="height: 43%;"></div>
+                <div class="bar projected" style="height: 100%;"></div>
+              </div>
+              <div class="bar-label">ENE</div>
+            </div>
+            <div class="bar-group">
+              <div class="bar-pct good">91%</div>
+              <div class="bar-pair">
+                <div class="bar received" style="height: 91%;"></div>
+                <div class="bar projected" style="height: 100%;"></div>
+              </div>
+              <div class="bar-label">FEB</div>
+            </div>
+            <div class="bar-group">
+              <div class="bar-pct good">81%</div>
+              <div class="bar-pair">
+                <div class="bar received" style="height: 81%;"></div>
+                <div class="bar projected" style="height: 100%;"></div>
+              </div>
+              <div class="bar-label">MAR</div>
+            </div>
+            <div class="bar-group">
+              <div class="bar-pct bad">16%</div>
+              <div class="bar-pair">
+                <div class="bar received" style="height: 16%;"></div>
+                <div class="bar projected" style="height: 100%;"></div>
+              </div>
+              <div class="bar-label">ABR</div>
+            </div>
+          </div>
+
+          <div class="chart-stats">
+            <div>
+              <div class="chart-stat-label">Prom. Recaudo Mensual</div>
+              <div class="chart-stat-value">$ 100.409.785</div>
+            </div>
+            <div>
+              <div class="chart-stat-label">Precisión Proyección</div>
+              <div class="chart-stat-value">62.0%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ═══════════════════ MORA ═══════════════════ -->
+<div id="screen-mora" class="screen-container">
+  <div class="screen-label">Mora — Gestión de Cartera Vencida</div>
+  <div class="app-frame">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><div><div class="logo-circle"></div></div><div><div class="logo-text">C-KREA</div><div class="logo-sub">PayControl</div></div></div>
+      <nav class="nav-items">
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</div>
+        <div class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Mora<span class="nav-badge">32</span></div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/></svg>Clientes</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Pagos</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>Gastos</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reportes</div>
+      </nav>
+      <div class="sidebar-footer"><div class="sync-indicator"><span class="sync-dot"></span>Siesa sincronizado</div></div>
+    </aside>
+    <main class="content">
+      <div class="page-header">
+        <h1 class="page-title">Gestión de Mora</h1>
+        <div class="page-actions">
+          <input class="search-input" placeholder="Buscar cliente..." />
+          <button class="btn">⤓ Exportar</button>
+        </div>
+      </div>
+
+      <div class="kpi-grid" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="kpi-card">
+          <div class="kpi-label">Total en Mora</div>
+          <div class="kpi-value" style="color: var(--red);">$ 539.131.515</div>
+          <div class="kpi-sub red">130 cuotas vencidas</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Clientes en Mora</div>
+          <div class="kpi-value">32</div>
+          <div class="kpi-sub muted">de 48 clientes activos</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Promedio Días</div>
+          <div class="kpi-value">108</div>
+          <div class="kpi-sub muted">días en mora</div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="tab-bar">
+          <div class="tab-item active">Todos <span class="tab-count">32</span></div>
+          <div class="tab-item">Leve (1-30d) <span class="tab-count">8</span></div>
+          <div class="tab-item">Moderado (31-90d) <span class="tab-count">12</span></div>
+          <div class="tab-item">Crítico (91+d) <span class="tab-count">12</span></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Local</th>
+              <th>Cliente</th>
+              <th>Estado</th>
+              <th>Días Mora</th>
+              <th class="right">Saldo Vencido</th>
+              <th class="right">Interés Acum.</th>
+              <th>Última Gestión</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>L-205</strong></td>
+              <td>María López<div class="td-sub">NIT 800.456.789-1</div></td>
+              <td><span class="badge red"><span class="badge-dot"></span>Crítico</span></td>
+              <td><strong>187</strong></td>
+              <td class="right">$ 24.500.000</td>
+              <td class="right">$ 3.675.000</td>
+              <td>Mar 28, 2026</td>
+              <td style="color: var(--text-muted); cursor: pointer;">⋯</td>
+            </tr>
+            <tr>
+              <td><strong>L-103</strong></td>
+              <td>SportMax S.A.S<div class="td-sub">NIT 900.789.012-3</div></td>
+              <td><span class="badge red"><span class="badge-dot"></span>Crítico</span></td>
+              <td><strong>142</strong></td>
+              <td class="right">$ 18.200.000</td>
+              <td class="right">$ 2.184.000</td>
+              <td>Abr 2, 2026</td>
+              <td style="color: var(--text-muted); cursor: pointer;">⋯</td>
+            </tr>
+            <tr>
+              <td><strong>L-312</strong></td>
+              <td>Panadería El Trigal<div class="td-sub">NIT 800.321.654-9</div></td>
+              <td><span class="badge amber"><span class="badge-dot"></span>Moderado</span></td>
+              <td><strong>67</strong></td>
+              <td class="right">$ 8.400.000</td>
+              <td class="right">$ 756.000</td>
+              <td>Abr 10, 2026</td>
+              <td style="color: var(--text-muted); cursor: pointer;">⋯</td>
+            </tr>
+            <tr>
+              <td><strong>L-418</strong></td>
+              <td>Óptica VisiónPlus<div class="td-sub">NIT 900.654.321-5</div></td>
+              <td><span class="badge amber"><span class="badge-dot"></span>Moderado</span></td>
+              <td><strong>45</strong></td>
+              <td class="right">$ 5.600.000</td>
+              <td class="right">$ 336.000</td>
+              <td>Abr 8, 2026</td>
+              <td style="color: var(--text-muted); cursor: pointer;">⋯</td>
+            </tr>
+            <tr>
+              <td><strong>L-108</strong></td>
+              <td>Tech Solutions<div class="td-sub">NIT 900.111.222-3</div></td>
+              <td><span class="badge amber"><span class="badge-dot"></span>Leve</span></td>
+              <td><strong>12</strong></td>
+              <td class="right">$ 3.200.000</td>
+              <td class="right">$ 51.200</td>
+              <td>Abr 14, 2026</td>
+              <td style="color: var(--text-muted); cursor: pointer;">⋯</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="table-footer">
+          <span>Mostrando 1-5 de 32 clientes</span>
+          <div class="pagination">
+            <button class="page-btn">←</button>
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">3</button>
+            <button class="page-btn">→</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ═══════════════════ CLIENTES ═══════════════════ -->
+<div id="screen-clientes" class="screen-container">
+  <div class="screen-label">Clientes — Lista de Inquilinos</div>
+  <div class="app-frame">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><div><div class="logo-circle"></div></div><div><div class="logo-text">C-KREA</div><div class="logo-sub">PayControl</div></div></div>
+      <nav class="nav-items">
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>Mora<span class="nav-badge">32</span></div>
+        <div class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/></svg>Clientes</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Pagos</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>Gastos</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reportes</div>
+      </nav>
+      <div class="sidebar-footer"><div class="sync-indicator"><span class="sync-dot"></span>Siesa sincronizado</div></div>
+    </aside>
+    <main class="content">
+      <div class="page-header">
+        <h1 class="page-title">Clientes</h1>
+        <div class="page-actions">
+          <input class="search-input" placeholder="Buscar por nombre, NIT, local..." />
+          <button class="btn btn-primary">+ Nuevo Cliente</button>
+          <button class="btn">⤓</button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="tab-bar">
+          <div class="tab-item active">Todos <span class="tab-count">85</span></div>
+          <div class="tab-item">Activos <span class="tab-count">56</span></div>
+          <div class="tab-item">En Mora <span class="tab-count">32</span></div>
+          <div class="tab-item">Críticos <span class="tab-count">28</span></div>
+          <div class="tab-item">Inactivos <span class="tab-count">1</span></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Local</th>
+              <th>Cliente</th>
+              <th>Entrada</th>
+              <th>Estado</th>
+              <th>Fase</th>
+              <th class="right">Canon Mensual</th>
+              <th class="right">Dto.</th>
+              <th class="right">Saldo Pendiente</th>
+              <th>Último Pago</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>L-101</strong></td>
+              <td>Juan Pérez<div class="td-sub">NIT 900.123.456-7</div></td>
+              <td>3</td>
+              <td><span class="badge green"><span class="badge-dot"></span>Al Día</span></td>
+              <td>2</td>
+              <td class="right">$ 3.500.000</td>
+              <td class="right">15%</td>
+              <td class="right">$ 0</td>
+              <td>Abr 10</td>
+              <td style="color: var(--text-muted); cursor: pointer;">→</td>
+            </tr>
+            <tr>
+              <td><strong>L-102</strong></td>
+              <td>Café Aroma<div class="td-sub">NIT 800.234.567-8</div></td>
+              <td>1</td>
+              <td><span class="badge amber"><span class="badge-dot"></span>Gracia</span></td>
+              <td>1</td>
+              <td class="right">$ 2.800.000</td>
+              <td class="right">35%</td>
+              <td class="right">$ 2.800.000</td>
+              <td>Mar 15</td>
+              <td style="color: var(--text-muted); cursor: pointer;">→</td>
+            </tr>
+            <tr>
+              <td><strong>L-103</strong></td>
+              <td>SportMax S.A.S<div class="td-sub">NIT 900.789.012-3</div></td>
+              <td>2</td>
+              <td><span class="badge red"><span class="badge-dot"></span>En Mora</span></td>
+              <td>3</td>
+              <td class="right">$ 5.200.000</td>
+              <td class="right">0%</td>
+              <td class="right">$ 15.600.000</td>
+              <td>Ene 22</td>
+              <td style="color: var(--text-muted); cursor: pointer;">→</td>
+            </tr>
+            <tr>
+              <td><strong>L-104</strong></td>
+              <td style="color: var(--text-muted);"><em>(Vacante)</em></td>
+              <td>3</td>
+              <td><span class="badge gray"><span class="badge-dot"></span>Inactivo</span></td>
+              <td>—</td>
+              <td class="right" style="color: var(--text-muted);">—</td>
+              <td class="right" style="color: var(--text-muted);">—</td>
+              <td class="right" style="color: var(--text-muted);">—</td>
+              <td style="color: var(--text-muted);">—</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td><strong>L-105</strong></td>
+              <td>Peluquería Estilo<div class="td-sub">NIT 800.555.666-0</div></td>
+              <td>1</td>
+              <td><span class="badge green"><span class="badge-dot"></span>Al Día</span></td>
+              <td>2</td>
+              <td class="right">$ 1.900.000</td>
+              <td class="right">15%</td>
+              <td class="right">$ 0</td>
+              <td>Abr 5</td>
+              <td style="color: var(--text-muted); cursor: pointer;">→</td>
+            </tr>
+            <tr>
+              <td><strong>L-106</strong></td>
+              <td>Farmacia Salud+<div class="td-sub">NIT 900.444.333-2</div></td>
+              <td>4</td>
+              <td><span class="badge green"><span class="badge-dot"></span>Al Día</span></td>
+              <td>3</td>
+              <td class="right">$ 4.100.000</td>
+              <td class="right">0%</td>
+              <td class="right">$ 0</td>
+              <td>Abr 12</td>
+              <td style="color: var(--text-muted); cursor: pointer;">→</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="table-footer">
+          <span>Mostrando 1-6 de 85 clientes</span>
+          <div class="pagination">
+            <button class="page-btn">←</button>
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">3</button>
+            <button class="page-btn">...</button>
+            <button class="page-btn">15</button>
+            <button class="page-btn">→</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ═══════════════════ DETAIL ═══════════════════ -->
+<div id="screen-detail" class="screen-container">
+  <div class="screen-label">Detalle de Cliente — Vista Completa del Inquilino</div>
+  <div class="app-frame">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><div><div class="logo-circle"></div></div><div><div class="logo-text">C-KREA</div><div class="logo-sub">PayControl</div></div></div>
+      <nav class="nav-items">
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>Mora</div>
+        <div class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/></svg>Clientes</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Pagos</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>Gastos</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reportes</div>
+      </nav>
+      <div class="sidebar-footer"><div class="sync-indicator"><span class="sync-dot"></span>Siesa sincronizado</div></div>
+    </aside>
+    <main class="content">
+      <div class="breadcrumb">
+        <a href="#">Clientes</a> / Local L-101 — Juan Pérez
+      </div>
+      <div class="page-header">
+        <h1 class="page-title">Local L-101 — Juan Pérez</h1>
+        <div class="page-actions">
+          <button class="btn btn-primary">Registrar Pago</button>
+          <button class="btn">Generar Factura</button>
+          <button class="btn">⋯</button>
+        </div>
+      </div>
+
+      <div class="detail-grid">
+        <div class="card">
+          <div class="card-title">Información del Contrato</div>
+          <div class="detail-row"><span class="detail-label">Local</span><span class="detail-value">L-101</span></div>
+          <div class="detail-row"><span class="detail-label">Entrada</span><span class="detail-value">3</span></div>
+          <div class="detail-row"><span class="detail-label">Inquilino</span><span class="detail-value">Juan Pérez</span></div>
+          <div class="detail-row"><span class="detail-label">NIT</span><span class="detail-value">900.123.456-7</span></div>
+          <div class="detail-row"><span class="detail-label">Contacto</span><span class="detail-value">310 555 1234</span></div>
+          <div class="detail-row"><span class="detail-label">Fecha Inicio</span><span class="detail-value">Ene 15, 2024</span></div>
+          <div class="detail-row"><span class="detail-label">Fecha Fin</span><span class="detail-value">Dic 31, 2026</span></div>
+          <div class="detail-row"><span class="detail-label">Fase Actual</span><span class="detail-value">2 de 3</span></div>
+          <div class="detail-row"><span class="detail-label">Canon Base</span><span class="detail-value">$ 3.500.000</span></div>
+          <div class="detail-row"><span class="detail-label">Descuento Fase</span><span class="detail-value">15%</span></div>
+          <div class="detail-row"><span class="detail-label">Pronto Pago</span><span class="detail-value">5%</span></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Estado Actual</div>
+          <div class="status-section">
+            <span class="badge badge-lg green"><span class="badge-dot"></span> AL DÍA</span>
+          </div>
+          <div class="status-detail-row"><span class="label">Próximo Vencimiento</span><span class="value">Mayo 1, 2026</span></div>
+          <div class="status-detail-row"><span class="label">Días para vencer</span><span class="value" style="color: var(--green);">16 días</span></div>
+          <div class="status-detail-row"><span class="label">Descuento PP disponible</span><span class="value">5% (si paga antes May 10)</span></div>
+          <div class="status-detail-row"><span class="label">Interés acumulado</span><span class="value">$ 0</span></div>
+          <div class="status-detail-row"><span class="label">Gastos asignados (May)</span><span class="value">$ 185.000</span></div>
+          <div class="status-detail-row total"><span class="label" style="font-weight: 600;">Total a Pagar</span><span class="value">$ 3.160.000</span></div>
+        </div>
+      </div>
+
+      <!-- Payment History -->
+      <div class="table-card" style="margin-bottom: 24px;">
+        <div class="tab-bar">
+          <div class="tab-item active">Historial de Pagos</div>
+          <div class="tab-item">Gastos Asignados</div>
+          <div class="tab-item">Línea de Tiempo</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Concepto</th>
+              <th class="right">Valor</th>
+              <th class="right">Descuento</th>
+              <th class="right">Interés</th>
+              <th>Estado</th>
+              <th>Ref. Siesa</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Abr 10, 2026</td>
+              <td>Canon Mensual</td>
+              <td class="right">$ 3.500.000</td>
+              <td class="right" style="color: var(--green);">- $ 700.000</td>
+              <td class="right">$ 0</td>
+              <td><span class="badge green"><span class="badge-dot"></span>Pagado</span></td>
+              <td style="font-family: monospace; font-size: 12px; color: var(--text-muted);">FV-2026-0412</td>
+            </tr>
+            <tr>
+              <td>Abr 10, 2026</td>
+              <td>Aseo</td>
+              <td class="right">$ 120.000</td>
+              <td class="right">—</td>
+              <td class="right">$ 0</td>
+              <td><span class="badge green"><span class="badge-dot"></span>Pagado</span></td>
+              <td style="font-family: monospace; font-size: 12px; color: var(--text-muted);">FV-2026-0413</td>
+            </tr>
+            <tr>
+              <td>Abr 10, 2026</td>
+              <td>Electricidad</td>
+              <td class="right">$ 65.000</td>
+              <td class="right">—</td>
+              <td class="right">$ 0</td>
+              <td><span class="badge green"><span class="badge-dot"></span>Pagado</span></td>
+              <td style="font-family: monospace; font-size: 12px; color: var(--text-muted);">FV-2026-0414</td>
+            </tr>
+            <tr>
+              <td>Mar 8, 2026</td>
+              <td>Canon Mensual</td>
+              <td class="right">$ 3.500.000</td>
+              <td class="right" style="color: var(--green);">- $ 700.000</td>
+              <td class="right">$ 0</td>
+              <td><span class="badge green"><span class="badge-dot"></span>Pagado</span></td>
+              <td style="font-family: monospace; font-size: 12px; color: var(--text-muted);">FV-2026-0305</td>
+            </tr>
+            <tr>
+              <td>Feb 12, 2026</td>
+              <td>Canon Mensual</td>
+              <td class="right">$ 3.500.000</td>
+              <td class="right" style="color: var(--green);">- $ 525.000</td>
+              <td class="right">$ 0</td>
+              <td><span class="badge green"><span class="badge-dot"></span>Pagado</span></td>
+              <td style="font-family: monospace; font-size: 12px; color: var(--text-muted);">FV-2026-0210</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Contract Timeline -->
+      <div class="card">
+        <div class="card-title">Línea de Tiempo del Contrato</div>
+        <div class="timeline-container">
+          <div class="timeline-bar">
+            <div class="timeline-fill" style="width: 62%;"></div>
+            <div class="timeline-marker" style="left: 62%;"></div>
+          </div>
+          <div class="timeline-labels">
+            <div class="timeline-phase"><strong>Inicio</strong>Ene 2024</div>
+            <div class="timeline-phase"><strong>Fase 1</strong>Jul 2024<br><span style="color: var(--green); font-size: 10px;">35% dto</span></div>
+            <div class="timeline-phase"><strong>Fase 2</strong>Ene 2025<br><span style="color: var(--amber); font-size: 10px;">15% dto</span></div>
+            <div class="timeline-phase"><strong>Fase 3</strong>Jul 2025<br><span style="color: var(--text-muted); font-size: 10px;">0% dto</span></div>
+            <div class="timeline-phase"><strong>Fin</strong>Dic 2026</div>
+          </div>
+          <div style="text-align: center; margin-top: 12px; font-size: 12px; color: var(--blue); font-weight: 500;">
+            ▲ Estamos aquí — Fase 2 (15% descuento)
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ═══════════════════ PAGOS ═══════════════════ -->
+<div id="screen-pagos" class="screen-container">
+  <div class="screen-label">Pagos — Registro y Gestión de Pagos + Panel Lateral de Registro</div>
+  <div class="app-frame">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><div><div class="logo-circle"></div></div><div><div class="logo-text">C-KREA</div><div class="logo-sub">PayControl</div></div></div>
+      <nav class="nav-items">
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>Mora</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/></svg>Clientes</div>
+        <div class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Pagos</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>Gastos</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reportes</div>
+      </nav>
+      <div class="sidebar-footer"><div class="sync-indicator"><span class="sync-dot"></span>Siesa sincronizado</div></div>
+    </aside>
+    <main class="content" style="position: relative;">
+      <div class="page-header">
+        <h1 class="page-title">Pagos</h1>
+        <div class="page-actions">
+          <input class="search-input" placeholder="Buscar pago..." />
+          <button class="btn btn-primary" onclick="toggleSlideOver()">+ Registrar Pago</button>
+          <button class="btn">⤓</button>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Recaudado Este Mes</div>
+          <div class="kpi-value" style="color: var(--green);">$ 142.300.000</div>
+          <div class="kpi-sub green">+12% vs. mes anterior</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Por Clasificar</div>
+          <div class="kpi-value">$ 87.799.331</div>
+          <div class="kpi-sub amber">14 pagos pendientes</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Descuentos Aplicados</div>
+          <div class="kpi-value">$ 12.100.000</div>
+          <div class="kpi-sub muted">Este mes</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Intereses Cobrados</div>
+          <div class="kpi-value">$ 3.800.000</div>
+          <div class="kpi-sub muted">Este mes</div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="tab-bar">
+          <div class="tab-item active">Todos <span class="tab-count">156</span></div>
+          <div class="tab-item">Procesados <span class="tab-count">138</span></div>
+          <div class="tab-item">Pendientes <span class="tab-count">14</span></div>
+          <div class="tab-item">Rechazados <span class="tab-count">4</span></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Cliente</th>
+              <th>Local</th>
+              <th>Concepto</th>
+              <th class="right">Valor</th>
+              <th>Estado</th>
+              <th>Siesa</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Abr 14</td>
+              <td>Juan Pérez<div class="td-sub">NIT 900.123.456-7</div></td>
+              <td>L-101</td>
+              <td>Canon</td>
+              <td class="right">$ 3.160.000</td>
+              <td><span class="badge green"><span class="badge-dot"></span>Procesado</span></td>
+              <td><span style="color: var(--green);">✓</span></td>
+              <td style="color: var(--text-muted); cursor: pointer;">⋯</td>
+            </tr>
+            <tr>
+              <td>Abr 14</td>
+              <td>Café Aroma<div class="td-sub">NIT 800.234.567-8</div></td>
+              <td>L-102</td>
+              <td>Canon + Gastos</td>
+              <td class="right">$ 2.380.000</td>
+              <td><span class="badge amber"><span class="badge-dot"></span>Pendiente</span></td>
+              <td><span style="color: var(--amber);">◷</span></td>
+              <td style="color: var(--text-muted); cursor: pointer;">⋯</td>
+            </tr>
+            <tr>
+              <td>Abr 13</td>
+              <td>SportMax S.A.S<div class="td-sub">NIT 900.789.012-3</div></td>
+              <td>L-103</td>
+              <td>Abono parcial</td>
+              <td class="right">$ 5.200.000</td>
+              <td><span class="badge red"><span class="badge-dot"></span>Rechazado</span></td>
+              <td><span style="color: var(--red);">✗</span></td>
+              <td style="color: var(--text-muted); cursor: pointer;">⋯</td>
+            </tr>
+            <tr>
+              <td>Abr 12</td>
+              <td>Farmacia Salud+<div class="td-sub">NIT 900.444.333-2</div></td>
+              <td>L-106</td>
+              <td>Canon</td>
+              <td class="right">$ 4.100.000</td>
+              <td><span class="badge green"><span class="badge-dot"></span>Procesado</span></td>
+              <td><span style="color: var(--green);">✓</span></td>
+              <td style="color: var(--text-muted); cursor: pointer;">⋯</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="table-footer">
+          <span>Mostrando 1-4 de 156 pagos</span>
+          <div class="pagination">
+            <button class="page-btn">←</button>
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">3</button>
+            <button class="page-btn">→</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Slide-over panel -->
+    <div class="slideover" id="slideOver" style="position: absolute; right: 0; top: 0; bottom: 0; transform: translateX(0);">
+      <div class="slideover-header">
+        <span class="slideover-title">Registrar Pago</span>
+        <button class="close-btn" onclick="toggleSlideOver()">×</button>
+      </div>
+      <div class="slideover-body">
+        <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 12px;">Paso 1 — Seleccionar Cliente</div>
+
+        <div class="form-group">
+          <label class="form-label">Cliente</label>
+          <input class="form-input" value="Juan Pérez — L-101" style="border-color: var(--blue);" />
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Saldo pendiente: $ 0</div>
+        </div>
+
+        <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 12px; margin-top: 24px;">Paso 2 — Detalle del Pago</div>
+
+        <div class="form-group">
+          <label class="form-label">Fecha de Pago</label>
+          <input class="form-input" type="text" value="Abril 15, 2026" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor Recibido</label>
+          <input class="form-input" value="$ 3.160.000" style="font-weight: 600;" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Método de Pago</label>
+          <select class="form-input" style="appearance: auto;">
+            <option>Transferencia</option>
+            <option>Consignación</option>
+            <option>Cheque</option>
+            <option>Efectivo</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Referencia Bancaria</label>
+          <input class="form-input" placeholder="Ej: REF-2026-04-001" />
+        </div>
+
+        <div class="summary-box">
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 8px;">Resumen Automático</div>
+          <div class="summary-row"><span class="label">Canon base</span><span class="value">$ 3.500.000</span></div>
+          <div class="summary-row"><span class="label">Descuento fase (15%)</span><span class="value" style="color: var(--green);">- $ 525.000</span></div>
+          <div class="summary-row"><span class="label">Descuento PP (5%)</span><span class="value" style="color: var(--green);">- $ 148.750</span></div>
+          <div class="summary-row"><span class="label">Interés acumulado</span><span class="value">$ 0</span></div>
+          <div class="summary-row"><span class="label">Gastos asignados</span><span class="value">$ 185.000</span></div>
+          <div class="summary-row total"><span class="label">Total a aplicar</span><span class="value">$ 3.011.250</span></div>
+        </div>
+
+        <div style="margin-top: 16px; display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" checked style="accent-color: var(--blue);" />
+          <span style="font-size: 13px; color: var(--text-secondary);">Sincronizar automáticamente con Siesa</span>
+        </div>
+      </div>
+      <div class="slideover-footer">
+        <button class="btn" onclick="toggleSlideOver()">Cancelar</button>
+        <button class="btn btn-primary">Confirmar Pago</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ GASTOS ═══════════════════ -->
+<div id="screen-gastos" class="screen-container">
+  <div class="screen-label">Gastos — Gastos Compartidos y Asignación por Local</div>
+  <div class="app-frame">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><div><div class="logo-circle"></div></div><div><div class="logo-text">C-KREA</div><div class="logo-sub">PayControl</div></div></div>
+      <nav class="nav-items">
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Dashboard</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>Mora</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="9" cy="7" r="4"/></svg>Clientes</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>Pagos</div>
+        <div class="nav-item active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>Gastos</div>
+        <div class="nav-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Reportes</div>
+      </nav>
+      <div class="sidebar-footer"><div class="sync-indicator"><span class="sync-dot"></span>Siesa sincronizado</div></div>
+    </aside>
+    <main class="content">
+      <div class="page-header">
+        <h1 class="page-title">Gastos Compartidos</h1>
+        <div class="page-actions">
+          <select class="select-input"><option>Abril 2026</option><option>Marzo 2026</option></select>
+          <button class="btn btn-primary">+ Nuevo Gasto</button>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Total Gastos</div>
+          <div class="kpi-value">$ 18.500.000</div>
+          <div class="kpi-sub muted">Abril 2026</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Servicios Públicos</div>
+          <div class="kpi-value">$ 10.500.000</div>
+          <div class="kpi-sub muted">Elect. + Agua</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Aseo</div>
+          <div class="kpi-value">$ 3.700.000</div>
+          <div class="kpi-sub green">Asignado</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Vigilancia</div>
+          <div class="kpi-value">$ 2.800.000</div>
+          <div class="kpi-sub green">Asignado</div>
+        </div>
+      </div>
+
+      <div class="content-grid equal" style="margin-bottom: 24px;">
+        <div class="table-card">
+          <div class="table-header-bar">
+            <span class="card-title" style="margin-bottom: 0;">Gastos del Mes</span>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Categoría</th><th class="right">Monto</th><th>Método</th><th>Estado</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>Electricidad</strong></td><td class="right">$ 8.200.000</td><td><span class="badge blue"><span class="badge-dot"></span>Pro-rata</span></td><td><span class="badge green"><span class="badge-dot"></span>Asignado</span></td></tr>
+              <tr><td><strong>Agua</strong></td><td class="right">$ 1.300.000</td><td><span class="badge gray"><span class="badge-dot"></span>Fijo</span></td><td><span class="badge green"><span class="badge-dot"></span>Asignado</span></td></tr>
+              <tr><td><strong>Aseo</strong></td><td class="right">$ 3.700.000</td><td><span class="badge gray"><span class="badge-dot"></span>Fijo</span></td><td><span class="badge green"><span class="badge-dot"></span>Asignado</span></td></tr>
+              <tr><td><strong>Vigilancia</strong></td><td class="right">$ 2.800.000</td><td><span class="badge gray"><span class="badge-dot"></span>Fijo</span></td><td><span class="badge green"><span class="badge-dot"></span>Asignado</span></td></tr>
+              <tr><td><strong>Nómina</strong></td><td class="right">$ 1.000.000</td><td><span class="badge gray"><span class="badge-dot"></span>Fijo</span></td><td><span class="badge amber"><span class="badge-dot"></span>Pendiente</span></td></tr>
+              <tr><td><strong>Publicidad</strong></td><td class="right">$ 500.000</td><td><span class="badge gray"><span class="badge-dot"></span>Fijo</span></td><td><span class="badge amber"><span class="badge-dot"></span>Pendiente</span></td></tr>
+              <tr><td><strong>Cafetería</strong></td><td class="right">$ 1.000.000</td><td><span class="badge gray"><span class="badge-dot"></span>Fijo</span></td><td><span class="badge green"><span class="badge-dot"></span>Asignado</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Distribución por Categoría</div>
+          <div style="display: flex; justify-content: center; align-items: center; padding: 20px 0;">
+            <!-- Simple donut representation -->
+            <svg width="180" height="180" viewBox="0 0 180 180">
+              <circle cx="90" cy="90" r="70" fill="none" stroke="#e2e8f0" stroke-width="24"/>
+              <circle cx="90" cy="90" r="70" fill="none" stroke="#1e40af" stroke-width="24" stroke-dasharray="252 188" stroke-dashoffset="0" transform="rotate(-90 90 90)"/>
+              <circle cx="90" cy="90" r="70" fill="none" stroke="#3b82f6" stroke-width="24" stroke-dasharray="31 409" stroke-dashoffset="-252" transform="rotate(-90 90 90)"/>
+              <circle cx="90" cy="90" r="70" fill="none" stroke="#60a5fa" stroke-width="24" stroke-dasharray="88 352" stroke-dashoffset="-283" transform="rotate(-90 90 90)"/>
+              <circle cx="90" cy="90" r="70" fill="none" stroke="#93c5fd" stroke-width="24" stroke-dasharray="66 374" stroke-dashoffset="-371" transform="rotate(-90 90 90)"/>
+              <text x="90" y="85" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">$18.5M</text>
+              <text x="90" y="102" text-anchor="middle" font-size="11" fill="#64748b">Total</text>
+            </svg>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; padding: 0 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px;">
+              <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #1e40af;"></span>Electricidad</span>
+              <span style="font-weight: 600;">44%</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px;">
+              <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #60a5fa;"></span>Aseo</span>
+              <span style="font-weight: 600;">20%</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px;">
+              <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #93c5fd;"></span>Vigilancia</span>
+              <span style="font-weight: 600;">15%</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px;">
+              <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #3b82f6;"></span>Agua</span>
+              <span style="font-weight: 600;">7%</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px;">
+              <span style="display: flex; align-items: center; gap: 6px;"><span style="width: 10px; height: 10px; border-radius: 2px; background: #e2e8f0;"></span>Otros</span>
+              <span style="font-weight: 600;">14%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-header-bar">
+          <span class="card-title" style="margin-bottom: 0;">Asignación por Local</span>
+          <button class="btn">⤓ Exportar</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Local</th>
+              <th>Cliente</th>
+              <th class="right">Electricidad</th>
+              <th class="right">Agua</th>
+              <th class="right">Aseo</th>
+              <th class="right">Vigil.</th>
+              <th class="right">Total</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>L-101</strong></td>
+              <td>Juan Pérez</td>
+              <td class="right">$ 98.000</td>
+              <td class="right">$ 15.500</td>
+              <td class="right">$ 44.100</td>
+              <td class="right">$ 33.400</td>
+              <td class="right"><strong>$ 191.000</strong></td>
+              <td><span style="color: var(--green);">✓</span></td>
+            </tr>
+            <tr>
+              <td><strong>L-102</strong></td>
+              <td>Café Aroma</td>
+              <td class="right">$ 156.000</td>
+              <td class="right">$ 15.500</td>
+              <td class="right">$ 44.100</td>
+              <td class="right">$ 33.400</td>
+              <td class="right"><strong>$ 249.000</strong></td>
+              <td><span style="color: var(--amber);">◷</span></td>
+            </tr>
+            <tr>
+              <td><strong>L-103</strong></td>
+              <td>SportMax S.A.S</td>
+              <td class="right">$ 210.000</td>
+              <td class="right">$ 15.500</td>
+              <td class="right">$ 44.100</td>
+              <td class="right">$ 33.400</td>
+              <td class="right"><strong>$ 303.000</strong></td>
+              <td><span style="color: var(--red);">✗</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="table-footer">
+          <span>Mostrando 1-3 de 83 locales</span>
+          <div class="pagination">
+            <button class="page-btn">←</button>
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">3</button>
+            <button class="page-btn">→</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+function showScreen(name) {
+  document.querySelectorAll('.screen-container').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.screen-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('screen-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+
+function toggleSlideOver() {
+  const panel = document.getElementById('slideOver');
+  if (panel.style.transform === 'translateX(0px)' || panel.style.transform === 'translateX(0)') {
+    panel.style.transform = 'translateX(100%)';
+  } else {
+    panel.style.transform = 'translateX(0)';
+  }
+}
+
+// Start with slideOver hidden
+document.getElementById('slideOver').style.transform = 'translateX(100%)';
+</script>
+
+</body>
+</html>

@@ -1,4 +1,5 @@
 import { Sidebar } from "@/components/layout/sidebar"
+import { MobileNav } from "@/components/layout/mobile-nav"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { supabaseAdmin } from "@/lib/db/executor"
@@ -27,8 +28,9 @@ export default async function AppLayout({
   return (
     <>
       <Sidebar displayName={displayName} signOutAction={signOut} />
-      <main className="ml-[220px] flex min-h-screen w-full flex-col">
-        <div className="flex-1 px-8 py-6 w-full max-w-[1440px] mx-auto">{children}</div>
+      <main className="ml-0 lg:ml-[220px] flex min-h-screen w-full flex-col">
+        <MobileNav displayName={displayName} signOutAction={signOut} />
+        <div className="flex-1 px-4 sm:px-6 lg:px-8 py-4 sm:py-6 w-full max-w-[1440px] mx-auto">{children}</div>
       </main>
     </>
   )

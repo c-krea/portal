@@ -1,0 +1,540 @@
+<\!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C-Krea PayControl — Database ERD</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; }
+  .header { background: #1e293b; padding: 20px 32px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .header h1 span { color: #38bdf8; }
+  .tabs { display: flex; gap: 4px; }
+  .tab { padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; background: transparent; color: #94a3b8; border: 1px solid transparent; transition: all 0.2s; }
+  .tab:hover { color: #e2e8f0; background: #334155; }
+  .tab.active { background: #38bdf8; color: #0f172a; border-color: #38bdf8; }
+  .content { padding: 24px 32px; }
+  .erd-container { overflow: auto; background: #1e293b; border-radius: 12px; padding: 32px; min-height: 80vh; position: relative; }
+  
+  /* Mermaid ERD styling */
+  .mermaid-wrap { display: flex; justify-content: center; }
+  
+  /* Tables view */
+  .tables-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+  .table-card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; overflow: hidden; }
+  .table-card .card-header { padding: 12px 16px; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .table-card .card-header .badge { font-size: 10px; padding: 2px 8px; border-radius: 99px; font-weight: 500; }
+  .table-card .card-body { padding: 0 16px 12px; }
+  .table-card table { width: 100%; font-size: 12px; border-collapse: collapse; }
+  .table-card table th { text-align: left; padding: 4px 0; color: #64748b; font-weight: 500; border-bottom: 1px solid #334155; }
+  .table-card table td { padding: 4px 0; color: #cbd5e1; }
+  .table-card table td.type { color: #38bdf8; font-family: monospace; font-size: 11px; }
+  .table-card table td.pk { color: #fbbf24; }
+  .table-card table td.fk { color: #a78bfa; }
+  .table-card .comment { padding: 8px 16px; font-size: 11px; color: #64748b; border-top: 1px solid #334155; font-style: italic; }
+  
+  /* Color coding by domain */
+  .domain-core .card-header { background: #1e3a5f; border-bottom: 2px solid #38bdf8; }
+  .domain-core .badge { background: #38bdf8; color: #0f172a; }
+  .domain-financial .card-header { background: #3b1f2b; border-bottom: 2px solid #f472b6; }
+  .domain-financial .badge { background: #f472b6; color: #0f172a; }
+  .domain-gastos .card-header { background: #1a3329; border-bottom: 2px solid #4ade80; }
+  .domain-gastos .badge { background: #4ade80; color: #0f172a; }
+  .domain-siesa .card-header { background: #3b2f1a; border-bottom: 2px solid #fbbf24; }
+  .domain-siesa .badge { background: #fbbf24; color: #0f172a; }
+  .domain-system .card-header { background: #2d2340; border-bottom: 2px solid #a78bfa; }
+  .domain-system .badge { background: #a78bfa; color: #0f172a; }
+  
+  /* Mapping view */
+  .mapping-section { background: #1e293b; border-radius: 10px; padding: 20px; margin-bottom: 16px; border: 1px solid #334155; }
+  .mapping-section h3 { font-size: 15px; margin-bottom: 12px; color: #38bdf8; }
+  .mapping-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .mapping-table th { text-align: left; padding: 8px 12px; background: #0f172a; color: #94a3b8; font-weight: 500; }
+  .mapping-table td { padding: 8px 12px; border-bottom: 1px solid #334155; }
+  .mapping-table .siesa { color: #fbbf24; font-family: monospace; }
+  .mapping-table .portal { color: #38bdf8; font-family: monospace; }
+  .mapping-table .arrow { color: #64748b; text-align: center; }
+  
+  /* RLS view */
+  .rls-matrix { width: 100%; border-collapse: collapse; font-size: 13px; background: #1e293b; border-radius: 10px; overflow: hidden; }
+  .rls-matrix th { padding: 10px 12px; background: #0f172a; color: #94a3b8; font-weight: 500; text-align: center; }
+  .rls-matrix th:first-child { text-align: left; }
+  .rls-matrix td { padding: 8px 12px; border-bottom: 1px solid #334155; text-align: center; }
+  .rls-matrix td:first-child { text-align: left; font-family: monospace; color: #38bdf8; font-size: 12px; }
+  .rls-check { color: #4ade80; }
+  .rls-x { color: #475569; }
+  .rls-limited { color: #fbbf24; font-size: 11px; }
+  
+  .hidden { display: none; }
+  .legend { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #94a3b8; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  
+  /* SVG ERD */
+  .erd-svg { width: 100%; overflow-x: auto; }
+  .erd-svg svg { min-width: 1200px; }
+</style>
+</head>
+<body>
+<div class="header">
+    <h1><span>C-Krea</span> PayControl — Database Schema & ERD</h1>
+    <div class="tabs">
+        <div class="tab active" onclick="showView('erd')">ERD Diagram</div>
+        <div class="tab" onclick="showView('tables')">Table Details</div>
+        <div class="tab" onclick="showView('mapping')">Siesa Mapping</div>
+        <div class="tab" onclick="showView('rls')">RLS Policies</div>
+    </div>
+</div>
+
+<div class="content">
+    <\!-- ERD VIEW -->
+    <div id="view-erd">
+        <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#38bdf8"></div> Core (Companies, Tenants, Units, Contracts)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f472b6"></div> Financial (Invoices, Payments, Interest, Cartera)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#4ade80"></div> Gastos (Types, Expenses, Allocations)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#fbbf24"></div> Siesa Integration (Sync, Accounting)</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div> System (Audit, Notifications, Profiles)</div>
+        </div>
+        <div class="erd-container erd-svg" id="erd-diagram"></div>
+    </div>
+
+    <\!-- TABLES VIEW -->
+    <div id="view-tables" class="hidden">
+        <div class="legend">
+            <div class="legend-item"><span style="color:#fbbf24">PK</span> = Primary Key</div>
+            <div class="legend-item"><span style="color:#a78bfa">FK</span> = Foreign Key</div>
+            <div class="legend-item">21 tables total</div>
+        </div>
+        <div class="tables-grid" id="tables-grid"></div>
+    </div>
+
+    <\!-- MAPPING VIEW -->
+    <div id="view-mapping" class="hidden" id="mapping-content"></div>
+
+    <\!-- RLS VIEW -->
+    <div id="view-rls" class="hidden"></div>
+</div>
+
+<script>
+function showView(name) {
+    document.querySelectorAll('[id^="view-"]').forEach(el => el.classList.add('hidden'));
+    document.getElementById('view-' + name).classList.remove('hidden');
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+}
+
+// ── TABLE DEFINITIONS ──
+const tables = [
+  { name: 'companies', domain: 'core', comment: 'Multi-company filter. Siesa DB has both C-Krea and Raymond.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'name', t: 'TEXT' }, { n: 'nit', t: 'TEXT UNIQUE' },
+    { n: 'siesa_co_id', t: 'TEXT' }, { n: 'siesa_ccosto', t: 'TEXT' }, { n: 'siesa_canal_id', t: 'TEXT' },
+    { n: 'is_active', t: 'BOOLEAN' }
+  ]},
+  { name: 'profiles', domain: 'system', comment: 'Extends Supabase auth.users. Role determines RLS access.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK/FK→auth.users' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'full_name', t: 'TEXT' }, { n: 'email', t: 'TEXT' }, { n: 'role', t: 'user_role' },
+    { n: 'tenant_id', t: 'UUID', k: 'FK→tenants' }
+  ]},
+  { name: 'tenants', domain: 'core', comment: 'Rental clients. NIT = Colombian tax ID, primary Siesa identifier.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'nit', t: 'TEXT' }, { n: 'razon_social', t: 'TEXT' }, { n: 'nombre_corto', t: 'TEXT' },
+    { n: 'tipo_cliente', t: 'TEXT' }, { n: 'condicion_pago', t: 'TEXT' }, { n: 'email', t: 'TEXT' },
+    { n: 'siesa_row_id', t: 'TEXT' }
+  ]},
+  { name: 'units', domain: 'core', comment: '85 physical rental spaces across 6 entradas + Zona 8.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'unit_number', t: 'TEXT' }, { n: 'unit_code', t: 'TEXT' }, { n: 'entrada', t: 'TEXT' },
+    { n: 'clasificacion', t: 'TEXT' }, { n: 'status', t: 'unit_status' },
+    { n: 'has_electricity_meter', t: 'BOOLEAN' }
+  ]},
+  { name: 'contracts', domain: 'core', comment: 'Rental agreements: tenant→unit with financial terms.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'tenant_id', t: 'UUID', k: 'FK→tenants' }, { n: 'unit_id', t: 'UUID', k: 'FK→units' },
+    { n: 'fecha_inicio', t: 'DATE' }, { n: 'canon_base', t: 'NUMERIC(15,2)' },
+    { n: 'incremento_ipc', t: 'NUMERIC' }, { n: 'fecha_incremento_ipc', t: 'DATE' },
+    { n: 'descuento_pct', t: 'NUMERIC(5,2)' }, { n: 'pronto_pago_pct', t: 'NUMERIC(5,2)' },
+    { n: 'interes_mora_rate', t: 'NUMERIC' }, { n: 'grace_period_days', t: 'INTEGER' },
+    { n: 'status', t: 'contract_status' }
+  ]},
+  { name: 'contract_phases', domain: 'core', comment: 'PRD Rule B: time-based discount phases per contract.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'contract_id', t: 'UUID', k: 'FK→contracts' },
+    { n: 'phase_number', t: 'INTEGER' }, { n: 'start_date', t: 'DATE' }, { n: 'end_date', t: 'DATE' },
+    { n: 'descuento_pct', t: 'NUMERIC(5,2)' }, { n: 'pronto_pago_pct', t: 'NUMERIC(5,2)' }
+  ]},
+  { name: 'financial_rules', domain: 'financial', comment: 'Global rules: interest rate, PP window, grace period.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'rule_key', t: 'TEXT' }, { n: 'rule_value', t: 'NUMERIC' },
+    { n: 'effective_from', t: 'DATE' }, { n: 'effective_until', t: 'DATE' }
+  ]},
+  { name: 'invoices', domain: 'financial', comment: 'Monthly billing. Line items stored separately for Siesa XML.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'contract_id', t: 'UUID', k: 'FK→contracts' }, { n: 'tenant_id', t: 'UUID', k: 'FK→tenants' },
+    { n: 'unit_id', t: 'UUID', k: 'FK→units' },
+    { n: 'siesa_documento', t: 'TEXT' }, { n: 'siesa_periodo', t: 'TEXT' },
+    { n: 'fecha_emision', t: 'DATE' }, { n: 'fecha_vencimiento', t: 'DATE' },
+    { n: 'subtotal_canon', t: 'NUMERIC' }, { n: 'subtotal_descuentos', t: 'NUMERIC' },
+    { n: 'subtotal_gastos', t: 'NUMERIC' }, { n: 'subtotal_interes', t: 'NUMERIC' },
+    { n: 'iva', t: 'NUMERIC' }, { n: 'total', t: 'NUMERIC' }, { n: 'saldo', t: 'NUMERIC' },
+    { n: 'status', t: 'invoice_status' }
+  ]},
+  { name: 'invoice_line_items', domain: 'financial', comment: 'Separate lines: canon, discount, interest, gastos for Siesa.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'invoice_id', t: 'UUID', k: 'FK→invoices' },
+    { n: 'type', t: 'line_item_type' }, { n: 'description', t: 'TEXT' },
+    { n: 'amount', t: 'NUMERIC(15,2)' }, { n: 'siesa_cuenta', t: 'TEXT' },
+    { n: 'reference_id', t: 'UUID' }
+  ]},
+  { name: 'payments', domain: 'financial', comment: 'Recaudo from Siesa. Canon + gastos payments.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'tenant_id', t: 'UUID', k: 'FK→tenants' },
+    { n: 'siesa_docto', t: 'TEXT' }, { n: 'siesa_cruce', t: 'TEXT' },
+    { n: 'fecha_recaudo', t: 'DATE' }, { n: 'valor_aplicado', t: 'NUMERIC' },
+    { n: 'pronto_pago_aplicado', t: 'NUMERIC' }, { n: 'valor_final', t: 'NUMERIC' },
+    { n: 'status', t: 'payment_status' }, { n: 'concepto', t: 'TEXT' }
+  ]},
+  { name: 'payment_applications', domain: 'financial', comment: 'Ledger: maps payments to invoices with exact amounts.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'payment_id', t: 'UUID', k: 'FK→payments' },
+    { n: 'invoice_id', t: 'UUID', k: 'FK→invoices' }, { n: 'amount_applied', t: 'NUMERIC(15,2)' }
+  ]},
+  { name: 'interest_accruals', domain: 'financial', comment: 'PRD Rule C: daily late-interest accrual per overdue invoice.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'invoice_id', t: 'UUID', k: 'FK→invoices' },
+    { n: 'contract_id', t: 'UUID', k: 'FK→contracts' },
+    { n: 'accrual_date', t: 'DATE' }, { n: 'days_overdue', t: 'INTEGER' },
+    { n: 'overdue_balance', t: 'NUMERIC' }, { n: 'daily_rate', t: 'NUMERIC' },
+    { n: 'interest_amount', t: 'NUMERIC' }, { n: 'cumulative_interest', t: 'NUMERIC' },
+    { n: 'is_waived', t: 'BOOLEAN' }
+  ]},
+  { name: 'cartera', domain: 'financial', comment: 'Receivables from Siesa, enriched with interest + gastos.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'tenant_id', t: 'UUID', k: 'FK→tenants' }, { n: 'invoice_id', t: 'UUID', k: 'FK→invoices' },
+    { n: 'siesa_row_id', t: 'TEXT' }, { n: 'siesa_factura', t: 'TEXT' },
+    { n: 'fecha_vence', t: 'DATE' }, { n: 'dias_mora', t: 'INTEGER' },
+    { n: 'saldo', t: 'NUMERIC' }, { n: 'valor_vencido', t: 'NUMERIC' },
+    { n: 'interes_acumulado', t: 'NUMERIC' }, { n: 'gastos_pendientes', t: 'NUMERIC' },
+    { n: 'total_deuda', t: 'NUMERIC (generated)' }
+  ]},
+  { name: 'gasto_types', domain: 'gastos', comment: 'Shared expense categories (PRD Rule D).', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'category', t: 'gasto_category' }, { n: 'name', t: 'TEXT' },
+    { n: 'allocation_method', t: 'gasto_alloc_method' }, { n: 'is_billable', t: 'BOOLEAN' },
+    { n: 'siesa_cuenta', t: 'TEXT' }
+  ]},
+  { name: 'gastos', domain: 'gastos', comment: 'Monthly shared expense totals to distribute.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'gasto_type_id', t: 'UUID', k: 'FK→gasto_types' },
+    { n: 'periodo', t: 'TEXT' }, { n: 'total_amount', t: 'NUMERIC(15,2)' },
+    { n: 'is_allocated', t: 'BOOLEAN' }
+  ]},
+  { name: 'gasto_allocations', domain: 'gastos', comment: 'Per-tenant distribution. Electricity=metered; others=pro-rata.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'gasto_id', t: 'UUID', k: 'FK→gastos' },
+    { n: 'tenant_id', t: 'UUID', k: 'FK→tenants' }, { n: 'unit_id', t: 'UUID', k: 'FK→units' },
+    { n: 'contract_id', t: 'UUID', k: 'FK→contracts' }, { n: 'invoice_id', t: 'UUID', k: 'FK→invoices' },
+    { n: 'amount', t: 'NUMERIC(15,2)' }, { n: 'allocation_method', t: 'gasto_alloc_method' },
+    { n: 'meter_reading', t: 'NUMERIC' }, { n: 'siesa_cruce', t: 'TEXT' }, { n: 'siesa_rk', t: 'TEXT' }
+  ]},
+  { name: 'projections', domain: 'financial', comment: 'Monthly revenue projections for variance analysis.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'contract_id', t: 'UUID', k: 'FK→contracts' }, { n: 'unit_id', t: 'UUID', k: 'FK→units' },
+    { n: 'year', t: 'INTEGER' }, { n: 'month', t: 'INTEGER' },
+    { n: 'canon_proyectado', t: 'NUMERIC' }, { n: 'descuento_proyectado', t: 'NUMERIC' },
+    { n: 'pronto_pago_proyectado', t: 'NUMERIC' }
+  ]},
+  { name: 'accounting_entries', domain: 'siesa', comment: 'P&L from Siesa Estado de resultados. Read-only sync.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'siesa_documento', t: 'TEXT' }, { n: 'cuenta', t: 'TEXT' }, { n: 'desc_cuenta', t: 'TEXT' },
+    { n: 'co', t: 'TEXT' }, { n: 'ccosto', t: 'TEXT' }, { n: 'periodo', t: 'TEXT' },
+    { n: 'valor', t: 'NUMERIC(15,2)' }
+  ]},
+  { name: 'siesa_sync_log', domain: 'siesa', comment: 'Tracks every pull/push for 100% reconciliation.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'direction', t: 'sync_direction' }, { n: 'entity_type', t: 'TEXT' },
+    { n: 'entity_id', t: 'UUID' }, { n: 'status', t: 'sync_status' },
+    { n: 'request_payload', t: 'JSONB' }, { n: 'response_payload', t: 'JSONB' }
+  ]},
+  { name: 'audit_log', domain: 'system', comment: 'Immutable audit trail. Every change with mandatory reason.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'user_id', t: 'UUID', k: 'FK→profiles' }, { n: 'action', t: 'audit_action' },
+    { n: 'entity_type', t: 'TEXT' }, { n: 'entity_id', t: 'UUID' },
+    { n: 'old_values', t: 'JSONB' }, { n: 'new_values', t: 'JSONB' }, { n: 'reason', t: 'TEXT' }
+  ]},
+  { name: 'notifications', domain: 'system', comment: 'Email/SMS/in-app alerts for payments, interest, gastos.', cols: [
+    { n: 'id', t: 'UUID', k: 'PK' }, { n: 'company_id', t: 'UUID', k: 'FK→companies' },
+    { n: 'tenant_id', t: 'UUID', k: 'FK→tenants' }, { n: 'user_id', t: 'UUID', k: 'FK→profiles' },
+    { n: 'type', t: 'TEXT' }, { n: 'title', t: 'TEXT' }, { n: 'channel', t: 'TEXT' },
+    { n: 'is_read', t: 'BOOLEAN' }
+  ]}
+];
+
+// ── RENDER TABLE CARDS ──
+const grid = document.getElementById('tables-grid');
+tables.forEach(t => {
+    const card = document.createElement('div');
+    card.className = `table-card domain-${t.domain}`;
+    card.innerHTML = `
+        <div class="card-header">${t.name} <span class="badge">${t.domain}</span></div>
+        <div class="card-body">
+            <table>
+                <tr><th>Column</th><th>Type</th><th>Key</th></tr>
+                ${t.cols.map(c => `<tr>
+                    <td>${c.n}</td>
+                    <td class="type">${c.t}</td>
+                    <td class="${c.k?.startsWith('PK') ? 'pk' : c.k?.startsWith('FK') ? 'fk' : ''}">${c.k || ''}</td>
+                </tr>`).join('')}
+            </table>
+        </div>
+        <div class="comment">${t.comment}</div>
+    `;
+    grid.appendChild(card);
+});
+
+// ── RENDER ERD DIAGRAM (SVG) ──
+const erdData = {
+    nodes: [
+        // Core domain
+        { id: 'companies', x: 80, y: 40, w: 150, h: 36, domain: 'core', label: 'companies' },
+        { id: 'tenants', x: 80, y: 140, w: 150, h: 36, domain: 'core', label: 'tenants' },
+        { id: 'units', x: 320, y: 140, w: 150, h: 36, domain: 'core', label: 'units' },
+        { id: 'contracts', x: 200, y: 250, w: 150, h: 36, domain: 'core', label: 'contracts' },
+        { id: 'contract_phases', x: 200, y: 350, w: 170, h: 36, domain: 'core', label: 'contract_phases' },
+        { id: 'profiles', x: 560, y: 40, w: 150, h: 36, domain: 'system', label: 'profiles' },
+        // Financial domain
+        { id: 'financial_rules', x: 440, y: 250, w: 170, h: 36, domain: 'financial', label: 'financial_rules' },
+        { id: 'invoices', x: 200, y: 460, w: 150, h: 36, domain: 'financial', label: 'invoices' },
+        { id: 'invoice_line_items', x: 10, y: 560, w: 190, h: 36, domain: 'financial', label: 'invoice_line_items' },
+        { id: 'payments', x: 440, y: 460, w: 150, h: 36, domain: 'financial', label: 'payments' },
+        { id: 'payment_applications', x: 320, y: 560, w: 200, h: 36, domain: 'financial', label: 'payment_applications' },
+        { id: 'interest_accruals', x: 10, y: 660, w: 190, h: 36, domain: 'financial', label: 'interest_accruals' },
+        { id: 'cartera', x: 680, y: 460, w: 150, h: 36, domain: 'financial', label: 'cartera' },
+        { id: 'projections', x: 440, y: 350, w: 160, h: 36, domain: 'financial', label: 'projections' },
+        // Gastos domain
+        { id: 'gasto_types', x: 700, y: 140, w: 160, h: 36, domain: 'gastos', label: 'gasto_types' },
+        { id: 'gastos', x: 700, y: 250, w: 150, h: 36, domain: 'gastos', label: 'gastos' },
+        { id: 'gasto_allocations', x: 700, y: 350, w: 190, h: 36, domain: 'gastos', label: 'gasto_allocations' },
+        // Siesa + System
+        { id: 'accounting_entries', x: 930, y: 140, w: 200, h: 36, domain: 'siesa', label: 'accounting_entries' },
+        { id: 'siesa_sync_log', x: 930, y: 250, w: 170, h: 36, domain: 'siesa', label: 'siesa_sync_log' },
+        { id: 'audit_log', x: 780, y: 40, w: 150, h: 36, domain: 'system', label: 'audit_log' },
+        { id: 'notifications', x: 560, y: 560, w: 160, h: 36, domain: 'system', label: 'notifications' },
+    ],
+    edges: [
+        // companies → children
+        { from: 'companies', to: 'tenants', label: '1:N' },
+        { from: 'companies', to: 'units', label: '1:N' },
+        { from: 'companies', to: 'profiles', label: '1:N' },
+        // tenant/unit → contracts
+        { from: 'tenants', to: 'contracts', label: '1:N' },
+        { from: 'units', to: 'contracts', label: '1:1' },
+        // contracts → phases
+        { from: 'contracts', to: 'contract_phases', label: '1:N' },
+        // contracts → invoices
+        { from: 'contracts', to: 'invoices', label: '1:N' },
+        // invoices → line items
+        { from: 'invoices', to: 'invoice_line_items', label: '1:N' },
+        // invoices → interest
+        { from: 'invoices', to: 'interest_accruals', label: '1:N' },
+        // tenants → payments
+        { from: 'tenants', to: 'payments', label: '1:N' },
+        // payments ↔ invoices via applications
+        { from: 'payments', to: 'payment_applications', label: '1:N' },
+        { from: 'invoices', to: 'payment_applications', label: '1:N' },
+        // tenants → cartera
+        { from: 'tenants', to: 'cartera', label: '1:N' },
+        // gastos chain
+        { from: 'gasto_types', to: 'gastos', label: '1:N' },
+        { from: 'gastos', to: 'gasto_allocations', label: '1:N' },
+        { from: 'tenants', to: 'gasto_allocations', label: '1:N', style: 'dashed' },
+        // projections
+        { from: 'units', to: 'projections', label: '1:N', style: 'dashed' },
+        // notifications
+        { from: 'tenants', to: 'notifications', label: '1:N', style: 'dashed' },
+    ]
+};
+
+const colors = { core: '#38bdf8', financial: '#f472b6', gastos: '#4ade80', siesa: '#fbbf24', system: '#a78bfa' };
+const bgColors = { core: '#1e3a5f', financial: '#3b1f2b', gastos: '#1a3329', siesa: '#3b2f1a', system: '#2d2340' };
+
+function renderERD() {
+    const svgW = 1180, svgH = 740;
+    let svg = `<svg viewBox="0 0 ${svgW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="font-family:-apple-system,sans-serif">`;
+    svg += `<defs><marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L10,5 L0,10" fill="#475569"/></marker></defs>`;
+    
+    // Draw edges
+    erdData.edges.forEach(e => {
+        const from = erdData.nodes.find(n => n.id === e.from);
+        const to = erdData.nodes.find(n => n.id === e.to);
+        const x1 = from.x + from.w / 2, y1 = from.y + from.h;
+        const x2 = to.x + to.w / 2, y2 = to.y;
+        const dash = e.style === 'dashed' ? 'stroke-dasharray="5,5"' : '';
+        // Use a curved path
+        const midY = (y1 + y2) / 2;
+        svg += `<path d="M${x1},${y1} C${x1},${midY} ${x2},${midY} ${x2},${y2}" fill="none" stroke="#475569" stroke-width="1.5" ${dash} marker-end="url(#arrow)"/>`;
+        // Label
+        const lx = (x1 + x2) / 2 + 8, ly = midY - 4;
+        svg += `<text x="${lx}" y="${ly}" fill="#64748b" font-size="10">${e.label}</text>`;
+    });
+    
+    // Draw nodes
+    erdData.nodes.forEach(n => {
+        const c = colors[n.domain], bg = bgColors[n.domain];
+        svg += `<rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="6" fill="${bg}" stroke="${c}" stroke-width="1.5"/>`;
+        svg += `<text x="${n.x + n.w/2}" y="${n.y + n.h/2 + 5}" fill="${c}" font-size="12" font-weight="600" text-anchor="middle">${n.label}</text>`;
+    });
+    
+    svg += '</svg>';
+    document.getElementById('erd-diagram').innerHTML = svg;
+}
+renderERD();
+
+// ── MAPPING VIEW ──
+const mappingHTML = `
+<div class="mapping-section">
+    <h3>Siesa → Portal Column Mapping: Ocupacion Sheet → tenants + units + contracts</h3>
+    <table class="mapping-table">
+        <tr><th>Siesa Column</th><th></th><th>Portal Table.Column</th><th>Notes</th></tr>
+        <tr><td class="siesa">ENTRADA</td><td class="arrow">→</td><td class="portal">units.entrada</td><td>e.g., 'ENTRADA 1'</td></tr>
+        <tr><td class="siesa">LOC</td><td class="arrow">→</td><td class="portal">units.unit_number</td><td>e.g., '101'</td></tr>
+        <tr><td class="siesa">DOCUMENTO</td><td class="arrow">→</td><td class="portal">tenants.nit</td><td>NIT / Colombian tax ID</td></tr>
+        <tr><td class="siesa">RAZON_SOCIAL</td><td class="arrow">→</td><td class="portal">tenants.razon_social</td><td>Legal business name</td></tr>
+        <tr><td class="siesa">LOCAL</td><td class="arrow">→</td><td class="portal">units.unit_code</td><td>e.g., 'E1L101'</td></tr>
+        <tr><td class="siesa">INGRESO</td><td class="arrow">→</td><td class="portal">contracts.fecha_inicio</td><td>Contract start date</td></tr>
+        <tr><td class="siesa">LISTA</td><td class="arrow">→</td><td class="portal">contracts.lista_precios</td><td>Price list code (ACK)</td></tr>
+        <tr><td class="siesa">PRECIO</td><td class="arrow">→</td><td class="portal">contracts.canon_base</td><td>Monthly rent amount</td></tr>
+        <tr><td class="siesa">DESCUENTO</td><td class="arrow">→</td><td class="portal">contracts.descuento_pct</td><td>Discount % (0-20)</td></tr>
+        <tr><td class="siesa">PRONTO_PAGO</td><td class="arrow">→</td><td class="portal">contracts.pronto_pago_pct</td><td>Early-pay discount %</td></tr>
+        <tr><td class="siesa">ESTADO</td><td class="arrow">→</td><td class="portal">contracts.status</td><td>Activo/Critico</td></tr>
+        <tr><td class="siesa">UNO/ONCE/VEINTIUNO/CRITICO</td><td class="arrow">→</td><td class="portal">contracts.flag_*</td><td>Criticality flags (booleans)</td></tr>
+    </table>
+</div>
+<div class="mapping-section">
+    <h3>Siesa → Portal: Documentos Sheet → invoices</h3>
+    <table class="mapping-table">
+        <tr><th>Siesa Column</th><th></th><th>Portal Table.Column</th><th>Notes</th></tr>
+        <tr><td class="siesa">documento</td><td class="arrow">→</td><td class="portal">invoices.siesa_documento</td><td>e.g., '001-FVS-69736'</td></tr>
+        <tr><td class="siesa">periodo</td><td class="arrow">→</td><td class="portal">invoices.siesa_periodo</td><td>YYYYMM format</td></tr>
+        <tr><td class="siesa">doc (NIT)</td><td class="arrow">→</td><td class="portal">tenants.nit</td><td>Join key to resolve tenant_id</td></tr>
+        <tr><td class="siesa">cliente</td><td class="arrow">→</td><td class="portal">tenants.razon_social</td><td>Verification only</td></tr>
+        <tr><td class="siesa">tipo</td><td class="arrow">→</td><td class="portal">invoices.siesa_tipo</td><td>'Facturas' or 'Descuentos'</td></tr>
+        <tr><td class="siesa">auxiliar</td><td class="arrow">→</td><td class="portal">invoices.siesa_auxiliar</td><td>Account code (42201006)</td></tr>
+        <tr><td class="siesa">ventas</td><td class="arrow">→</td><td class="portal">invoices.subtotal_canon</td><td>Base sale amount</td></tr>
+        <tr><td class="siesa">impuesto</td><td class="arrow">→</td><td class="portal">invoices.iva</td><td>IVA tax</td></tr>
+        <tr><td class="siesa">retenciones</td><td class="arrow">→</td><td class="portal">invoices.retenciones</td><td>Tax withholdings</td></tr>
+        <tr><td class="siesa">id_canal / canal</td><td class="arrow">→</td><td class="portal">companies.siesa_canal_id</td><td>R08 / C-KREA — company filter</td></tr>
+        <tr><td class="siesa">id_co / co</td><td class="arrow">→</td><td class="portal">companies.siesa_co_id</td><td>044 / Central Creativa — company filter</td></tr>
+    </table>
+</div>
+<div class="mapping-section">
+    <h3>Siesa → Portal: Cartera Sheet → cartera</h3>
+    <table class="mapping-table">
+        <tr><th>Siesa Column</th><th></th><th>Portal Table.Column</th><th>Notes</th></tr>
+        <tr><td class="siesa">RowId</td><td class="arrow">→</td><td class="portal">cartera.siesa_row_id</td><td>Unique Siesa record ID</td></tr>
+        <tr><td class="siesa">RowIdTercero</td><td class="arrow">→</td><td class="portal">tenants.siesa_row_id</td><td>Tenant link in Siesa</td></tr>
+        <tr><td class="siesa">Documento (NIT)</td><td class="arrow">→</td><td class="portal">tenants.nit</td><td>Join key</td></tr>
+        <tr><td class="siesa">Sucursal</td><td class="arrow">→</td><td class="portal">cartera.siesa_sucursal</td><td>Includes unit# in name</td></tr>
+        <tr><td class="siesa">Factura</td><td class="arrow">→</td><td class="portal">cartera.siesa_factura</td><td>e.g., 'RK-94', 'FVS-68429'</td></tr>
+        <tr><td class="siesa">Obs</td><td class="arrow">→</td><td class="portal">cartera.observacion</td><td>Free-text notes</td></tr>
+        <tr><td class="siesa">FechaFactura</td><td class="arrow">→</td><td class="portal">cartera.fecha_factura</td><td></td></tr>
+        <tr><td class="siesa">FechaProntoPago</td><td class="arrow">→</td><td class="portal">cartera.fecha_pronto_pago</td><td></td></tr>
+        <tr><td class="siesa">FechaVence</td><td class="arrow">→</td><td class="portal">cartera.fecha_vence</td><td></td></tr>
+        <tr><td class="siesa">Dias</td><td class="arrow">→</td><td class="portal">cartera.dias_mora</td><td>Days overdue</td></tr>
+        <tr><td class="siesa">Financia</td><td class="arrow">→</td><td class="portal">cartera.dias_financia</td><td>Days since invoice</td></tr>
+        <tr><td class="siesa">Saldo</td><td class="arrow">→</td><td class="portal">cartera.saldo</td><td>Outstanding balance</td></tr>
+        <tr><td class="siesa">VrVencido</td><td class="arrow">→</td><td class="portal">cartera.valor_vencido</td><td>Overdue amount</td></tr>
+    </table>
+</div>
+<div class="mapping-section">
+    <h3>Siesa → Portal: Recaudo Sheet → payments</h3>
+    <table class="mapping-table">
+        <tr><th>Siesa Column</th><th></th><th>Portal Table.Column</th><th>Notes</th></tr>
+        <tr><td class="siesa">Clasificacion</td><td class="arrow">→</td><td class="portal">payments.siesa_clasificacion</td><td>RECAUDADO / NO PROYECTADO / VENCIDO</td></tr>
+        <tr><td class="siesa">Documento (NIT)</td><td class="arrow">→</td><td class="portal">tenants.nit</td><td>Join key</td></tr>
+        <tr><td class="siesa">Docto</td><td class="arrow">→</td><td class="portal">payments.siesa_docto</td><td>e.g., '001-RK-543'</td></tr>
+        <tr><td class="siesa">Cruce</td><td class="arrow">→</td><td class="portal">payments.siesa_cruce</td><td>Matched invoice ref</td></tr>
+        <tr><td class="siesa">FechaRecaudo</td><td class="arrow">→</td><td class="portal">payments.fecha_recaudo</td><td></td></tr>
+        <tr><td class="siesa">FechaPp</td><td class="arrow">→</td><td class="portal">payments.fecha_pronto_pago</td><td></td></tr>
+        <tr><td class="siesa">FechaVcto</td><td class="arrow">→</td><td class="portal">payments.fecha_vencimiento</td><td></td></tr>
+        <tr><td class="siesa">FechaFact</td><td class="arrow">→</td><td class="portal">payments.fecha_factura</td><td></td></tr>
+        <tr><td class="siesa">ValorAplicado</td><td class="arrow">→</td><td class="portal">payments.valor_aplicado</td><td>Amount before PP discount</td></tr>
+        <tr><td class="siesa">ProntoPago</td><td class="arrow">→</td><td class="portal">payments.pronto_pago_aplicado</td><td>PP discount amount</td></tr>
+        <tr><td class="siesa">ValorFinal</td><td class="arrow">→</td><td class="portal">payments.valor_final</td><td>Net payment amount</td></tr>
+    </table>
+</div>
+<div class="mapping-section">
+    <h3>Siesa → Portal: Estado de Resultados → accounting_entries</h3>
+    <table class="mapping-table">
+        <tr><th>Siesa Column</th><th></th><th>Portal Table.Column</th><th>Notes</th></tr>
+        <tr><td class="siesa">DOCUMENTO</td><td class="arrow">→</td><td class="portal">accounting_entries.siesa_documento</td><td>e.g., '001-NCM-7409'</td></tr>
+        <tr><td class="siesa">NOTAS</td><td class="arrow">→</td><td class="portal">accounting_entries.notas</td><td></td></tr>
+        <tr><td class="siesa">CUENTA</td><td class="arrow">→</td><td class="portal">accounting_entries.cuenta</td><td>Account code</td></tr>
+        <tr><td class="siesa">DESC_CUENTA</td><td class="arrow">→</td><td class="portal">accounting_entries.desc_cuenta</td><td>e.g., 'Sueldos'</td></tr>
+        <tr><td class="siesa">CO</td><td class="arrow">→</td><td class="portal">accounting_entries.co</td><td>Company office code</td></tr>
+        <tr><td class="siesa">CCOSTO</td><td class="arrow">→</td><td class="portal">accounting_entries.ccosto</td><td>Cost center (285=C-Krea)</td></tr>
+        <tr><td class="siesa">PERIODO</td><td class="arrow">→</td><td class="portal">accounting_entries.periodo</td><td>YYYYMM</td></tr>
+        <tr><td class="siesa">VALOR</td><td class="arrow">→</td><td class="portal">accounting_entries.valor</td><td>Amount (COP)</td></tr>
+    </table>
+</div>
+<div class="mapping-section">
+    <h3>C-KREA GB Gastos Sheet → gasto_types + gastos + gasto_allocations</h3>
+    <table class="mapping-table">
+        <tr><th>Source</th><th></th><th>Portal Table.Column</th><th>Notes</th></tr>
+        <tr><td class="siesa">Category headers</td><td class="arrow">→</td><td class="portal">gasto_types.category</td><td>servicios_publicos, aseo_cafeteria, vigilancia, etc.</td></tr>
+        <tr><td class="siesa">DESCRIPCION items</td><td class="arrow">→</td><td class="portal">gasto_types.name</td><td>e.g., 'Acueducto', 'T-protec', 'Vigilancia'</td></tr>
+        <tr><td class="siesa">VALOR</td><td class="arrow">→</td><td class="portal">gastos.total_amount</td><td>Monthly total per expense type</td></tr>
+        <tr><td class="siesa">LUZ detail rows</td><td class="arrow">→</td><td class="portal">gasto_allocations (metered)</td><td>Per-tenant electricity with Siesa RK + FVS refs</td></tr>
+        <tr><td class="siesa">LUZ → RK</td><td class="arrow">→</td><td class="portal">gasto_allocations.siesa_rk</td><td>Siesa receipt document</td></tr>
+        <tr><td class="siesa">LUZ → Cruce/FVS</td><td class="arrow">→</td><td class="portal">gasto_allocations.siesa_cruce</td><td>Matched invoice for reconciliation</td></tr>
+        <tr><td class="siesa">LUZ → ValorFinal</td><td class="arrow">→</td><td class="portal">gasto_allocations.amount</td><td>Per-tenant electricity cost</td></tr>
+    </table>
+</div>
+`;
+document.getElementById('view-mapping').innerHTML = mappingHTML;
+
+// ── RLS VIEW ──
+const rlsTables = [
+    'tenants', 'units', 'contracts', 'contract_phases', 'invoices', 'invoice_line_items',
+    'payments', 'payment_applications', 'interest_accruals', 'cartera',
+    'gasto_types', 'gastos', 'gasto_allocations', 'projections',
+    'accounting_entries', 'financial_rules', 'audit_log', 'siesa_sync_log', 'notifications'
+];
+const roles = ['admin', 'finance', 'viewer', 'tenant (Phase 2)'];
+const access = {
+    admin:    { s: true, i: true, u: true, d: true },
+    finance:  { s: true, i: true, u: true, d: false },
+    viewer:   { s: true, i: false, u: false, d: false },
+    tenant:   { s: 'own', i: false, u: false, d: false }
+};
+const specialRules = {
+    audit_log: { admin: {s:true,i:true,u:false,d:false}, finance: {s:true,i:false,u:false,d:false}, viewer: {s:false,i:false,u:false,d:false}, tenant: {s:false,i:false,u:false,d:false} },
+    siesa_sync_log: { admin: {s:true,i:true,u:false,d:false}, finance: {s:false,i:false,u:false,d:false}, viewer: {s:false,i:false,u:false,d:false}, tenant: {s:false,i:false,u:false,d:false} },
+    notifications: { admin: {s:true,i:true,u:true,d:false}, finance: {s:'own',i:false,u:false,d:false}, viewer: {s:'own',i:false,u:false,d:false}, tenant: {s:'own',i:false,u:false,d:false} }
+};
+
+function rlsCell(val) {
+    if (val === true) return '<span class="rls-check">&#10003;</span>';
+    if (val === false) return '<span class="rls-x">&#8212;</span>';
+    if (val === 'own') return '<span class="rls-limited">own only</span>';
+    return '';
+}
+
+let rlsHTML = `<p style="color:#94a3b8;margin-bottom:16px;font-size:13px">All tables are company-scoped via <code style="color:#38bdf8">auth.user_company_id()</code>. Tenants (Phase 2) see only their own records via <code style="color:#38bdf8">auth.user_tenant_id()</code>.</p>`;
+rlsHTML += '<table class="rls-matrix"><tr><th>Table</th>';
+roles.forEach(r => rlsHTML += `<th colspan="4">${r}</th>`);
+rlsHTML += '</tr><tr><th></th>';
+roles.forEach(() => rlsHTML += '<th>S</th><th>I</th><th>U</th><th>D</th>');
+rlsHTML += '</tr>';
+
+rlsTables.forEach(t => {
+    rlsHTML += `<tr><td>${t}</td>`;
+    ['admin', 'finance', 'viewer', 'tenant'].forEach(r => {
+        const a = specialRules[t]?.[r] || access[r];
+        const sv = typeof a.s === 'string' ? a.s : a.s;
+        rlsHTML += `<td>${rlsCell(sv)}</td><td>${rlsCell(a.i)}</td><td>${rlsCell(a.u)}</td><td>${rlsCell(a.d)}</td>`;
+    });
+    rlsHTML += '</tr>';
+});
+rlsHTML += '</table>';
+rlsHTML += '<p style="color:#64748b;margin-top:12px;font-size:11px">S=SELECT, I=INSERT, U=UPDATE, D=DELETE. All operations scoped to user\'s company_id. "own only" = filtered by tenant_id or user_id.</p>';
+document.getElementById('view-rls').innerHTML = rlsHTML;
+</script>
+</body>
+</html>

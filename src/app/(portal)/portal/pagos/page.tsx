@@ -186,11 +186,11 @@ export default async function PagosHistorialPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs font-medium uppercase tracking-wider text-slate-500">
-                <th className="px-5 py-3 text-left">Fecha Pago</th>
-                <th className="px-5 py-3 text-left">Vencimiento</th>
-                <th className="px-5 py-3 text-left">Concepto</th>
-                <th className="px-5 py-3 text-right">Valor</th>
-                <th className="px-5 py-3 text-left">Estado</th>
+                <th className="px-4 sm:px-5 py-3 text-left">Fecha Pago</th>
+                <th className="hidden sm:table-cell px-5 py-3 text-left">Vencimiento</th>
+                <th className="hidden md:table-cell px-5 py-3 text-left">Concepto</th>
+                <th className="px-4 sm:px-5 py-3 text-right">Valor</th>
+                <th className="hidden sm:table-cell px-5 py-3 text-left">Estado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -199,19 +199,19 @@ export default async function PagosHistorialPage({
                 const early = p.diasDiff != null && p.diasDiff < 0
                 return (
                   <tr key={p.id} className="hover:bg-slate-50">
-                    <td className="px-5 py-3 font-medium text-slate-700">
+                    <td className="px-4 sm:px-5 py-3 font-medium text-slate-700">
                       {formatDate(p.fechaRecaudo)}
                     </td>
-                    <td className="px-5 py-3 text-slate-500">
+                    <td className="hidden sm:table-cell px-5 py-3 text-slate-500">
                       {p.fechaVencimiento ? formatDate(p.fechaVencimiento) : "—"}
                     </td>
-                    <td className="px-5 py-3 text-slate-500">
+                    <td className="hidden md:table-cell px-5 py-3 text-slate-500">
                       {p.concepto ?? "—"}
                     </td>
-                    <td className="px-5 py-3 text-right font-medium text-slate-900">
+                    <td className="px-4 sm:px-5 py-3 text-right font-medium text-slate-900">
                       {formatCOP(p.valorFinal)}
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="hidden sm:table-cell px-5 py-3">
                       {late ? (
                         <span className="rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-600">
                           {p.diasDiff}d tarde

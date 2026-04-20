@@ -41,7 +41,7 @@ function Row({
   return (
     <div className="flex items-start gap-3 py-3 border-b border-slate-50 last:border-0">
       <Icon className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
-      <span className="w-40 shrink-0 text-sm text-slate-400">{label}</span>
+      <span className="w-28 sm:w-40 shrink-0 text-sm text-slate-400">{label}</span>
       <span className="text-sm font-medium text-slate-800">{value ?? "—"}</span>
     </div>
   )
@@ -80,7 +80,7 @@ export default async function PerfilPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
 
         {/* Contact card */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

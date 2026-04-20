@@ -87,7 +87,7 @@ export default async function MoraPage() {
       </div>
 
       {/* ── Row 2: aging buckets ── */}
-      <div className="mt-4 grid grid-cols-3 gap-4">
+      <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* 0–30 days */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm border-l-4 border-l-amber-400">
           <span className="inline-block rounded-full bg-amber-50 px-3 py-0.5 text-xs font-semibold text-amber-700">
