@@ -107,7 +107,7 @@ const columns: ColumnDef<ClienteRow>[] = [
       return (
         <div className="flex items-center gap-2">
           <span className={cn("h-2 w-2 rounded-full shrink-0", dot)} />
-          <span className="text-sm text-slate-700">{label}</span>
+          <span className="text-slate-700">{label}</span>
         </div>
       )
     },
@@ -207,7 +207,7 @@ export function ClientesTable({ data, vacantUnits }: { data: ClienteRow[]; vacan
           placeholder="Buscar cliente o NIT..."
           value={globalFilter}
           onChange={(e) => setGlobalFilter(e.target.value)}
-          className="w-full max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </div>
 
@@ -218,7 +218,7 @@ export function ClientesTable({ data, vacantUnits }: { data: ClienteRow[]; vacan
             key={id}
             onClick={() => setTab(id)}
             className={cn(
-              "flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium transition-colors",
+              "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors",
               tab === id
                 ? "border-blue-500 text-blue-600"
                 : "border-transparent text-slate-500 hover:text-slate-700"
@@ -239,7 +239,7 @@ export function ClientesTable({ data, vacantUnits }: { data: ClienteRow[]; vacan
 
       {/* Table */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs">
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="border-b border-slate-100">
