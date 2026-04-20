@@ -8,12 +8,12 @@ import type { MoraRow } from "@/lib/data/mora"
 type SortKey = "cliente" | "diasMora" | "mesesPendientes" | "saldoVencido" | "saldoTotal"
 type SortDir = "asc" | "desc"
 
-const COLS: { key: SortKey; label: string; align: "left" | "right" }[] = [
+const COLS: { key: SortKey; label: string; align: "left" | "right"; hide?: string }[] = [
   { key: "cliente",         label: "Arrendatario",     align: "left" },
   { key: "diasMora",        label: "Días mora",        align: "right" },
-  { key: "mesesPendientes", label: "Facturas",         align: "right" },
+  { key: "mesesPendientes", label: "Facturas",         align: "right", hide: "hidden sm:table-cell" },
   { key: "saldoVencido",    label: "Vencido",          align: "right" },
-  { key: "saldoTotal",      label: "Saldo total",      align: "right" },
+  { key: "saldoTotal",      label: "Saldo total",      align: "right", hide: "hidden md:table-cell" },
 ]
 
 function diasBadge(dias: number) {
@@ -48,7 +48,7 @@ export function MoraTable({ data }: { data: MoraRow[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-slate-100 bg-slate-50">
-            {COLS.map(({ key, label, align }) => {
+            {COLS.map(({ key, label, align, hide }) => {
               const active = sortKey === key
               const indicator = active ? (sortDir === "asc" ? " ↑" : " ↓") : ""
               return (
@@ -57,7 +57,7 @@ export function MoraTable({ data }: { data: MoraRow[] }) {
                   onClick={() => handleSort(key)}
                   className={`cursor-pointer select-none px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 hover:text-slate-800 ${
                     align === "right" ? "text-right" : "text-left"
-                  }${active ? " text-slate-800" : ""}`}
+                  }${active ? " text-slate-800" : ""}${hide ? ` ${hide}` : ""}`}
                 >
                   {label}{indicator}
                 </th>
@@ -91,13 +91,13 @@ export function MoraTable({ data }: { data: MoraRow[] }) {
                     {row.diasMora}d
                   </span>
                 </td>
-                <td className="px-4 py-3 text-right text-slate-700">
+                <td className="hidden sm:table-cell px-4 py-3 text-right text-slate-700">
                   {row.mesesPendientes > 0 ? row.mesesPendientes : "—"}
                 </td>
                 <td className="px-4 py-3 text-right font-mono font-semibold text-rose-600">
                   {formatCOP(row.saldoVencido)}
                 </td>
-                <td className="px-4 py-3 text-right font-mono text-slate-700">
+                <td className="hidden md:table-cell px-4 py-3 text-right font-mono text-slate-700">
                   {formatCOP(row.saldoTotal)}
                 </td>
               </tr>

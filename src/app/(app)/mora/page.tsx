@@ -36,51 +36,51 @@ export default async function MoraPage() {
       <PageHeader title="Gestión de Mora" />
 
       {/* ── Row 1: core KPIs ── */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-rose-50">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-5 shadow-sm">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full bg-rose-50">
               <AlertTriangle className="h-4 w-4 text-rose-500" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Cartera Vencida</p>
-              <p className="text-lg font-bold text-rose-600">{formatCOP(summary.totalCarteraVencida)}</p>
+              <p className="text-sm sm:text-lg font-bold text-rose-600 tabular-nums truncate">{formatCOP(summary.totalCarteraVencida)}</p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-50">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-5 shadow-sm">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full bg-orange-50">
               <Users className="h-4 w-4 text-orange-500" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Clientes</p>
-              <p className="text-lg font-bold text-slate-900">{rows.length}</p>
+              <p className="text-sm sm:text-lg font-bold text-slate-900">{rows.length}</p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-50">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-5 shadow-sm">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full bg-amber-50">
               <Clock className="h-4 w-4 text-amber-500" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Prom. Días</p>
-              <p className="text-lg font-bold text-slate-900">{avgDias}d</p>
+              <p className="text-sm sm:text-lg font-bold text-slate-900">{avgDias}d</p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-50">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-5 shadow-sm">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-full bg-violet-50">
               <TrendingUp className="h-4 w-4 text-violet-500" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Interés Acum.</p>
-              <p className="text-lg font-bold text-violet-700">{formatCOP(summary.totalInteresPortal)}</p>
+              <p className="text-sm sm:text-lg font-bold text-violet-700 tabular-nums truncate">{formatCOP(summary.totalInteresPortal)}</p>
             </div>
           </div>
         </div>
