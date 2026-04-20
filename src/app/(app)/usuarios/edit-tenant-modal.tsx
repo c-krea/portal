@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import {
   Pencil, X, Loader2, AlertTriangle,
-  Hash, Briefcase, User, Mail, Phone, MapPin, Store,
+  Hash, Briefcase, Mail, Phone, MapPin, Store,
   CalendarDays, TrendingUp, Percent, ArrowRight, KeyRound,
 } from "lucide-react"
 import { updateTenantUser } from "./actions"
@@ -238,9 +238,7 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
                   <EditRow icon={Briefcase} label="Nombre corto">
                     <TInput value={nombre} onChange={setNombre} placeholder="Como aparece en el portal" />
                   </EditRow>
-                  <EditRow icon={User} label="Representante">
-                    <TInput value={contactoNombre} onChange={setContactoNombre} placeholder="Nombre del contacto" />
-                  </EditRow>
+
                   <EditRow icon={Mail} label="Email contacto">
                     <TInput type="email" value={bizEmail} onChange={setBizEmail} placeholder="empresa@email.com" />
                   </EditRow>
