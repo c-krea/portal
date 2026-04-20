@@ -79,20 +79,24 @@ export function MedidorForm({
           <div className="flex flex-col gap-3">
             <p className="text-sm font-medium text-slate-700">Foto del contador</p>
             <div className="relative flex min-h-[260px] items-center justify-center rounded-xl border-2 border-dashed overflow-hidden border-emerald-200 bg-emerald-50">
-              {fotoBase64 && fotoMime.startsWith("image/") ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={fotoBase64} alt="Foto enviada" className="h-full w-full object-cover" />
-              ) : fotoBase64 ? (
-                <div className="flex flex-col items-center gap-3 p-6 text-center">
-                  <CheckCircle2 className="h-12 w-12 text-emerald-400" />
-                  <p className="text-sm text-emerald-700">Archivo subido correctamente</p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-3 p-6 text-center">
-                  <CheckCircle2 className="h-12 w-12 text-emerald-400" />
+              <div className="flex flex-col items-center gap-3 p-6 text-center">
+                <CheckCircle2 className="h-12 w-12 text-emerald-400" />
+                {state.fotoUrl ? (
+                  <>
+                    <p className="text-sm text-emerald-700">Foto guardada correctamente</p>
+                    <a
+                      href={state.fotoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-medium text-blue-600 underline"
+                    >
+                      Ver foto enviada →
+                    </a>
+                  </>
+                ) : (
                   <p className="text-sm text-emerald-700">Sin foto adjunta</p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
             <p className="text-xs text-emerald-600 font-medium">{state.message}</p>
           </div>

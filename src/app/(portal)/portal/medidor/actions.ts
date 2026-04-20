@@ -17,6 +17,7 @@ export type MedidorPortalState = {
   success?: boolean
   error?: string
   message?: string
+  fotoUrl?: string
 }
 
 export async function submitLectura(
@@ -133,6 +134,7 @@ export async function submitLectura(
 
   return {
     success: true,
+    fotoUrl: fotoUrl ?? undefined,
     message:
       validationStatus === "aprobado"
         ? `Lectura enviada y aprobada automáticamente (${kwh.toLocaleString("es-CO")} kWh).`
