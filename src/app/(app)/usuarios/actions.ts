@@ -8,11 +8,30 @@ export async function updatePortalEmail(tenantId: string, email: string) {
   if (!trimmed || !trimmed.includes("@")) {
     return { error: "Email inválido" }
   }
-  const { error } = await supabaseAdmin
+
+  // 1. Update tenants table
+  const { error: dbError } = await supabaseAdmin
     .from("tenants")
     .update({ portal_email: trimmed })
     .eq("id", tenantId)
-  if (error) return { error: error.message }
+  if (dbError) return { error: dbError.message }
+
+  // 2. If tenant already has an auth account, keep auth.users in sync
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("role", "tenant")
+    .single()
+
+  if (profile?.id) {
+    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+      profile.id,
+      { email: trimmed }
+    )
+    if (authError) return { error: `Email guardado, pero no se pudo actualizar auth: ${authError.message}` }
+  }
+
   revalidatePath("/usuarios")
   return { success: true }
 }
