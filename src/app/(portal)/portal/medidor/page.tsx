@@ -30,7 +30,7 @@ export default async function MedidorPage() {
 
   const periodo = currentPeriodo()
   const today = new Date().getDate()
-  const withinDeadline = today <= 10
+  const withinDeadline = true // TEMP: deadline disabled for demo — revert to `today <= 10` (WOR-47)
 
   const [medidor, history, prevRows] = await Promise.all([
     getPortalMedidorStatus(profile.unitId, periodo),
