@@ -165,7 +165,7 @@ export function MedidorForm({
                 type="number"
                 name="lecturaActual"
                 min={lecturaAnteriorRef}
-                step="1"
+                step="0.01"
                 required
                 placeholder={`Mínimo ${lecturaAnteriorRef}`}
                 className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-lg font-semibold tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500"

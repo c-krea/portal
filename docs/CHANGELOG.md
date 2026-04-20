@@ -6,6 +6,24 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [2.6.0] — 2026-04-20
+
+### Added
+- Meter validation upgraded to hybrid seasonal + full-history model
+- Primary reference: same calendar month across all prior years (e.g. April 2026 vs April 2025)
+- Fallback: full available history average (not just 3 months) when no valid same-month data
+- Three-tier validation: `aprobado` (±20%), `revision` (±40%), `critico` (>40% or 0 kWh)
+- Admin medidores: `🚨 Crítico` badge (red) for critical readings
+- Admin medidores: column renamed "vs Prom.3m" → "vs Histórico"
+- Meter input step changed to 0.01 (accepts decimal meter readings)
+- DB check constraint updated to allow `critico` status
+
+### Fixed
+- Units with 0 kWh in same-month prior year now correctly fall back to full-history avg
+- ValidationBadge had no critico case — fell through to grey "Pendiente"
+
+---
+
 ## [2.5.0] — 2026-04-20
 
 ### Added

@@ -2,6 +2,39 @@
 
 ---
 
+## 2026-04-20 — Session 23: Meter Validation Upgrade (v2.6.0)
+
+### What shipped
+- **Hybrid validation**: seasonal same-month avg (primary) → full-history avg (fallback) → auto-approve (no history)
+- **Three tiers**: `aprobado` ±20%, `revision` ±40%, `critico` >40% or kwh=0
+- **Admin badge**: `🚨 Crítico` added to ValidationBadge (was falling through to grey "Pendiente")
+- **DB constraint**: updated `meter_readings_validation_status_check` to allow `critico`
+- **Column rename**: "vs Prom.3m" → "vs Histórico" (reflects actual logic)
+- **Step fix**: meter input `step="0.01"` — was `step="1"` which blocked decimal min values
+
+### DB review findings (all 82 units)
+- 57 units: valid April 2025 data → seasonal avg used
+- 14 units: no valid April (vacant or started after Apr 2025) → full-history avg
+- 2 units (506A/506B): zero history → auto-approve
+- 8 units had April 2025 = 0 kWh (vacant that month) → fixed: now fall back to full-history avg instead of auto-approving everything
+- Notable large seasonal vs full-hist gaps: 516 (april=109 vs hist=385), 508 (221 vs 342), 121 (54 vs 162) — seasonal is correct here, those tenants genuinely changed usage
+
+### Key decisions
+- Option B (seasonal) chosen over Option C (statistical) — 15 months of data not enough for reliable σ
+- Fallback uses ALL available history, not just last 3 months — more robust for newer units with 2–10 months of data
+- Zero April kWh treated as "no valid seasonal reference" — falls through to full-history (prevents auto-approving everything for formerly-vacant units)
+
+### Manual tests run
+- ✅ Aprobado: 100.2 kWh (+8% vs April ref 92.8) → aprobado
+- ✅ Revision: 125.2 kWh (+35%) → revision
+- ✅ Critico: 159.2 kWh (+71%) → critico (after fixing DB constraint)
+- DB constraint fix: was missing `critico` → upsert failed silently with "Error al guardar"
+
+### Pending
+- CKR-19: revert `withinDeadline = true` → `today <= 10` after demo (2026-04-20)
+
+---
+
 ## 2026-04-20 — Session 22: Google Drive Photo Upload + Meter Auto-Validation (v2.5.0)
 
 ### What shipped

@@ -23,6 +23,12 @@ function ValidationBadge({ vs }: { vs: MedidorAdminRow["validationStatus"] }) {
         ⚠ En Revisión
       </span>
     )
+  if (vs === "critico")
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-700">
+        🚨 Crítico
+      </span>
+    )
   if (vs === "sin_lectura")
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-600">
@@ -84,7 +90,7 @@ export function MedidoresAdminTable({
     { key: "unitNumber",   label: "Local",        align: "left" },
     { key: "tenantName",   label: "Arrendatario", align: "left",  hide: "hidden sm:table-cell" },
     { key: "kwh",          label: "kWh",          align: "right" },
-    { key: "desvPct",      label: "vs Prom.3m",   align: "right", hide: "hidden md:table-cell" },
+    { key: "desvPct",      label: "vs Histórico",  align: "right", hide: "hidden md:table-cell" },
     { key: "totalEnergia", label: "Total",         align: "right", hide: "hidden sm:table-cell" },
   ]
 
