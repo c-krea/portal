@@ -48,3 +48,5 @@ graphify-out/
 *.xlsx
 ~$*.xlsx
 sentry-wizard-installation-error-*.log
+Archive (DONT OPEN)/
+docs/INSIGHTS_v1.md
