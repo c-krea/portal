@@ -33,18 +33,13 @@ function TInput({ value, onChange, placeholder, type = "text", disabled }: {
   )
 }
 
-function NumInput({ value, onChange, placeholder, prefix, suffix, min = 0, step = 1 }: {
-  value: string; onChange: (v: string) => void; placeholder?: string
-  prefix?: string; suffix?: string; min?: number; step?: number
+function NumInput({ value, onChange, placeholder, min = 0, step = 1 }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; min?: number; step?: number
 }) {
   return (
-    <div className="relative">
-      {prefix && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">{prefix}</span>}
-      <input type="number" value={value} onChange={e => onChange(e.target.value)}
-        min={min} step={step} placeholder={placeholder ?? "0"}
-        className={`w-full rounded-md border border-slate-200 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 ${prefix ? "pl-5 pr-2" : "px-2 pr-6"}`} />
-      {suffix && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">{suffix}</span>}
-    </div>
+    <input type="number" value={value} onChange={e => onChange(e.target.value)}
+      min={min} step={step} placeholder={placeholder ?? "0"}
+      className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
   )
 }
 
@@ -63,13 +58,13 @@ function ContractFields({
         <TInput type="date" value={uc.fechaFin} onChange={v => onChange("fechaFin", v)} placeholder="Indefinido" />
       </EditRow>
       <EditRow icon={TrendingUp} label="Canon base">
-        <NumInput value={uc.canonBase} onChange={v => onChange("canonBase", v)} prefix="$" step={1000} />
+        <NumInput value={uc.canonBase} onChange={v => onChange("canonBase", v)} step={1000} />
       </EditRow>
       <EditRow icon={Percent} label="Descuento fase">
-        <NumInput value={uc.descuentoPct} onChange={v => onChange("descuentoPct", v)} suffix="%" max={100} />
+        <NumInput value={uc.descuentoPct} onChange={v => onChange("descuentoPct", v)} />
       </EditRow>
       <EditRow icon={Percent} label="Pronto pago">
-        <NumInput value={uc.prontoPagoPct} onChange={v => onChange("prontoPagoPct", v)} suffix="%" max={100} />
+        <NumInput value={uc.prontoPagoPct} onChange={v => onChange("prontoPagoPct", v)} />
       </EditRow>
       <div className="pt-2">
         <p className="mb-1 text-xs text-slate-400">Notas de descuento</p>
