@@ -41,25 +41,45 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
 
   const authUserIds = rows.map(r => r.auth_user_id).filter(Boolean) as string[]
   const lastSignInMap = new Map<string, string | null>()
+  const authEmailMap  = new Map<string, string>()
 
   if (authUserIds.length > 0) {
     const { data } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })
     for (const u of data?.users ?? []) {
       lastSignInMap.set(u.id, u.last_sign_in_at ?? null)
+      if (u.email) authEmailMap.set(u.id, u.email)
     }
   }
 
-  return rows.map(r => ({
-    tenantId:      String(r.id),
-    nombre:        String(r.nombre),
-    units:         String(r.units),
-    portalEmail:   r.portal_email ? String(r.portal_email) : null,
-    businessEmail: r.business_email ? String(r.business_email) : null,
-    authUserId:    r.auth_user_id ? String(r.auth_user_id) : null,
-    lastSignIn:    r.auth_user_id
-      ? (lastSignInMap.get(String(r.auth_user_id)) ?? null)
-      : null,
-  }))
+  // Backfill portal_email from auth.users for any tenant whose DB value is stale/missing
+  const backfills: Promise<unknown>[] = []
+  for (const r of rows) {
+    if (!r.auth_user_id) continue
+    const authEmail = authEmailMap.get(String(r.auth_user_id))
+    if (authEmail && authEmail !== r.portal_email) {
+      backfills.push(
+        supabaseAdmin
+          .from("tenants")
+          .update({ portal_email: authEmail })
+          .eq("id", String(r.id))
+      )
+    }
+  }
+  if (backfills.length > 0) await Promise.all(backfills)
+
+  return rows.map(r => {
+    const authUserId  = r.auth_user_id ? String(r.auth_user_id) : null
+    const authEmail   = authUserId ? (authEmailMap.get(authUserId) ?? null) : null
+    return {
+      tenantId:      String(r.id),
+      nombre:        String(r.nombre),
+      units:         String(r.units),
+      portalEmail:   authEmail ?? (r.portal_email ? String(r.portal_email) : null),
+      businessEmail: r.business_email ? String(r.business_email) : null,
+      authUserId,
+      lastSignIn:    authUserId ? (lastSignInMap.get(authUserId) ?? null) : null,
+    }
+  })
 }
 
 export async function getUsuarios(): Promise<UsuarioRow[]> {
