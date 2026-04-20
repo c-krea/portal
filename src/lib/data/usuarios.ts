@@ -12,6 +12,19 @@ export type UsuarioRow = {
   lastSignIn: string | null
 }
 
+export type UnitContract = {
+  unitId: string
+  unitNumber: string
+  entrada: string | null
+  contractId: string
+  canonBase: number
+  descuentoPct: number | null
+  prontoPagoPct: number | null
+  fechaInicio: string
+  fechaFin: string | null
+  descripcionDescuentos: string | null
+}
+
 export type PortalTenantRow = {
   tenantId: string
   nombre: string
@@ -27,14 +40,7 @@ export type PortalTenantRow = {
   businessEmail: string | null
   authUserId: string | null
   lastSignIn: string | null
-  // contract (null for multi-unit tenants — edit via Clientes)
-  contractId: string | null
-  canonBase: number | null
-  descuentoPct: number | null
-  prontoPagoPct: number | null
-  fechaInicio: string | null
-  fechaFin: string | null
-  descripcionDescuentos: string | null
+  unitContracts: UnitContract[]
 }
 
 export async function getPortalTenants(): Promise<PortalTenantRow[]> {
@@ -53,13 +59,20 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
       STRING_AGG(u.id::text, ',' ORDER BY u.unit_number)     AS unit_ids,
       MIN(u.entrada)                     AS entrada,
       p.id AS auth_user_id,
-      MIN(c.id::text)                    AS contract_id,
-      MIN(c.canon_base::numeric)         AS canon_base,
-      MIN(c.descuento_pct::numeric)      AS descuento_pct,
-      MIN(c.pronto_pago_pct::numeric)    AS pronto_pago_pct,
-      MIN(c.fecha_inicio::text)          AS fecha_inicio,
-      MIN(c.fecha_fin::text)             AS fecha_fin,
-      MIN(c.descripcion_descuentos)      AS descripcion_descuentos
+      JSON_AGG(
+        JSON_BUILD_OBJECT(
+          'unitId',               u.id::text,
+          'unitNumber',           u.unit_number,
+          'entrada',              u.entrada,
+          'contractId',           c.id::text,
+          'canonBase',            c.canon_base::numeric,
+          'descuentoPct',         c.descuento_pct::numeric,
+          'prontoPagoPct',        c.pronto_pago_pct::numeric,
+          'fechaInicio',          c.fecha_inicio::text,
+          'fechaFin',             c.fecha_fin::text,
+          'descripcionDescuentos',c.descripcion_descuentos
+        ) ORDER BY u.unit_number
+      ) AS unit_contracts
     FROM tenants t
     JOIN contracts c ON c.tenant_id = t.id AND c.status = 'activo'
     JOIN units u ON u.id = c.unit_id
@@ -100,6 +113,19 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
   return rows.map(r => {
     const authUserId  = r.auth_user_id ? String(r.auth_user_id) : null
     const authEmail   = authUserId ? (authEmailMap.get(authUserId) ?? null) : null
+    const rawContracts = (r.unit_contracts as UnitContract[]) ?? []
+    const unitContracts: UnitContract[] = rawContracts.map(uc => ({
+      unitId:               String(uc.unitId),
+      unitNumber:           String(uc.unitNumber),
+      entrada:              uc.entrada ? String(uc.entrada) : null,
+      contractId:           String(uc.contractId),
+      canonBase:            Number(uc.canonBase),
+      descuentoPct:         uc.descuentoPct != null ? Number(uc.descuentoPct) : null,
+      prontoPagoPct:        uc.prontoPagoPct != null ? Number(uc.prontoPagoPct) : null,
+      fechaInicio:          String(uc.fechaInicio),
+      fechaFin:             uc.fechaFin ? String(uc.fechaFin) : null,
+      descripcionDescuentos: uc.descripcionDescuentos ? String(uc.descripcionDescuentos) : null,
+    }))
     return {
       tenantId:             String(r.id),
       nombre:               String(r.nombre),
@@ -115,14 +141,8 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
       businessEmail:        r.business_email ? String(r.business_email) : null,
       authUserId,
       lastSignIn:           authUserId ? (lastSignInMap.get(authUserId) ?? null) : null,
-      contractId:           r.contract_id ? String(r.contract_id) : null,
-      canonBase:            r.canon_base != null ? Number(r.canon_base) : null,
-      descuentoPct:         r.descuento_pct != null ? Number(r.descuento_pct) : null,
-      prontoPagoPct:        r.pronto_pago_pct != null ? Number(r.pronto_pago_pct) : null,
-      fechaInicio:          r.fecha_inicio ? String(r.fecha_inicio) : null,
-      fechaFin:             r.fecha_fin ? String(r.fecha_fin) : null,
-      descripcionDescuentos: r.descripcion_descuentos ? String(r.descripcion_descuentos) : null,
-    }
+      unitContracts,
+      }
   })
 }
 

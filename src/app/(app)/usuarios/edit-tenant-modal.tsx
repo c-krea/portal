@@ -7,23 +7,13 @@ import {
   CalendarDays, TrendingUp, Percent, ArrowRight, KeyRound,
 } from "lucide-react"
 import { updateTenantUser } from "./actions"
-import type { PortalTenantRow } from "@/lib/data/usuarios"
+import type { PortalTenantRow, UnitContract } from "@/lib/data/usuarios"
 
 function SectionTitle({ title }: { title: string }) {
-  return (
-    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{title}</p>
-  )
+  return <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{title}</p>
 }
 
-function EditRow({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: React.ElementType
-  label: string
-  children: React.ReactNode
-}) {
+function EditRow({ icon: Icon, label, children }: { icon: React.ElementType; label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center gap-3 py-2 border-b border-slate-50 last:border-0">
       <Icon className="h-4 w-4 shrink-0 text-slate-300" />
@@ -33,33 +23,87 @@ function EditRow({
   )
 }
 
-function TInput({
-  value, onChange, placeholder, type = "text", disabled,
-}: {
-  value: string; onChange: (v: string) => void; placeholder?: string; type?: string; disabled?: boolean
+function TInput({ value, onChange, placeholder, type = "text", disabled }: {
+  value: string; onChange?: (v: string) => void; placeholder?: string; type?: string; disabled?: boolean
 }) {
   return (
-    <input
-      type={type}
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      placeholder={placeholder ?? "—"}
-      disabled={disabled}
-      className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400"
-    />
+    <input type={type} value={value} onChange={e => onChange?.(e.target.value)}
+      placeholder={placeholder ?? "—"} disabled={disabled}
+      className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400" />
   )
 }
 
-export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
-  const multiUnit = tenant.unitIds.length > 1
-  const hasContract = !!tenant.contractId && !multiUnit
+function NumInput({ value, onChange, placeholder, prefix, suffix, min = 0, step = 1 }: {
+  value: string; onChange: (v: string) => void; placeholder?: string
+  prefix?: string; suffix?: string; min?: number; step?: number
+}) {
+  return (
+    <div className="relative">
+      {prefix && <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">{prefix}</span>}
+      <input type="number" value={value} onChange={e => onChange(e.target.value)}
+        min={min} step={step} placeholder={placeholder ?? "0"}
+        className={`w-full rounded-md border border-slate-200 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 ${prefix ? "pl-5 pr-2" : "px-2 pr-6"}`} />
+      {suffix && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">{suffix}</span>}
+    </div>
+  )
+}
 
+function ContractFields({
+  uc, onChange,
+}: {
+  uc: { canonBase: string; descuentoPct: string; prontoPagoPct: string; fechaInicio: string; fechaFin: string; descripcion: string }
+  onChange: (field: string, v: string) => void
+}) {
+  return (
+    <>
+      <EditRow icon={CalendarDays} label="Inicio">
+        <TInput type="date" value={uc.fechaInicio} onChange={v => onChange("fechaInicio", v)} />
+      </EditRow>
+      <EditRow icon={ArrowRight} label="Fin">
+        <TInput type="date" value={uc.fechaFin} onChange={v => onChange("fechaFin", v)} placeholder="Indefinido" />
+      </EditRow>
+      <EditRow icon={TrendingUp} label="Canon base">
+        <NumInput value={uc.canonBase} onChange={v => onChange("canonBase", v)} prefix="$" step={1000} />
+      </EditRow>
+      <EditRow icon={Percent} label="Descuento fase">
+        <NumInput value={uc.descuentoPct} onChange={v => onChange("descuentoPct", v)} suffix="%" max={100} />
+      </EditRow>
+      <EditRow icon={Percent} label="Pronto pago">
+        <NumInput value={uc.prontoPagoPct} onChange={v => onChange("prontoPagoPct", v)} suffix="%" max={100} />
+      </EditRow>
+      <div className="pt-2">
+        <p className="mb-1 text-xs text-slate-400">Notas de descuento</p>
+        <textarea value={uc.descripcion} onChange={e => onChange("descripcion", e.target.value)}
+          rows={3} placeholder="Ej: 43% hasta dic 2025…"
+          className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" />
+      </div>
+    </>
+  )
+}
+
+type ContractState = {
+  canonBase: string; descuentoPct: string; prontoPagoPct: string
+  fechaInicio: string; fechaFin: string; descripcion: string
+}
+
+function ucToState(uc: UnitContract): ContractState {
+  return {
+    canonBase:    String(uc.canonBase ?? ""),
+    descuentoPct: String(uc.descuentoPct ?? ""),
+    prontoPagoPct: String(uc.prontoPagoPct ?? ""),
+    fechaInicio:  uc.fechaInicio ?? "",
+    fechaFin:     uc.fechaFin ?? "",
+    descripcion:  uc.descripcionDescuentos ?? "",
+  }
+}
+
+export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
   const [open, setOpen]             = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [pending, startTransition]  = useTransition()
   const [error, setError]           = useState<string | null>(null)
 
-  // Contact fields
+  // Identity
   const [nombre, setNombre]                 = useState(tenant.nombre)
   const [razonSocial, setRazonSocial]       = useState(tenant.razonSocial)
   const [nit, setNit]                       = useState(tenant.nit ?? "")
@@ -67,28 +111,28 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
   const [contactoNombre, setContactoNombre] = useState(tenant.contactoNombre ?? "")
   const [bizEmail, setBizEmail]             = useState(tenant.businessEmail ?? "")
   const [portalEmail, setPortalEmail]       = useState(tenant.portalEmail ?? "")
-  const [unitNumber, setUnitNumber]         = useState(tenant.units)
-  const [entrada, setEntrada]               = useState(tenant.entrada ?? "")
 
-  // Contract fields
-  const [canonBase, setCanonBase]           = useState(String(tenant.canonBase ?? ""))
-  const [descuentoPct, setDescuentoPct]     = useState(String(tenant.descuentoPct ?? ""))
-  const [prontoPagoPct, setProntoPagoPct]   = useState(String(tenant.prontoPagoPct ?? ""))
-  const [fechaInicio, setFechaInicio]       = useState(tenant.fechaInicio ?? "")
-  const [fechaFin, setFechaFin]             = useState(tenant.fechaFin ?? "")
-  const [descripcion, setDescripcion]       = useState(tenant.descripcionDescuentos ?? "")
+  // Per-unit contract states (keyed by contractId)
+  const [selectedUnitIdx, setSelectedUnitIdx] = useState(0)
+  const [contractStates, setContractStates]   = useState<Record<string, ContractState>>({})
+
+  function initStates() {
+    const init: Record<string, ContractState> = {}
+    for (const uc of tenant.unitContracts) init[uc.contractId] = ucToState(uc)
+    return init
+  }
 
   function openModal() {
     setNombre(tenant.nombre); setRazonSocial(tenant.razonSocial)
     setNit(tenant.nit ?? ""); setTelefono(tenant.telefono ?? "")
     setContactoNombre(tenant.contactoNombre ?? ""); setBizEmail(tenant.businessEmail ?? "")
-    setPortalEmail(tenant.portalEmail ?? ""); setUnitNumber(tenant.units)
-    setEntrada(tenant.entrada ?? "")
-    setCanonBase(String(tenant.canonBase ?? "")); setDescuentoPct(String(tenant.descuentoPct ?? ""))
-    setProntoPagoPct(String(tenant.prontoPagoPct ?? ""))
-    setFechaInicio(tenant.fechaInicio ?? ""); setFechaFin(tenant.fechaFin ?? "")
-    setDescripcion(tenant.descripcionDescuentos ?? "")
+    setPortalEmail(tenant.portalEmail ?? ""); setSelectedUnitIdx(0)
+    setContractStates(initStates())
     setError(null); setConfirming(false); setOpen(true)
+  }
+
+  function updateContractField(contractId: string, field: string, value: string) {
+    setContractStates(prev => ({ ...prev, [contractId]: { ...prev[contractId], [field]: value } }))
   }
 
   function handleSaveClick() {
@@ -96,29 +140,35 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
     if (!razonSocial.trim()) { setError("La razón social es obligatoria"); return }
     if (portalEmail && !portalEmail.includes("@")) { setError("Email portal inválido"); return }
     if (bizEmail && !bizEmail.includes("@")) { setError("Email de contacto inválido"); return }
-    if (hasContract && canonBase && isNaN(parseFloat(canonBase))) { setError("Canon base inválido"); return }
     setConfirming(true)
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
     startTransition(async () => {
-      const result = await updateTenantUser(tenant.tenantId, tenant.unitIds, {
-        nombre, razonSocial, nit, telefono, contactoNombre,
-        portalEmail, businessEmail: bizEmail, unitNumber, entrada,
-        ...(hasContract && {
-          contractId:           tenant.contractId!,
-          canonBase:            parseFloat(canonBase) || undefined,
-          descuentoPct:         descuentoPct ? parseFloat(descuentoPct) : null,
-          prontoPagoPct:        prontoPagoPct ? parseFloat(prontoPagoPct) : null,
-          fechaInicio:          fechaInicio || undefined,
-          fechaFin:             fechaFin || null,
-          descripcionDescuentos: descripcion || null,
-        }),
-      })
-      if (result.error) { setError(result.error); setConfirming(false) }
-      else { setOpen(false) }
+      // Save identity + each contract sequentially
+      for (const uc of tenant.unitContracts) {
+        const cs = contractStates[uc.contractId]
+        const result = await updateTenantUser(tenant.tenantId, [uc.unitId], {
+          nombre, razonSocial, nit, telefono, contactoNombre,
+          portalEmail, businessEmail: bizEmail,
+          unitNumber: uc.unitNumber,
+          entrada: uc.entrada ?? "",
+          contractId:           uc.contractId,
+          canonBase:            parseFloat(cs.canonBase) || undefined,
+          descuentoPct:         cs.descuentoPct ? parseFloat(cs.descuentoPct) : null,
+          prontoPagoPct:        cs.prontoPagoPct ? parseFloat(cs.prontoPagoPct) : null,
+          fechaInicio:          cs.fechaInicio || undefined,
+          fechaFin:             cs.fechaFin || null,
+          descripcionDescuentos: cs.descripcion || null,
+        })
+        if (result.error) { setError(result.error); setConfirming(false); return }
+      }
+      setOpen(false)
     })
   }
+
+  const selectedUc = tenant.unitContracts[selectedUnitIdx]
+  const selectedCs = selectedUc ? contractStates[selectedUc.contractId] : null
 
   if (!open) {
     return (
@@ -157,9 +207,8 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
                   <p className="font-semibold text-amber-800">¿Confirmar cambios para {razonSocial}?</p>
                   <p className="mt-1 text-sm text-amber-700">
                     Se actualizará la información de contacto
-                    {hasContract && ", condiciones del contrato"}
-                    {portalEmail !== (tenant.portalEmail ?? "") && " y acceso al portal"}
-                    .
+                    {tenant.unitContracts.length > 0 && `, y los contratos de los locales ${tenant.units}`}
+                    {portalEmail !== (tenant.portalEmail ?? "") && " y acceso al portal"}.
                   </p>
                 </div>
               </div>
@@ -182,7 +231,7 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
 
               <div className="grid grid-cols-2 gap-5">
 
-                {/* ── Left: Contact card ── */}
+                {/* ── Left: Contact ── */}
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <SectionTitle title="Información de Contacto" />
                   <EditRow icon={Hash} label="NIT / Cédula">
@@ -203,83 +252,58 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
                   <EditRow icon={Phone} label="Teléfono">
                     <TInput value={telefono} onChange={setTelefono} placeholder="310 000 0000" />
                   </EditRow>
-                  <EditRow icon={MapPin} label="Entrada">
-                    <TInput value={entrada} onChange={setEntrada}
-                      placeholder={multiUnit ? "Múltiples locales" : "Ej: Entrada Norte"}
-                      disabled={multiUnit} />
-                  </EditRow>
-                  <EditRow icon={Store} label="Local">
-                    <TInput value={unitNumber} onChange={setUnitNumber}
-                      disabled={multiUnit}
-                      placeholder={multiUnit ? "Editar en Clientes" : ""} />
+                  <EditRow icon={Store} label="Local(es)">
+                    <TInput value={tenant.units} disabled />
                   </EditRow>
                   <EditRow icon={KeyRound} label="Email portal">
                     <TInput type="email" value={portalEmail} onChange={setPortalEmail} placeholder="Login al portal" />
                   </EditRow>
                 </div>
 
-                {/* ── Right: Contract card ── */}
+                {/* ── Right: Contract(s) ── */}
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <SectionTitle title="Condiciones del Contrato" />
 
-                  {!hasContract ? (
-                    <p className="text-xs text-slate-400 italic">
-                      {multiUnit
-                        ? "Múltiples contratos — edite individualmente en Clientes."
-                        : "Sin contrato activo."}
-                    </p>
+                  {tenant.unitContracts.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">Sin contrato activo.</p>
                   ) : (
                     <>
-                      <EditRow icon={CalendarDays} label="Inicio">
-                        <TInput type="date" value={fechaInicio} onChange={setFechaInicio} />
-                      </EditRow>
-                      <EditRow icon={ArrowRight} label="Fin">
-                        <TInput type="date" value={fechaFin} onChange={setFechaFin} placeholder="Indefinido" />
-                      </EditRow>
-                      <EditRow icon={TrendingUp} label="Canon base">
-                        <div className="relative">
-                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">$</span>
-                          <input
-                            type="number" value={canonBase}
-                            onChange={e => setCanonBase(e.target.value)}
-                            min={0} step={1000}
-                            className="w-full rounded-md border border-slate-200 pl-5 pr-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
+                      {/* Unit selector tabs — shown only for multi-unit */}
+                      {tenant.unitContracts.length > 1 && (
+                        <div className="mb-3 flex gap-1 rounded-lg border border-slate-200 bg-slate-100 p-1">
+                          {tenant.unitContracts.map((uc, idx) => (
+                            <button key={uc.contractId}
+                              onClick={() => setSelectedUnitIdx(idx)}
+                              className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-colors ${
+                                selectedUnitIdx === idx
+                                  ? "bg-white text-slate-900 shadow-sm"
+                                  : "text-slate-500 hover:text-slate-700"
+                              }`}>
+                              Local {uc.unitNumber}
+                            </button>
+                          ))}
                         </div>
-                      </EditRow>
-                      <EditRow icon={Percent} label="Descuento fase">
-                        <div className="relative">
-                          <input type="number" value={descuentoPct}
-                            onChange={e => setDescuentoPct(e.target.value)}
-                            min={0} max={100} step={1} placeholder="0"
-                            className="w-full rounded-md border border-slate-200 px-2 pr-6 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      )}
+
+                      {/* Contract fields for selected unit */}
+                      {selectedUc && selectedCs && (
+                        <>
+                          {selectedUc.entrada && (
+                            <EditRow icon={MapPin} label="Entrada">
+                              <TInput value={selectedUc.entrada} disabled />
+                            </EditRow>
+                          )}
+                          <ContractFields
+                            uc={selectedCs}
+                            onChange={(field, v) => updateContractField(selectedUc.contractId, field, v)}
                           />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
-                        </div>
-                      </EditRow>
-                      <EditRow icon={Percent} label="Pronto pago">
-                        <div className="relative">
-                          <input type="number" value={prontoPagoPct}
-                            onChange={e => setProntoPagoPct(e.target.value)}
-                            min={0} max={100} step={1} placeholder="0"
-                            className="w-full rounded-md border border-slate-200 px-2 pr-6 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">%</span>
-                        </div>
-                      </EditRow>
-                      <div className="pt-2">
-                        <p className="mb-1 text-xs text-slate-400">Notas de descuento</p>
-                        <textarea value={descripcion} onChange={e => setDescripcion(e.target.value)}
-                          rows={3} placeholder="Ej: 43% hasta dic 2025…"
-                          className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-                        />
-                      </div>
+                        </>
+                      )}
                     </>
                   )}
                 </div>
               </div>
 
-              {/* Footer */}
               <div className="mt-5 flex gap-3">
                 <button onClick={() => setOpen(false)}
                   className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
