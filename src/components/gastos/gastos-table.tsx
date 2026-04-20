@@ -37,11 +37,19 @@ const METHOD_LABELS: Record<string, string> = {
   percentage: "Porcentaje",
 }
 
+declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData, TValue> {
+    className?: string
+  }
+}
+
 const columns: ColumnDef<GastoRow>[] = [
   {
     accessorKey: "periodo",
     header: "Período",
     size: 100,
+    meta: { className: "hidden sm:table-cell" },
     cell: ({ getValue }) => (
       <span className="font-mono text-sm font-medium text-slate-700">{fmtPeriodo(getValue<string>())}</span>
     ),
@@ -57,6 +65,7 @@ const columns: ColumnDef<GastoRow>[] = [
     accessorKey: "category",
     header: "Categoría",
     size: 160,
+    meta: { className: "hidden md:table-cell" },
     cell: ({ getValue }) => (
       <span className="text-slate-600">
         {CATEGORY_LABELS[getValue<string>()] ?? getValue<string>()}
@@ -67,6 +76,7 @@ const columns: ColumnDef<GastoRow>[] = [
     accessorKey: "allocationMethod",
     header: "Método",
     size: 110,
+    meta: { className: "hidden md:table-cell" },
     cell: ({ getValue }) => (
       <span className="text-xs text-slate-500">
         {METHOD_LABELS[getValue<string>()] ?? getValue<string>()}
@@ -84,6 +94,7 @@ const columns: ColumnDef<GastoRow>[] = [
   {
     accessorKey: "description",
     header: "Descripción",
+    meta: { className: "hidden lg:table-cell" },
     cell: ({ getValue }) => (
       <span className="text-xs text-slate-500">{getValue<string | null>() ?? "—"}</span>
     ),
@@ -133,6 +144,7 @@ export function GastosTable({ data, embedded = false }: { data: GastoRow[]; embe
                       "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500",
                       header.column.getCanSort() &&
                         "cursor-pointer select-none hover:text-slate-700",
+                      header.column.columnDef.meta?.className,
                     )}
                   >
                     {flexRender(header.column.columnDef.header, header.getContext())}
@@ -158,7 +170,7 @@ export function GastosTable({ data, embedded = false }: { data: GastoRow[]; embe
                   className="border-b border-slate-50 hover:bg-slate-50"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3">
+                    <td key={cell.id} className={cn("px-4 py-3", cell.column.columnDef.meta?.className)}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}

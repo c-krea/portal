@@ -58,16 +58,16 @@ export default async function GastosPage({
       </div>
 
       {/* KPI strip */}
-      <div className="mb-6 grid grid-cols-2 gap-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Total Gastos 2026</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900">{formatCOP(summary.totalYtd)}</p>
+          <p className="mt-1 text-sm sm:text-2xl font-bold text-slate-900 tabular-nums truncate">{formatCOP(summary.totalYtd)}</p>
           <p className="mt-0.5 text-xs text-slate-400">{summary.totalMeses} meses registrados</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{mesLabel} 2026</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900">{formatCOP(chartData.total)}</p>
-          <p className="mt-0.5 text-xs text-slate-400">{rows.length} registros · promedio {formatCOP(summary.avgMensual)}/mes</p>
+          <p className="mt-1 text-sm sm:text-2xl font-bold text-slate-900 tabular-nums truncate">{formatCOP(chartData.total)}</p>
+          <p className="mt-0.5 text-xs text-slate-400 truncate">{rows.length} registros · {formatCOP(summary.avgMensual)}/mes</p>
         </div>
       </div>
 

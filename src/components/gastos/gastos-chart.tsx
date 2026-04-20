@@ -52,9 +52,9 @@ export function GastosChart({ data }: { data: GastoChartRow }) {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Donut */}
-      <div className="min-h-0 flex-1">
+    <div className="flex flex-col">
+      {/* Pie */}
+      <div style={{ height: 200 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
