@@ -124,7 +124,7 @@ export default async function DashboardPage() {
             {desglose.map(({ icon: Icon, iconBg, iconColor, label, value, subtext }, idx) => (
               <div
                 key={label}
-                className={`flex flex-1 items-center gap-4 ${idx < desglose.length - 1 ? "border-b border-slate-100" : ""}`}
+                className={`flex items-center gap-4 py-4 lg:flex-1 lg:py-0 ${idx < desglose.length - 1 ? "border-b border-slate-100" : ""}`}
               >
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${iconBg}`}>
                   <Icon className={`h-5 w-5 ${iconColor}`} />

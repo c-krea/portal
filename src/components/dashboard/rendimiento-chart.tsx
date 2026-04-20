@@ -120,31 +120,38 @@ export function RendimientoChart({ data }: { data: Row[] }) {
   const max = Math.max(...data.map((d) => d.proyectado), 1)
 
   return (
-    <div className="flex h-full flex-col">
+    <div style={{ width: "100%" }}>
       <CustomLegend />
-      <div className="min-h-0 flex-1 pt-2">
+      <div style={{ width: "100%", height: 380 }}>
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData} barCategoryGap="35%" margin={{ top: 4, right: 4, left: 8, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+          <BarChart
+            data={chartData}
+            layout="vertical"
+            barCategoryGap="25%"
+            margin={{ top: 0, right: 16, left: 0, bottom: 0 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
             <XAxis
-              dataKey="mes"
-              tick={{ fontSize: 10, fill: "#94a3b8" }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
+              type="number"
               tickFormatter={(v) => `$${(v / 1_000_000).toFixed(0)}M`}
               tick={{ fontSize: 10, fill: "#94a3b8" }}
               axisLine={false}
               tickLine={false}
-              width={44}
               domain={[0, max * 1.12]}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f8fafc", radius: 6 }} />
-            {/* Stacked bottom → top: cash · PP · pendiente */}
-            <Bar dataKey="recaudado"  stackId="a" fill={EMERALD}      radius={[0, 0, 4, 4]} maxBarSize={40} />
-            <Bar dataKey="ppOtorgado" stackId="a" fill={EMERALD_DARK} radius={[0, 0, 0, 0]} maxBarSize={40} />
-            <Bar dataKey="pendiente"  stackId="a" fill={NAVY}         radius={[4, 4, 0, 0]} maxBarSize={40} />
+            <YAxis
+              type="category"
+              dataKey="mes"
+              tick={{ fontSize: 10, fill: "#94a3b8" }}
+              axisLine={false}
+              tickLine={false}
+              width={36}
+            />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f8fafc" }} />
+            {/* Stacked left → right: cash · PP · pendiente */}
+            <Bar dataKey="recaudado"  stackId="a" fill={EMERALD}      radius={[4, 0, 0, 4]} maxBarSize={28} />
+            <Bar dataKey="ppOtorgado" stackId="a" fill={EMERALD_DARK} radius={[0, 0, 0, 0]} maxBarSize={28} />
+            <Bar dataKey="pendiente"  stackId="a" fill={NAVY}         radius={[0, 4, 4, 0]} maxBarSize={28} />
           </BarChart>
         </ResponsiveContainer>
       </div>

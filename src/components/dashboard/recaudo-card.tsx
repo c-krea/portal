@@ -14,7 +14,7 @@ export function RecaudoCard({ data }: { data: ProyectadoVsReal[] }) {
     <div className="flex h-[480px] flex-1 flex-col rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
 
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-semibold text-slate-900">Proyectado vs. Recaudado 2026</p>
         <div className="flex gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
           {(["grafica", "tabla"] as const).map((t) => (
@@ -39,21 +39,16 @@ export function RecaudoCard({ data }: { data: ProyectadoVsReal[] }) {
         {tab === "grafica" ? (
           <RendimientoChart data={data} />
         ) : (
-          <div className="h-full overflow-y-auto">
+          <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: 400 }}>
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-white">
                 <tr className="border-b border-slate-100">
-                  {["Mes", "Proyectado", "Recaudo neto", "PP otorgado", "Pendiente", "%"].map((h, i) => (
-                    <th
-                      key={h}
-                      className={cn(
-                        "py-2 text-xs font-medium uppercase tracking-wider text-slate-400",
-                        i === 0 ? "text-left" : "text-right",
-                      )}
-                    >
-                      {h}
-                    </th>
-                  ))}
+                  <th className="py-2 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Mes</th>
+                  <th className="py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-400">Proyectado</th>
+                  <th className="hidden sm:table-cell py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-400">Recaudo neto</th>
+                  <th className="hidden md:table-cell py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-400">PP otorgado</th>
+                  <th className="py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-400">Pendiente</th>
+                  <th className="py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-400">%</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -65,12 +60,12 @@ export function RecaudoCard({ data }: { data: ProyectadoVsReal[] }) {
                     <tr key={r.mes} className="hover:bg-slate-50">
                       <td className="py-1.5 font-medium text-slate-700">{r.mes}</td>
                       <td className="py-1.5 text-right font-mono text-slate-600">{formatCOP(r.proyectado)}</td>
-                      <td className="py-1.5 text-right font-mono">
+                      <td className="hidden sm:table-cell py-1.5 text-right font-mono">
                         {r.recaudado > 0
                           ? <span className="text-emerald-700">{formatCOP(r.recaudado)}</span>
                           : <span className="text-slate-300">—</span>}
                       </td>
-                      <td className="py-1.5 text-right font-mono">
+                      <td className="hidden md:table-cell py-1.5 text-right font-mono">
                         {r.ppOtorgado > 0
                           ? <span className="font-medium text-emerald-900">{formatCOP(r.ppOtorgado)}</span>
                           : <span className="text-slate-300">—</span>}
