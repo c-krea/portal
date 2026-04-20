@@ -23,24 +23,24 @@ export default async function UsuariosPage() {
       <PageHeader title="Usuarios" />
 
       {/* Stats */}
-      <div className="mb-6 flex flex-wrap gap-3">
-        <div className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm shadow-sm">
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
           <span className="text-slate-500">Inquilinos activos: </span>
           <span className="font-semibold text-slate-900">{tenants.length}</span>
         </div>
-        <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm shadow-sm">
-          <Mail className="h-3.5 w-3.5 text-blue-400" />
-          <span className="text-slate-500">Email configurado: </span>
+        <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
+          <Mail className="h-3 w-3 shrink-0 text-blue-400" />
+          <span className="text-slate-500">Email: </span>
           <span className="font-semibold text-blue-700">{withEmail}</span>
         </div>
-        <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm shadow-sm">
-          <UserCheck className="h-3.5 w-3.5 text-emerald-500" />
-          <span className="text-slate-500">Cuenta creada: </span>
+        <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
+          <UserCheck className="h-3 w-3 shrink-0 text-emerald-500" />
+          <span className="text-slate-500">Cuenta: </span>
           <span className="font-semibold text-emerald-700">{withAccount}</span>
         </div>
-        <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm shadow-sm">
-          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-          <span className="text-slate-500">Activos (30 días): </span>
+        <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
+          <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" />
+          <span className="text-slate-500">Activos 30d: </span>
           <span className="font-semibold text-emerald-700">{recentActive}</span>
         </div>
       </div>
