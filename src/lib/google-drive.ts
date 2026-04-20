@@ -1,5 +1,4 @@
 import { google } from "googleapis"
-import { Readable } from "stream"
 import { PDFDocument } from "pdf-lib"
 
 function getDriveClient() {
@@ -48,7 +47,6 @@ async function toPdf(buffer: ArrayBuffer, mimeType: string): Promise<{ data: Buf
     page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height })
     return { data: Buffer.from(await pdfDoc.save()), mime: "application/pdf", ext: "pdf" }
   } catch {
-    // Unsupported format (WebP, HEIC, etc.) — upload raw
     const ext = mimeType.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg"
     return { data: Buffer.from(buffer), mime: mimeType, ext }
   }
@@ -66,7 +64,12 @@ export async function uploadMeterPhoto(
   const unitFolderId = await getOrCreateFolder(drive, `Local ${unitNumber}`, rootFolderId)
 
   const { data: fileData, mime: fileMime, ext: fileExt } = await toPdf(buffer, mimeType)
-  const stream = Readable.from(fileData)
+
+  // Use Buffer directly — Readable streams can be unreliable in serverless
+  const { Readable } = await import("stream")
+  const stream = new Readable()
+  stream.push(fileData)
+  stream.push(null)
 
   const file = await drive.files.create({
     requestBody: {

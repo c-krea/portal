@@ -97,7 +97,9 @@ export async function submitLectura(
       fotoDriveId = fileId
       fotoUrl = url
     } catch (err) {
-      console.error("Drive upload error:", err)
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error("Drive upload error:", msg)
+      return { error: `Error subiendo foto: ${msg}` }
     }
   }
 
