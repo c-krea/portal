@@ -2,6 +2,34 @@
 
 ---
 
+## 2026-04-20 — Session 22: Google Drive Photo Upload + Meter Auto-Validation (v2.5.0)
+
+### What shipped
+- **Google Drive integration**: tenant photos upload to `Medidores C-Krea / Local {N} / YYYY-MM.pdf` via OAuth2 refresh token (not service account — personal Gmail has no SA storage quota)
+- **PDF conversion**: all images (JPG/PNG) auto-converted to PDF via `pdf-lib` before upload. Fallback: upload raw if format unsupported (WebP, HEIC)
+- **Drag-and-drop**: drop zone highlights blue on hover, accepts JPG/PNG/PDF. Base64 via FileReader → hidden input (DataTransfer→input.files unreliable in React server actions)
+- **Auto-validation**: already existed — ±10% vs promedio_3m → `aprobado`/`revision`
+- **DB**: added `foto_drive_id` column to `meter_readings`
+- **Inline preview**: after submit → `router.refresh()` → locked state shows embedded Google Drive iframe (360px). Works for PDFs and images.
+- **Admin table**: "Foto" column with "Ver" Drive link
+- **Demo fix**: deadline bypassed (`withinDeadline = true`) — CKR-19 tracks revert
+
+### Key decisions
+- **OAuth2 refresh token > service account** for personal Gmail Drive. SA has no storage quota on personal folders. Shared Drives require workspace. OAuth2 with refresh token uploads as the real user.
+- **Base64 hidden input** is the only reliable way to pass files through React server actions with drag-and-drop. `DataTransfer→input.files` works for click-to-select but not guaranteed for programmatic sets in server action forms.
+- **iframe with `/preview` URL** renders Drive files inline — no CORS issues, works for PDF + images.
+- **`router.refresh()` in useEffect** after `state.success` triggers server component re-render — picks up fresh DB data including `foto_drive_id` for the iframe.
+
+### Gotchas
+- `revalidatePath` causes server component remount → wipes React state (blob URLs, base64). Never rely on local state for post-submit display — use server state or action return values.
+- `Readable.from(Buffer)` unreliable in Vercel serverless for googleapis media upload — use `new Readable(); stream.push(buf); stream.push(null)` instead.
+- Google Drive OAuth consent screen must be "Published" (not Testing) to authorize with secondary Gmail accounts without adding test users.
+
+### Pending next session
+- **Meter validation equation upgrade**: current is ±10% vs promedio_3m (last 3 months). Decision pending on Option B (seasonal reference: same month prior years + 3m trend) vs Option C (statistical: mean ± 2σ). 15 months of data available (Jan 2025 → Mar 2026). German to provide context on which approach fits.
+
+---
+
 ## 2026-04-19 — Session 21: Full Admin Mobile Pass (v2.4.0)
 
 ### What shipped

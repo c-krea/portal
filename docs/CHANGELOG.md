@@ -6,6 +6,24 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [2.5.0] — 2026-04-20
+
+### Added
+- Google Drive photo upload for meter readings (OAuth2 refresh token — uploads as real Gmail user)
+- PDF auto-conversion: all uploaded images converted to PDF via pdf-lib before Drive upload
+- Drag-and-drop file upload on tenant portal medidor page (JPG, PNG, PDF accepted)
+- Inline Drive file preview via iframe after submit (360px embedded viewer)
+- `foto_drive_id` column on `meter_readings` table
+- Admin medidores table: "Foto" column with direct Drive link
+- CKR-19: revert deadline bypass after demo
+
+### Fixed
+- Meter photo upload: switched from service account JWT to OAuth2 refresh token (SA has no storage quota on personal Gmail Drive)
+- Post-submit preview: page auto-refreshes via `router.refresh()` instead of relying on React state (which gets wiped on server component remount)
+- Drag-and-drop: use FileReader base64 → hidden input instead of DataTransfer→input.files (unreliable in server actions)
+
+---
+
 ## [2.3.0] — 2026-04-19
 
 ### Added
