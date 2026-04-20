@@ -34,16 +34,16 @@ type SortKey = keyof Pick<
 
 type SortDir = "asc" | "desc"
 
-const COLS: { key: SortKey; label: string; align: "left" | "right" | "center" }[] = [
-  { key: "unitNumber",         label: "Local",           align: "left" },
-  { key: "cliente",            label: "Arrendatario",    align: "left" },
-  { key: "fechaInicio",        label: "Desde",           align: "left" },
-  { key: "mesesTranscurridos", label: "Meses",           align: "right" },
-  { key: "canonMensual",       label: "Canon / mes",     align: "right" },
-  { key: "descuentoPct",       label: "Dcto %",          align: "right" },
-  { key: "prontoPagoPct",      label: "PP elegible",     align: "right" },
-  { key: "netoAnualIVA",       label: "Neto anual c/IVA",align: "right" },
-  { key: "status",             label: "Estado",          align: "center" },
+const COLS: { key: SortKey; label: string; align: "left" | "right" | "center"; hide?: string }[] = [
+  { key: "unitNumber",         label: "Local",            align: "left" },
+  { key: "cliente",            label: "Arrendatario",     align: "left" },
+  { key: "fechaInicio",        label: "Desde",            align: "left",   hide: "hidden sm:table-cell" },
+  { key: "mesesTranscurridos", label: "Meses",            align: "right",  hide: "hidden md:table-cell" },
+  { key: "canonMensual",       label: "Canon / mes",      align: "right",  hide: "hidden sm:table-cell" },
+  { key: "descuentoPct",       label: "Dcto %",           align: "right",  hide: "hidden md:table-cell" },
+  { key: "prontoPagoPct",      label: "PP elegible",      align: "right",  hide: "hidden lg:table-cell" },
+  { key: "netoAnualIVA",       label: "Neto anual c/IVA", align: "right" },
+  { key: "status",             label: "Estado",           align: "center" },
 ]
 
 function compare(a: ProyeccionDetalle, b: ProyeccionDetalle, key: SortKey, dir: SortDir): number {
@@ -77,7 +77,7 @@ export function DetalleTable({ data }: { data: ProyeccionDetalle[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-slate-100 bg-slate-50">
-            {COLS.map(({ key, label, align }) => {
+            {COLS.map(({ key, label, align, hide }) => {
               const active = sortKey === key
               const indicator = active ? (sortDir === "asc" ? " ↑" : " ↓") : ""
               return (
@@ -86,7 +86,7 @@ export function DetalleTable({ data }: { data: ProyeccionDetalle[] }) {
                   onClick={() => handleSort(key)}
                   className={`cursor-pointer select-none px-4 py-3 text-xs font-medium uppercase tracking-wider text-slate-500 hover:text-slate-800 ${
                     align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"
-                  }${active ? " text-slate-800" : ""}`}
+                  }${active ? " text-slate-800" : ""}${hide ? ` ${hide}` : ""}`}
                 >
                   {label}{indicator}
                 </th>
@@ -98,11 +98,11 @@ export function DetalleTable({ data }: { data: ProyeccionDetalle[] }) {
           {sorted.map((row) => (
             <tr key={row.contractId} className="hover:bg-slate-50">
               <td className="px-4 py-2.5 font-mono text-xs font-semibold text-slate-800">{row.unitNumber}</td>
-              <td className="px-4 py-2.5 text-slate-700">{row.cliente}</td>
-              <td className="px-4 py-2.5 text-xs text-slate-500">{formatDate(row.fechaInicio)}</td>
-              <td className="px-4 py-2.5 text-right text-slate-700">{row.mesesTranscurridos}</td>
-              <td className="px-4 py-2.5 text-right font-mono text-slate-900">{formatCOP(row.canonMensual)}</td>
-              <td className="px-4 py-2.5 text-right text-slate-600">
+              <td className="px-4 py-2.5 text-sm text-slate-700">{row.cliente}</td>
+              <td className="hidden sm:table-cell px-4 py-2.5 text-xs text-slate-500">{formatDate(row.fechaInicio)}</td>
+              <td className="hidden md:table-cell px-4 py-2.5 text-right text-slate-700">{row.mesesTranscurridos}</td>
+              <td className="hidden sm:table-cell px-4 py-2.5 text-right font-mono text-slate-900">{formatCOP(row.canonMensual)}</td>
+              <td className="hidden md:table-cell px-4 py-2.5 text-right text-slate-600">
                 {row.descuentoPct > 0 ? (
                   <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
                     {row.descuentoPct}%
@@ -111,7 +111,7 @@ export function DetalleTable({ data }: { data: ProyeccionDetalle[] }) {
                   <span className="text-slate-300">—</span>
                 )}
               </td>
-              <td className="px-4 py-2.5 text-right text-slate-600">
+              <td className="hidden lg:table-cell px-4 py-2.5 text-right text-slate-600">
                 {row.prontoPagoPct > 0 ? (
                   <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
                     {row.prontoPagoPct}%

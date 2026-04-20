@@ -72,7 +72,8 @@ export function ProyeccionesChart({ data }: { data: Row[] }) {
   const max = Math.max(...data.map((d) => d.proyectado))
 
   return (
-    <div className="mt-4 h-52">
+    <div className="mt-4 overflow-x-auto">
+      <div style={{ minWidth: 540, height: 208 }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} barCategoryGap="28%" margin={{ top: 4, right: 4, left: 8, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -98,6 +99,7 @@ export function ProyeccionesChart({ data }: { data: Row[] }) {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      </div>
     </div>
   )
 }
