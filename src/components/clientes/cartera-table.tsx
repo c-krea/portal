@@ -29,11 +29,19 @@ function MoraBadge({ dias }: { dias: number }) {
   )
 }
 
+declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData, TValue> {
+    className?: string
+  }
+}
+
 const columns: ColumnDef<CarteraItem>[] = [
   {
     accessorKey: "siesaFactura",
     header: "Factura",
     size: 120,
+    meta: { className: "hidden md:table-cell" },
     cell: ({ getValue }) => (
       <span className="font-mono text-xs text-slate-600">{getValue<string | null>() ?? "—"}</span>
     ),
@@ -50,13 +58,14 @@ const columns: ColumnDef<CarteraItem>[] = [
     accessorKey: "fechaVence",
     header: "Vence",
     size: 100,
+    meta: { className: "hidden sm:table-cell" },
     cell: ({ getValue }) => (
       <span className="text-slate-600">{getValue<string | null>() ?? "—"}</span>
     ),
   },
   {
     accessorKey: "diasMora",
-    header: "Días Mora",
+    header: "Mora",
     size: 90,
     cell: ({ getValue }) => <MoraBadge dias={getValue<number>()} />,
   },
@@ -77,6 +86,7 @@ const columns: ColumnDef<CarteraItem>[] = [
     accessorKey: "valorVencido",
     header: "Vencido",
     size: 130,
+    meta: { className: "hidden sm:table-cell" },
     cell: ({ getValue }) => {
       const v = getValue<number>()
       return v > 0 ? (
@@ -90,6 +100,7 @@ const columns: ColumnDef<CarteraItem>[] = [
     accessorKey: "interesAcumulado",
     header: "Interés",
     size: 120,
+    meta: { className: "hidden md:table-cell" },
     cell: ({ getValue }) => {
       const v = getValue<number>()
       return v > 0 ? (
@@ -101,7 +112,8 @@ const columns: ColumnDef<CarteraItem>[] = [
   },
   {
     accessorKey: "observacion",
-    header: "Observación",
+    header: "Nota",
+    meta: { className: "hidden lg:table-cell" },
     cell: ({ getValue }) => (
       <span className="text-xs text-slate-500">{getValue<string | null>() ?? ""}</span>
     ),
@@ -136,6 +148,7 @@ export function CarteraTable({ data }: { data: CarteraItem[] }) {
                   className={cn(
                     "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500",
                     header.column.getCanSort() && "cursor-pointer select-none hover:text-slate-700",
+                    header.column.columnDef.meta?.className,
                   )}
                 >
                   <div className="flex items-center gap-1">
@@ -158,7 +171,7 @@ export function CarteraTable({ data }: { data: CarteraItem[] }) {
           {table.getRowModel().rows.map((row) => (
             <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50">
               {row.getVisibleCells().map((cell) => (
-                <td key={cell.id} className="px-4 py-3">
+                <td key={cell.id} className={cn("px-4 py-3", cell.column.columnDef.meta?.className)}>
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
                 </td>
               ))}

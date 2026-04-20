@@ -49,7 +49,7 @@ function KpiCard({
       <p className="text-xs text-slate-500">{label}</p>
       <p
         className={cn(
-          "mt-1 text-lg font-semibold",
+          "mt-1 text-sm sm:text-lg font-semibold truncate",
           warning ? "text-rose-600" : "text-slate-900",
         )}
       >
@@ -247,16 +247,16 @@ export default async function ClienteDetailPage({
           </div>
           {pagos.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50">
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Fecha</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Recibo</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Factura</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Aplicado</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">PP</th>
+                    <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Recibo</th>
+                    <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Factura</th>
+                    <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Aplicado</th>
+                    <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">PP</th>
                     <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Neto</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Clasificación</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Estado</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -267,16 +267,16 @@ export default async function ClienteDetailPage({
                     return (
                       <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50">
                         <td className="px-4 py-3 text-slate-600 tabular-nums">{p.fechaRecaudo}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                        <td className="hidden md:table-cell px-4 py-3 font-mono text-slate-500">
                           {p.siesaDocto ?? "—"}
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-500">
+                        <td className="hidden md:table-cell px-4 py-3 font-mono text-slate-500">
                           {p.siesaCruce ?? (p.concepto ? p.concepto : "—")}
                         </td>
-                        <td className="px-4 py-3 text-right font-medium text-slate-900 tabular-nums">
+                        <td className="hidden sm:table-cell px-4 py-3 text-right font-medium text-slate-900 tabular-nums">
                           {formatCOP(p.valorAplicado)}
                         </td>
-                        <td className="px-4 py-3 text-right text-emerald-600 tabular-nums">
+                        <td className="hidden sm:table-cell px-4 py-3 text-right text-emerald-600 tabular-nums">
                           {p.prontoPagoAplicado > 0 ? formatCOP(p.prontoPagoAplicado) : (
                             <span className="text-slate-300">—</span>
                           )}
@@ -297,13 +297,14 @@ export default async function ClienteDetailPage({
                 </tbody>
                 <tfoot>
                   <tr className="border-t border-slate-200 bg-slate-50">
-                    <td colSpan={3} className="px-4 py-3 text-xs font-medium text-slate-500">
-                      {pagos.length} pagos mostrados
+                    <td colSpan={1} className="px-4 py-3 text-xs font-medium text-slate-500">
+                      {pagos.length} pagos
                     </td>
-                    <td className="px-4 py-3 text-right text-xs font-semibold text-slate-700 tabular-nums">
+                    <td className="hidden md:table-cell" colSpan={2} />
+                    <td className="hidden sm:table-cell px-4 py-3 text-right text-xs font-semibold text-slate-700 tabular-nums">
                       {formatCOP(pagos.reduce((s, p) => s + p.valorAplicado, 0))}
                     </td>
-                    <td className="px-4 py-3 text-right text-xs font-semibold text-emerald-600 tabular-nums">
+                    <td className="hidden sm:table-cell px-4 py-3 text-right text-xs font-semibold text-emerald-600 tabular-nums">
                       {formatCOP(pagos.reduce((s, p) => s + p.prontoPagoAplicado, 0))}
                     </td>
                     <td className="px-4 py-3 text-right text-xs font-semibold text-slate-900 tabular-nums">
