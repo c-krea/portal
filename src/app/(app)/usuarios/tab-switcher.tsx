@@ -99,7 +99,7 @@ export function TabSwitcher({
       {tab === "inquilinos" && (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-100">
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Local</th>
@@ -158,7 +158,7 @@ export function TabSwitcher({
       {tab === "admins" && (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-slate-100">
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Nombre</th>

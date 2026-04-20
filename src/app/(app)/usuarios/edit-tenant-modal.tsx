@@ -29,7 +29,7 @@ function TInput({ value, onChange, placeholder, type = "text", disabled }: {
   return (
     <input type={type} value={value} onChange={e => onChange?.(e.target.value)}
       placeholder={placeholder ?? "—"} disabled={disabled}
-      className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400" />
+      className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400" />
   )
 }
 
@@ -39,7 +39,7 @@ function NumInput({ value, onChange, placeholder, min = 0, step = 1 }: {
   return (
     <input type="number" value={value} onChange={e => onChange(e.target.value)}
       min={min} step={step} placeholder={placeholder ?? "0"}
-      className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500" />
   )
 }
 
@@ -70,7 +70,7 @@ function ContractFields({
         <p className="mb-1 text-xs text-slate-400">Notas de descuento</p>
         <textarea value={uc.descripcion} onChange={e => onChange("descripcion", e.target.value)}
           rows={3} placeholder="Ej: 43% hasta dic 2025…"
-          className="w-full rounded-md border border-slate-200 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" />
+          className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" />
       </div>
     </>
   )
@@ -185,7 +185,7 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-100 px-4 sm:px-6 py-4">
             <div>
-              <h2 className="text-base font-semibold text-slate-900">{tenant.nombre}</h2>
+              <h2 className="text-sm font-semibold text-slate-900">{tenant.nombre}</h2>
               <p className="text-xs text-slate-400 mt-0.5">Local {tenant.units}</p>
             </div>
             <button onClick={() => setOpen(false)} disabled={pending}
@@ -199,8 +199,8 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
               <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-amber-800">¿Confirmar cambios para {razonSocial}?</p>
-                  <p className="mt-1 text-sm text-amber-700">
+                  <p className="text-xs font-semibold text-amber-800">¿Confirmar cambios para {razonSocial}?</p>
+                  <p className="mt-1 text-xs text-amber-700">
                     Se actualizará la información de contacto
                     {tenant.unitContracts.length > 0 && `, y los contratos de los locales ${tenant.units}`}
                     {portalEmail !== (tenant.portalEmail ?? "") && " y acceso al portal"}.
@@ -210,11 +210,11 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
               {error && <p className="mb-3 rounded-lg bg-rose-50 px-4 py-2 text-sm text-rose-700">{error}</p>}
               <div className="flex gap-3">
                 <button onClick={() => setConfirming(false)} disabled={pending}
-                  className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+                  className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">
                   Cancelar
                 </button>
                 <button onClick={handleConfirm} disabled={pending}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-900 py-2 text-xs font-semibold text-white hover:bg-slate-700 disabled:opacity-50">
                   {pending && <Loader2 className="h-4 w-4 animate-spin" />}
                   {pending ? "Guardando…" : "Confirmar"}
                 </button>
@@ -299,11 +299,11 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
 
               <div className="mt-5 flex gap-3">
                 <button onClick={() => setOpen(false)}
-                  className="flex-1 rounded-lg border border-slate-200 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
+                  className="flex-1 rounded-lg border border-slate-200 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50">
                   Cancelar
                 </button>
                 <button onClick={handleSaveClick}
-                  className="flex-1 rounded-lg bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-700">
+                  className="flex-1 rounded-lg bg-slate-900 py-2 text-xs font-semibold text-white hover:bg-slate-700">
                   Guardar cambios
                 </button>
               </div>
