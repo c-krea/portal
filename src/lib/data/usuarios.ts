@@ -16,6 +16,7 @@ export type PortalTenantRow = {
   tenantId: string
   nombre: string
   units: string
+  unitIds: string[]
   portalEmail: string | null
   businessEmail: string | null
   authUserId: string | null
@@ -30,6 +31,7 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
       t.portal_email,
       t.email AS business_email,
       STRING_AGG(u.unit_number, ', ' ORDER BY u.unit_number) AS units,
+      STRING_AGG(u.id::text, ',' ORDER BY u.unit_number) AS unit_ids,
       p.id AS auth_user_id
     FROM tenants t
     JOIN contracts c ON c.tenant_id = t.id AND c.status = 'activo'
@@ -75,6 +77,7 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
       tenantId:      String(r.id),
       nombre:        String(r.nombre),
       units:         String(r.units),
+      unitIds:       String(r.unit_ids).split(","),
       portalEmail:   authEmail ?? (r.portal_email ? String(r.portal_email) : null),
       businessEmail: r.business_email ? String(r.business_email) : null,
       authUserId,

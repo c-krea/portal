@@ -36,6 +36,53 @@ export async function updatePortalEmail(tenantId: string, email: string) {
   return { success: true }
 }
 
+export async function updateTenantUser(
+  tenantId: string,
+  unitIds: string[],
+  data: { nombre: string; portalEmail: string; unitNumber: string }
+) {
+  if (!data.nombre.trim()) return { error: "El nombre es obligatorio" }
+  const email = data.portalEmail.trim().toLowerCase()
+  if (email && !email.includes("@")) return { error: "Email inválido" }
+
+  // Update tenant name + portal email
+  const { error: tenantError } = await supabaseAdmin
+    .from("tenants")
+    .update({ nombre_corto: data.nombre.trim(), portal_email: email || null })
+    .eq("id", tenantId)
+  if (tenantError) return { error: tenantError.message }
+
+  // Sync email to auth if account exists
+  if (email) {
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("role", "tenant")
+      .single()
+    if (profile?.id) {
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+        profile.id,
+        { email }
+      )
+      if (authError) return { error: `Guardado, pero error en auth: ${authError.message}` }
+    }
+  }
+
+  // Update unit number(s) — only if single unit to avoid ambiguity
+  const unitNum = data.unitNumber.trim()
+  if (unitNum && unitIds.length === 1) {
+    const { error: unitError } = await supabaseAdmin
+      .from("units")
+      .update({ unit_number: unitNum })
+      .eq("id", unitIds[0])
+    if (unitError) return { error: `Tenant actualizado, pero error en local: ${unitError.message}` }
+  }
+
+  revalidatePath("/usuarios")
+  return { success: true }
+}
+
 export async function updateAdminUser(
   userId: string,
   data: { fullName: string; email: string; role: string }

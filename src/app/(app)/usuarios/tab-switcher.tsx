@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Building2, ShieldCheck, CheckCircle2, CircleDashed, Mail, UserCheck } from "lucide-react"
 import { EmailEditor } from "./email-editor"
 import { EditAdminModal } from "./edit-admin-modal"
+import { EditTenantModal } from "./edit-tenant-modal"
 import type { PortalTenantRow, UsuarioRow } from "@/lib/data/usuarios"
 
 function lastSignInLabel(iso: string | null): string {
@@ -72,7 +73,7 @@ export function TabSwitcher({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100">
-                  {["Local", "Inquilino", "Email Portal (login)", "Estado", "Último Acceso"].map(h => (
+                  {["Local", "Inquilino", "Email Portal (login)", "Estado", "Último Acceso", ""].map(h => (
                     <th key={h} className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                       {h}
                     </th>
@@ -87,8 +88,8 @@ export function TabSwitcher({
                     <tr key={t.tenantId} className="border-b border-slate-50 hover:bg-slate-50">
                       <td className="px-5 py-3 font-mono text-xs font-medium text-slate-600">{t.units}</td>
                       <td className="px-5 py-3 font-medium text-slate-900">{t.nombre}</td>
-                      <td className="px-5 py-3">
-                        <EmailEditor tenantId={t.tenantId} initialEmail={t.portalEmail} />
+                      <td className="px-5 py-3 text-sm text-slate-600">
+                        {t.portalEmail ?? <span className="italic text-slate-400">Sin email</span>}
                       </td>
                       <td className="px-5 py-3">
                         {hasAccount ? (
@@ -106,6 +107,9 @@ export function TabSwitcher({
                         )}
                       </td>
                       <td className="px-5 py-3 text-xs text-slate-400">{lastSignInLabel(t.lastSignIn)}</td>
+                      <td className="px-3 py-3">
+                        <EditTenantModal tenant={t} />
+                      </td>
                     </tr>
                   )
                 })}
