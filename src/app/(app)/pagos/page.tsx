@@ -67,7 +67,7 @@ export default async function PagosPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-100">
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                      <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                         Fecha
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
@@ -76,7 +76,7 @@ export default async function PagosPage() {
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                         Monto
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                      <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                         Concepto
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
@@ -97,7 +97,7 @@ export default async function PagosPage() {
                           key={p.id}
                           className="border-b border-slate-50 hover:bg-slate-50"
                         >
-                          <td className="px-4 py-3 text-slate-600">{p.fechaRecaudo}</td>
+                          <td className="hidden sm:table-cell px-4 py-3 text-slate-600">{p.fechaRecaudo}</td>
                           <td className="px-4 py-3">
                             <p className="font-medium text-slate-900">{p.clienteName}</p>
                             {p.unitNumber && (
@@ -107,7 +107,7 @@ export default async function PagosPage() {
                           <td className="px-4 py-3 font-semibold text-slate-900">
                             {formatCOP(p.valorFinal)}
                           </td>
-                          <td className="px-4 py-3 text-xs text-slate-500">
+                          <td className="hidden md:table-cell px-4 py-3 text-xs text-slate-500">
                             {p.concepto ??
                               (p.siesaDocto ? `Doc: ${p.siesaDocto}` : "—")}
                           </td>
