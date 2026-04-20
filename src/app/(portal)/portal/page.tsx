@@ -10,6 +10,7 @@ import {
 import { formatCOP, formatDate } from "@/lib/formatters"
 import Link from "next/link"
 import { ProfileCard } from "./profile-card"
+import { TotalBreakdownModal } from "./total-breakdown-modal"
 import {
   CheckCircle2,
   AlertCircle,
@@ -93,6 +94,14 @@ export default async function PortalPage() {
     : 0
 
   // Medidor deadline
+  // Total a pagar this month
+  const descuento = profile.descuentoPct ?? 0
+  const canonNeto = profile.canonBase * (1 - descuento / 100)
+  const ivaAmount = Math.round(canonNeto * 0.19)
+  const subtotalIva = Math.round(canonNeto * 1.19)
+  const gastoElec = medidor.totalEnergia ?? 0
+  const totalAPagar = subtotalIva + gastoElec
+
   const medidorDeadlineDays = 10 - todayDay // days left in submission window
   const medidorUrgent = !medidor.exists && todayDay <= 10 && medidorDeadlineDays <= 3
   const medidorOverdue = !medidor.exists && todayDay > 10
@@ -231,19 +240,34 @@ export default async function PortalPage() {
 
             {/* 2 — Total a pagar */}
             <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <Banknote className="h-4 w-4 text-slate-400" />
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Total a Pagar
-                </p>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Banknote className="h-4 w-4 text-slate-400" />
+                  <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                    Total a Pagar
+                  </p>
+                </div>
+                <TotalBreakdownModal
+                  canonBase={profile.canonBase}
+                  descuentoPct={descuento}
+                  canonNeto={canonNeto}
+                  ivaAmount={ivaAmount}
+                  subtotalIva={subtotalIva}
+                  gastoElec={gastoElec}
+                  totalAPagar={totalAPagar}
+                  kwh={medidor.lecturaActual}
+                  medidorExists={medidor.exists}
+                />
               </div>
               <div className="flex flex-1 items-end">
                 <p className="text-4xl font-black tabular-nums leading-none text-slate-900">
-                  {formatCOP(profile.canonBase)}
+                  {formatCOP(totalAPagar)}
                 </p>
               </div>
               <p className="mt-auto pt-3 text-xs text-slate-400">
-                Canon mensual
+                {medidor.exists && gastoElec > 0
+                  ? "Arrendamiento + electricidad"
+                  : "Arrendamiento · energía pendiente"}
               </p>
             </div>
 

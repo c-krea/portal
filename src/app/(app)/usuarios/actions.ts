@@ -131,6 +131,36 @@ export async function updateTenantUser(
   return { success: true }
 }
 
+export async function createTenantAccount(tenantId: string) {
+  const { data: tenant, error: fetchError } = await supabaseAdmin
+    .from("tenants")
+    .select("portal_email, nombre_corto, razon_social")
+    .eq("id", tenantId)
+    .single()
+
+  if (fetchError || !tenant) return { error: "Inquilino no encontrado" }
+  if (!tenant.portal_email) return { error: "Sin email configurado" }
+
+  const fullName = (tenant.nombre_corto || tenant.razon_social) as string
+
+  const { data, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email: tenant.portal_email as string,
+    email_confirm: true,
+    user_metadata: { full_name: fullName, role: "tenant" },
+  })
+
+  if (authError) return { error: authError.message }
+
+  // Trigger creates profile without tenant_id — patch it
+  await supabaseAdmin
+    .from("profiles")
+    .update({ tenant_id: tenantId, role: "tenant", full_name: fullName })
+    .eq("id", data.user.id)
+
+  revalidatePath("/usuarios")
+  return { success: true }
+}
+
 export async function updateAdminUser(
   userId: string,
   data: { fullName: string; email: string; role: string }

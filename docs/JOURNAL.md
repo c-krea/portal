@@ -2,6 +2,50 @@
 
 ---
 
+## 2026-04-19 — Session 19: Usuarios Admin + Mobile Portal (v2.2.0)
+
+### What happened
+
+**Mobile portal fixes:**
+- Portal layout: `px-4 sm:px-6`, name hidden on mobile, `py-6 sm:py-8`
+- Dashboard grid: `grid-cols-1 sm:grid-cols-3`, banner stacks vertically, Concepto col `hidden sm:table-cell`
+- Medidor page + form: both `grid-cols-2` → `grid-cols-1 md:grid-cols-2`
+
+**Usuarios page full rebuild:**
+- Two-tab layout: Inquilinos del Portal + Administración
+- Stats strip: total tenants / email configured / cuenta activa / activos últimos 30d
+- `getPortalTenants()`: switched from `MIN()` per-unit to `JSON_AGG(JSON_BUILD_OBJECT(...) ORDER BY u.unit_number)` — gets all contracts for multi-unit tenants. Reads `auth.admin.listUsers()` for real portal emails + lastSignIn. Auto-backfills `portal_email` on each page load to heal drift (units 101/118 had auth accounts but null `portal_email` in DB).
+- `EditTenantModal`: two-card layout matching perfil page. Left: contact info (NIT, razón social, nombre corto, email contacto, teléfono, email portal). Right: per-unit contract tabs (appears when `unitContracts.length > 1`) + contract fields. Amber confirmation dialog before save.
+- `EditAdminModal`: name/email/role. Same amber confirmation pattern.
+- `updateTenantUser` server action: updates tenants + auth sync + unit (single only) + per-contract fields.
+- Auth sync pattern enforced everywhere: any email write → also `auth.admin.updateUserById()`.
+- Representante field removed (Siesa ERP artifact).
+- $ and % symbols removed from number inputs (NumInput is plain input, no affixes).
+- Usuarios added to NAV_ITEMS in `src/lib/constants.ts` — was missing entirely.
+
+### Key decisions
+- `JSON_AGG` over `MIN()` for contracts — `MIN()` silently discards all but one contract's data for multi-unit tenants. Non-obvious bug, easy to miss.
+- `Promise.resolve(supabaseBuilder)` for backfill array — `PostgrestFilterBuilder` is `PromiseLike` not `Promise`, so `Promise<unknown>[]` type fails unless wrapped.
+- Two-step amber confirm modal on all destructive edits — consistent UX pattern now used in both admin and tenant modals.
+- No inline email editor in table — removed EmailEditor from row, all editing goes through modal now.
+
+### Errors caught before deploy
+1. `const` declarations inside `return {}` block — JS syntax error, not valid object literal. Moved declarations above return.
+2. `setRole(e.target.value)` — `string` not assignable to `"admin" | "finance" | "viewer" | "tenant"` union. Fixed with `as UsuarioRow["role"]` cast.
+3. `PostgrestFilterBuilder` not assignable to `Promise<unknown>` — backfill push array type mismatch. Fixed with `Promise.resolve()` wrapper.
+
+### Files changed
+- `src/lib/constants.ts` — Usuarios nav item
+- `src/lib/data/usuarios.ts` — UnitContract type, getPortalTenants() full rewrite, getUsuarios() lastSignIn
+- `src/app/(app)/usuarios/actions.ts` — updatePortalEmail, updateTenantUser, updateAdminUser
+- `src/app/(app)/usuarios/edit-admin-modal.tsx` (new)
+- `src/app/(app)/usuarios/edit-tenant-modal.tsx` (new)
+- `src/app/(app)/usuarios/tab-switcher.tsx` (new)
+- `src/app/(app)/usuarios/page.tsx` — stats + TabSwitcher
+- `src/app/(portal)/layout.tsx`, `portal/page.tsx`, `portal/medidor/page.tsx`, `portal/medidor/form.tsx` — mobile
+
+---
+
 ## 2026-04-17 — Session 17: PP Reconciliation Model + Dashboard Tab Toggle (v2.1.0)
 
 ### What happened

@@ -44,6 +44,7 @@ export type PortalMedidorStatus = {
   periodo: string | null
   fotoUrl: string | null
   exists: boolean
+  totalEnergia: number | null
 }
 
 export async function getPortalProfile(userId: string): Promise<PortalProfile | null> {
@@ -240,17 +241,18 @@ export async function getPortalMedidorStatus(
   periodo: string,
 ): Promise<PortalMedidorStatus> {
   const rows = await execute(`
-    SELECT lectura_actual::numeric AS lectura_actual, periodo, foto_url
+    SELECT lectura_actual::numeric AS lectura_actual, periodo, foto_url, total_energia::numeric AS total_energia
     FROM meter_readings
     WHERE unit_id = '${unitId}' AND periodo = '${periodo}'
     LIMIT 1
   `)
   const r = rows[0]
-  if (!r) return { lecturaActual: null, periodo: null, fotoUrl: null, exists: false }
+  if (!r) return { lecturaActual: null, periodo: null, fotoUrl: null, exists: false, totalEnergia: null }
   return {
     lecturaActual: Number(r.lectura_actual),
     periodo: String(r.periodo),
     fotoUrl: r.foto_url ? String(r.foto_url) : null,
     exists: true,
+    totalEnergia: r.total_energia != null ? Number(r.total_energia) : null,
   }
 }

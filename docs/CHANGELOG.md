@@ -8,6 +8,21 @@ Format: [YYYY-MM-DD] — description
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-04-19
+### Added
+- `/usuarios` admin page fully rebuilt: two-tab layout (Inquilinos del Portal / Administración), stats strip (total / email configured / cuenta activa / activos 30d)
+- `EditTenantModal`: two-card edit modal (Contact left, Contract right) matching `/portal/perfil` layout. Editable fields: NIT, razón social, nombre corto, email contacto, teléfono, email portal. Contract fields: inicio/fin, canon base, descuento fase, pronto pago %, notas descuento.
+- `EditAdminModal`: name/email/role editor with amber confirmation dialog, auth sync on save
+- Per-unit contract tabs in tenant modal for multi-unit tenants — eliminates dead-end "edit in Clientes" flow
+- `updateTenantUser` server action: saves all contact + unit + contract fields, syncs portal email to `auth.users`
+- `updateAdminUser` server action: updates profiles + auth.users
+- `getPortalTenants()`: `JSON_AGG(JSON_BUILD_OBJECT(...))` for per-unit contract aggregation; reads `auth.admin.listUsers()` for real emails + lastSignIn; auto-backfills `portal_email` on load to heal historical drift
+- `UnitContract` type + `PortalTenantRow` with `unitContracts: UnitContract[]`
+- Usuarios sidebar nav item added (was missing from NAV_ITEMS in constants.ts)
+- Auth sync: `updatePortalEmail` now updates both `tenants.portal_email` and `auth.users` — fixes units 101/118 showing "Sin email" despite having accounts
+- All 3 admin accounts set to `role = 'admin'`
+- Mobile responsiveness for tenant portal: `grid-cols-1 sm:grid-cols-3` on dashboard, stacked banner, Concepto column hidden on mobile, medidor form `grid-cols-1 md:grid-cols-2`, portal header compact on mobile
+
 ## [2.1.0] — 2026-04-17
 ### Changed
 - Proyecciones: removed pronto pago (PP) from ALL projection formulas — PP was wrongly pre-applied to 100% of contracts. PP is conditional and applies only when a client actually pays within 10 days. Zeroed out 899 `pronto_pago_proyectado` rows in DB.

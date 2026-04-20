@@ -1,11 +1,39 @@
 "use client"
 
-import { useState } from "react"
-import { Building2, ShieldCheck, CheckCircle2, CircleDashed, Mail, UserCheck } from "lucide-react"
+import { useState, useTransition } from "react"
+import { Building2, ShieldCheck, CheckCircle2, CircleDashed, Mail, UserCheck, UserPlus, Loader2 } from "lucide-react"
 import { EmailEditor } from "./email-editor"
 import { EditAdminModal } from "./edit-admin-modal"
 import { EditTenantModal } from "./edit-tenant-modal"
+import { createTenantAccount } from "./actions"
 import type { PortalTenantRow, UsuarioRow } from "@/lib/data/usuarios"
+
+function CreateAccountButton({ tenantId }: { tenantId: string }) {
+  const [pending, start] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  function handleClick() {
+    setError(null)
+    start(async () => {
+      const res = await createTenantAccount(tenantId)
+      if (res.error) setError(res.error)
+    })
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        onClick={handleClick}
+        disabled={pending}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+      >
+        {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus className="h-3 w-3" />}
+        {pending ? "Creando…" : "Crear cuenta"}
+      </button>
+      {error && <p className="text-xs text-rose-600 max-w-[160px] text-right">{error}</p>}
+    </div>
+  )
+}
 
 function lastSignInLabel(iso: string | null): string {
   if (!iso) return "Nunca"
@@ -108,7 +136,12 @@ export function TabSwitcher({
                       </td>
                       <td className="px-5 py-3 text-xs text-slate-400">{lastSignInLabel(t.lastSignIn)}</td>
                       <td className="px-3 py-3">
-                        <EditTenantModal tenant={t} />
+                        <div className="flex items-center gap-2 justify-end">
+                          {hasEmail && !hasAccount && (
+                            <CreateAccountButton tenantId={t.tenantId} />
+                          )}
+                          <EditTenantModal tenant={t} />
+                        </div>
                       </td>
                     </tr>
                   )

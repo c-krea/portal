@@ -7,20 +7,33 @@ import { execute } from "@/lib/db/executor"
 import { CheckCircle, Clock, AlertCircle, Zap } from "lucide-react"
 import { MedidoresAdminTable } from "@/components/medidores/medidores-admin-table"
 
-const PERIODOS = [
-  { label: "Ene", value: "2026-01" },
-  { label: "Feb", value: "2026-02" },
-  { label: "Mar", value: "2026-03" },
-  { label: "Abr", value: "2026-04" },
-]
+const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
+
+function buildPeriodos(year: number) {
+  const now = new Date()
+  const maxMonth = year === now.getFullYear() ? now.getMonth() + 1 : 12
+  const minMonth = year === 2025 ? 1 : 1
+  const periodos = []
+  for (let m = minMonth; m <= maxMonth; m++) {
+    periodos.push({
+      label: MONTH_LABELS[m - 1],
+      value: `${year}-${String(m).padStart(2, "0")}`,
+    })
+  }
+  return periodos
+}
 
 export default async function MedidoresPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>
+  searchParams: Promise<{ periodo?: string; year?: string }>
 }) {
-  const { periodo: periodoParam } = await searchParams
-  const periodo = periodoParam ?? "2026-04"
+  const { periodo: periodoParam, year: yearParam } = await searchParams
+  const now = new Date()
+  const selectedYear = yearParam ? Number(yearParam) : now.getFullYear()
+  const defaultPeriodo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+  const periodo = periodoParam ?? defaultPeriodo
+  const PERIODOS = buildPeriodos(selectedYear)
 
   const companies = await execute(`SELECT id FROM companies LIMIT 1`)
   const companyId = String(companies[0].id)
@@ -35,27 +48,47 @@ export default async function MedidoresPage({
   const totalKwh     = registradas.reduce((s, r) => s + (r.kwh ?? 0), 0)
   const totalEnergia = registradas.reduce((s, r) => s + (r.totalEnergia ?? 0), 0)
 
-  const periodoLabel = PERIODOS.find((p) => p.value === periodo)?.label ?? periodo
+  const periodoLabel = MONTH_LABELS[Number(periodo.split("-")[1]) - 1] ?? periodo
 
   return (
     <>
       <PageHeader title="Medidores de Energía" />
 
-      {/* Period tabs */}
-      <div className="mb-5 flex gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm w-fit">
-        {PERIODOS.map((p) => (
-          <a
-            key={p.value}
-            href={`/medidores?periodo=${p.value}`}
-            className={`rounded-lg px-5 py-1.5 text-sm font-medium transition-colors ${
-              p.value === periodo
-                ? "bg-slate-900 text-white"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            {p.label}
-          </a>
-        ))}
+      {/* Year + Period tabs */}
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        {/* Year switcher */}
+        <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          {[2025, 2026].map((y) => (
+            <a
+              key={y}
+              href={`/medidores?year=${y}`}
+              className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${
+                y === selectedYear
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              {y}
+            </a>
+          ))}
+        </div>
+
+        {/* Month tabs */}
+        <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          {PERIODOS.map((p) => (
+            <a
+              key={p.value}
+              href={`/medidores?year=${selectedYear}&periodo=${p.value}`}
+              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
+                p.value === periodo
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              {p.label}
+            </a>
+          ))}
+        </div>
       </div>
 
       {/* KPI strip */}
