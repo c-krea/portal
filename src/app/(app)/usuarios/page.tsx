@@ -1,25 +1,17 @@
 export const dynamic = "force-dynamic"
 
 import { PageHeader } from "@/components/layout/page-header"
-import { getPortalTenants } from "@/lib/data/usuarios"
-import { EmailEditor } from "./email-editor"
-import { CheckCircle2, CircleDashed, Mail, UserCheck } from "lucide-react"
-
-function lastSignInLabel(iso: string | null): string {
-  if (!iso) return "—"
-  const d = new Date(iso)
-  const diffMs = Date.now() - d.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-  if (diffDays === 0) return "Hoy"
-  if (diffDays === 1) return "Ayer"
-  if (diffDays < 30) return `Hace ${diffDays} días`
-  return d.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" })
-}
+import { getPortalTenants, getUsuarios } from "@/lib/data/usuarios"
+import { TabSwitcher } from "./tab-switcher"
+import { Mail, UserCheck, CheckCircle2 } from "lucide-react"
 
 export default async function UsuariosPage() {
-  const tenants = await getPortalTenants()
+  const [tenants, admins] = await Promise.all([
+    getPortalTenants(),
+    getUsuarios(),
+  ])
 
-  const withEmail  = tenants.filter(t => t.portalEmail).length
+  const withEmail   = tenants.filter(t => t.portalEmail).length
   const withAccount = tenants.filter(t => t.authUserId).length
   const recentActive = tenants.filter(t => {
     if (!t.lastSignIn) return false
@@ -28,7 +20,7 @@ export default async function UsuariosPage() {
 
   return (
     <>
-      <PageHeader title="Usuarios del Portal" />
+      <PageHeader title="Usuarios" />
 
       {/* Stats */}
       <div className="mb-6 flex flex-wrap gap-3">
@@ -53,76 +45,10 @@ export default async function UsuariosPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100">
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Local
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Inquilino
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Email Portal (login)
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Estado
-                </th>
-                <th className="px-5 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Último Acceso
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {tenants.map((t) => {
-                const hasAccount = !!t.authUserId
-                const hasEmail   = !!t.portalEmail
-
-                return (
-                  <tr key={t.tenantId} className="border-b border-slate-50 hover:bg-slate-50">
-                    <td className="px-5 py-3 font-mono text-xs font-medium text-slate-600">
-                      {t.units}
-                    </td>
-                    <td className="px-5 py-3 font-medium text-slate-900">
-                      {t.nombre}
-                    </td>
-                    <td className="px-5 py-3">
-                      <EmailEditor tenantId={t.tenantId} initialEmail={t.portalEmail} />
-                    </td>
-                    <td className="px-5 py-3">
-                      {hasAccount ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-                          <CheckCircle2 className="h-3 w-3" />
-                          Cuenta activa
-                        </span>
-                      ) : hasEmail ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                          <Mail className="h-3 w-3" />
-                          Email listo
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
-                          <CircleDashed className="h-3 w-3" />
-                          Sin configurar
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-xs text-slate-400">
-                      {lastSignInLabel(t.lastSignIn)}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <TabSwitcher tenants={tenants} admins={admins} />
 
       <p className="mt-3 text-xs text-slate-400">
-        Haga clic en el email de cualquier fila para editarlo. El email se usa para crear la cuenta del portal del inquilino.
+        Inquilinos: clic en el email para editar. Administración: cuentas de solo lectura del panel.
       </p>
     </>
   )

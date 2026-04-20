@@ -9,6 +9,7 @@ export type UsuarioRow = {
   tenantName: string | null
   isActive: boolean
   createdAt: string
+  lastSignIn: string | null
 }
 
 export type PortalTenantRow = {
@@ -95,8 +96,15 @@ export async function getUsuarios(): Promise<UsuarioRow[]> {
       p.created_at
     FROM profiles p
     LEFT JOIN tenants t ON p.tenant_id = t.id
+    WHERE p.role != 'tenant'
     ORDER BY p.created_at DESC
   `)
+
+  const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })
+  const lastSignInMap = new Map<string, string | null>()
+  for (const u of authData?.users ?? []) {
+    lastSignInMap.set(u.id, u.last_sign_in_at ?? null)
+  }
 
   return (rows as Array<Record<string, unknown>>).map((r) => ({
     id:         String(r.id),
@@ -107,5 +115,6 @@ export async function getUsuarios(): Promise<UsuarioRow[]> {
     tenantName: r.tenant_name ? String(r.tenant_name) : null,
     isActive:   Boolean(r.is_active),
     createdAt:  String(r.created_at),
+    lastSignIn: lastSignInMap.get(String(r.id)) ?? null,
   }))
 }
