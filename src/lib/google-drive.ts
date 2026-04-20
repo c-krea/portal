@@ -2,12 +2,11 @@ import { google } from "googleapis"
 import { PDFDocument } from "pdf-lib"
 
 function getDriveClient() {
-  const key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n")
-  const auth = new google.auth.JWT({
-    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key,
-    scopes: ["https://www.googleapis.com/auth/drive"],
-  })
+  const auth = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+  )
+  auth.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN })
   return google.drive({ version: "v3", auth })
 }
 
@@ -19,8 +18,6 @@ async function getOrCreateFolder(
   const res = await drive.files.list({
     q: `name='${name}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
     fields: "files(id)",
-    supportsAllDrives: true,
-    includeItemsFromAllDrives: true,
   })
   if (res.data.files && res.data.files.length > 0) {
     return res.data.files[0].id!
@@ -32,7 +29,6 @@ async function getOrCreateFolder(
       parents: [parentId],
     },
     fields: "id",
-    supportsAllDrives: true,
   })
   return folder.data.id!
 }
@@ -83,7 +79,6 @@ export async function uploadMeterPhoto(
       body: stream,
     },
     fields: "id",
-    supportsAllDrives: true,
   })
 
   const fileId = file.data.id!
@@ -91,7 +86,6 @@ export async function uploadMeterPhoto(
   await drive.permissions.create({
     fileId,
     requestBody: { role: "reader", type: "anyone" },
-    supportsAllDrives: true,
   })
 
   return {
