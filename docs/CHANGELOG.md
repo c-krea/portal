@@ -25,6 +25,22 @@ Format: [YYYY-MM-DD] — description
 - Portal pagos table: hides Vencimiento/Concepto columns on small screens
 - Portal perfil: cards stack on mobile, row label width responsive
 
+## [2.4.0] — 2026-04-19
+
+### Added
+- Route `/clientes` renamed to `/locales` across all links, nav, and revalidatePaths
+
+### Fixed (mobile — full admin pass)
+- Proyecciones: KPI cards text-sm on mobile, formula explainer hidden, chart scrolls horizontally (minWidth 540), table hides 4 cols progressively
+- Mora: KPI cards smaller on mobile, MoraTable hides Facturas + Saldo total
+- Pagos: table hides Fecha + Concepto on mobile
+- Gastos: KPI cards smaller, GastosChart explicit 200px height (Recharts fix), GastosTable meta.className column hiding
+- Locales: tabs overflow-x-auto, table hides Locales + Canon on mobile, text-xs throughout
+- Locales detail: KpiCard text-sm + truncate, Pagos table 3-col mobile, CarteraTable 3-col mobile
+- Medidores: KPI grid 2-col on mobile, controls row wraps, table 3-col mobile
+- Usuarios: stats grid 2-col, tab bar full-width, both tables 3-col mobile, edit modal stacks vertically + scrolls
+- Facturas: table 4-col mobile, text-xs throughout
+
 ## [Unreleased]
 
 ## [2.2.0] — 2026-04-19

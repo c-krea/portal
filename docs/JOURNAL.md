@@ -2,6 +2,28 @@
 
 ---
 
+## 2026-04-19 — Session 21: Full Admin Mobile Pass (v2.4.0)
+
+### What shipped
+- **Route rename**: `/clientes` → `/locales` everywhere (nav, links, actions, revalidatePaths)
+- **Proyecciones**: KPI text-sm mobile, formula hidden, chart overflow-x-auto minWidth:540, DetalleTable meta.className column hiding
+- **Mora**: KPI cards smaller, MoraTable progressive hiding (Facturas sm, Saldo total md)
+- **Pagos**: hide Fecha + Concepto on mobile
+- **Gastos**: KPI smaller, GastosChart explicit height fix (same Recharts flex chain bug as dashboard), GastosTable meta.className via TanStack module augmentation
+- **Locales**: tabs overflow-x-auto + shrink-0, table meta.className, text-xs throughout
+- **Locales detail**: KpiCard truncate, Pagos 3-col, CarteraTable meta.className
+- **Medidores**: grid-cols-2 KPIs, controls flex-wrap, table hide pattern
+- **Usuarios**: stats grid-cols-2, tab bar flex-1, tables text-xs, edit-tenant modal stacks (grid-cols-1 lg:grid-cols-2) + max-h-[90vh] scroll, all inputs/buttons text-xs
+- **Facturas**: table text-xs, 4-col mobile progressive hiding
+
+### Key decisions / patterns established
+- **Recharts always needs explicit px height** — `height="100%"` inside flex chain = 0. Use `style={{ height: Npx }}` on wrapper div. Now applied consistently: dashboard, proyecciones chart (overflow-x-auto wrapper), gastos pie.
+- **TanStack column hiding via meta.className** — add `declare module "@tanstack/react-table" { interface ColumnMeta<TData, TValue> { className?: string } }` then apply `meta.className` in both th and td. Used in: GastosTable, ClientesTable, CarteraTable.
+- **Custom table hiding** — add `hide?: string` field to COLS array, apply in th/td map. Used in: MoraTable, MedidoresAdminTable, DetalleTable.
+- **Mobile text sizing pattern**: `text-sm sm:text-xl` for KPI values in 2-col grids, `text-xs` for tables/tabs, `truncate` on COP values to prevent overflow.
+
+---
+
 ## 2026-04-19 — Session 20: Mobile, Portal P2, Tenant Accounts (v2.3.0)
 
 ### What shipped
