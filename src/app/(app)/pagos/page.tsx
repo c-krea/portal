@@ -123,7 +123,7 @@ export default async function PagosPage() {
                           </td>
                           <td className="px-4 py-3">
                             <Link
-                              href={`/clientes/${p.tenantId}`}
+                              href={`/locales/${p.tenantId}`}
                               className="text-xs text-blue-600 hover:underline"
                             >
                               Ver cliente

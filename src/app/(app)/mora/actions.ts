@@ -35,7 +35,7 @@ export async function calcularIntereses(
 
     revalidatePath("/mora")
     revalidatePath("/facturas")
-    revalidatePath("/clientes")
+    revalidatePath("/locales")
 
     return { success: true, summary }
   } catch (e) {

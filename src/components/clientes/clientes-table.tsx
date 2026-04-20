@@ -51,6 +51,13 @@ function filterByTab(rows: ClienteRow[], tab: Tab, vacantUnits: ClienteRow[]): C
   }
 }
 
+declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData, TValue> {
+    className?: string
+  }
+}
+
 const columns: ColumnDef<ClienteRow>[] = [
   {
     accessorKey: "cliente",
@@ -72,6 +79,7 @@ const columns: ColumnDef<ClienteRow>[] = [
     accessorKey: "unitNumbers",
     header: "Locales",
     enableSorting: false,
+    meta: { className: "hidden sm:table-cell" },
     cell: ({ getValue }) => {
       const units = getValue<string[]>()
       if (!units.length) return <span className="text-slate-400">—</span>
@@ -108,6 +116,7 @@ const columns: ColumnDef<ClienteRow>[] = [
     accessorKey: "canonTotal",
     header: "Canon Mensual",
     size: 130,
+    meta: { className: "hidden md:table-cell" },
     cell: ({ getValue }) => {
       const v = getValue<number>()
       return v > 0 ? (
@@ -203,13 +212,13 @@ export function ClientesTable({ data, vacantUnits }: { data: ClienteRow[]; vacan
       </div>
 
       {/* Tabs */}
-      <div className="mb-4 flex gap-1 border-b border-slate-200">
+      <div className="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200">
         {TABS.map(({ id, label }) => (
           <button
             key={id}
             onClick={() => setTab(id)}
             className={cn(
-              "flex items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium transition-colors",
+              "flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium transition-colors",
               tab === id
                 ? "border-blue-500 text-blue-600"
                 : "border-transparent text-slate-500 hover:text-slate-700"
@@ -241,7 +250,8 @@ export function ClientesTable({ data, vacantUnits }: { data: ClienteRow[]; vacan
                     style={{ width: header.column.columnDef.size }}
                     className={cn(
                       "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500",
-                      header.column.getCanSort() && "cursor-pointer select-none hover:text-slate-700"
+                      header.column.getCanSort() && "cursor-pointer select-none hover:text-slate-700",
+                      header.column.columnDef.meta?.className,
                     )}
                   >
                     <div className="flex items-center gap-1">
@@ -274,11 +284,11 @@ export function ClientesTable({ data, vacantUnits }: { data: ClienteRow[]; vacan
                   className={`border-b border-slate-50 hover:bg-slate-50 ${row.original.isVacant ? "" : "cursor-pointer"}`}
                   onClick={() => {
                     if (!row.original.isVacant && row.original.tenantId)
-                      window.location.href = `/clientes/${row.original.tenantId}`
+                      window.location.href = `/locales/${row.original.tenantId}`
                   }}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3">
+                    <td key={cell.id} className={cn("px-4 py-3", cell.column.columnDef.meta?.className)}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}

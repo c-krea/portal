@@ -211,7 +211,7 @@ export default async function FacturasPage({
                                 Ver
                               </Link>
                               <Link
-                                href={`/clientes/${f.tenantId}`}
+                                href={`/locales/${f.tenantId}`}
                                 className="text-xs text-slate-500 hover:underline"
                               >
                                 Cliente

@@ -64,7 +64,7 @@ export async function registrarPago(
 
     revalidatePath("/pagos")
     revalidatePath("/mora")
-    revalidatePath("/clientes")
+    revalidatePath("/locales")
     revalidatePath("/facturas")
 
     const { itemsCleared, totalApplied, remainder, allocations, ppTotal } = reconciliation
