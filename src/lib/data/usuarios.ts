@@ -21,6 +21,14 @@ export type PortalTenantRow = {
   businessEmail: string | null
   authUserId: string | null
   lastSignIn: string | null
+  // contract (null for multi-unit tenants — edit via Clientes)
+  contractId: string | null
+  canonBase: number | null
+  descuentoPct: number | null
+  prontoPagoPct: number | null
+  fechaInicio: string | null
+  fechaFin: string | null
+  descripcionDescuentos: string | null
 }
 
 export async function getPortalTenants(): Promise<PortalTenantRow[]> {
@@ -32,7 +40,14 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
       t.email AS business_email,
       STRING_AGG(u.unit_number, ', ' ORDER BY u.unit_number) AS units,
       STRING_AGG(u.id::text, ',' ORDER BY u.unit_number) AS unit_ids,
-      p.id AS auth_user_id
+      p.id AS auth_user_id,
+      MIN(c.id::text)                    AS contract_id,
+      MIN(c.canon_base::numeric)         AS canon_base,
+      MIN(c.descuento_pct::numeric)      AS descuento_pct,
+      MIN(c.pronto_pago_pct::numeric)    AS pronto_pago_pct,
+      MIN(c.fecha_inicio::text)          AS fecha_inicio,
+      MIN(c.fecha_fin::text)             AS fecha_fin,
+      MIN(c.descripcion_descuentos)      AS descripcion_descuentos
     FROM tenants t
     JOIN contracts c ON c.tenant_id = t.id AND c.status = 'activo'
     JOIN units u ON u.id = c.unit_id
@@ -81,7 +96,14 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
       portalEmail:   authEmail ?? (r.portal_email ? String(r.portal_email) : null),
       businessEmail: r.business_email ? String(r.business_email) : null,
       authUserId,
-      lastSignIn:    authUserId ? (lastSignInMap.get(authUserId) ?? null) : null,
+      lastSignIn:           authUserId ? (lastSignInMap.get(authUserId) ?? null) : null,
+      contractId:           r.contract_id ? String(r.contract_id) : null,
+      canonBase:            r.canon_base != null ? Number(r.canon_base) : null,
+      descuentoPct:         r.descuento_pct != null ? Number(r.descuento_pct) : null,
+      prontoPagoPct:        r.pronto_pago_pct != null ? Number(r.pronto_pago_pct) : null,
+      fechaInicio:          r.fecha_inicio ? String(r.fecha_inicio) : null,
+      fechaFin:             r.fecha_fin ? String(r.fecha_fin) : null,
+      descripcionDescuentos: r.descripcion_descuentos ? String(r.descripcion_descuentos) : null,
     }
   })
 }

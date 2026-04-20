@@ -39,7 +39,18 @@ export async function updatePortalEmail(tenantId: string, email: string) {
 export async function updateTenantUser(
   tenantId: string,
   unitIds: string[],
-  data: { nombre: string; portalEmail: string; unitNumber: string }
+  data: {
+    nombre: string
+    portalEmail: string
+    unitNumber: string
+    contractId?: string
+    canonBase?: number
+    descuentoPct?: number | null
+    prontoPagoPct?: number | null
+    fechaInicio?: string
+    fechaFin?: string | null
+    descripcionDescuentos?: string | null
+  }
 ) {
   if (!data.nombre.trim()) return { error: "El nombre es obligatorio" }
   const email = data.portalEmail.trim().toLowerCase()
@@ -69,7 +80,7 @@ export async function updateTenantUser(
     }
   }
 
-  // Update unit number(s) — only if single unit to avoid ambiguity
+  // Update unit number — only if single unit to avoid ambiguity
   const unitNum = data.unitNumber.trim()
   if (unitNum && unitIds.length === 1) {
     const { error: unitError } = await supabaseAdmin
@@ -77,6 +88,23 @@ export async function updateTenantUser(
       .update({ unit_number: unitNum })
       .eq("id", unitIds[0])
     if (unitError) return { error: `Tenant actualizado, pero error en local: ${unitError.message}` }
+  }
+
+  // Update contract fields if provided
+  if (data.contractId && data.canonBase != null) {
+    const { error: contractError } = await supabaseAdmin
+      .from("contracts")
+      .update({
+        canon_base:             data.canonBase,
+        descuento_pct:          data.descuentoPct ?? null,
+        pronto_pago_pct:        data.prontoPagoPct ?? null,
+        fecha_inicio:           data.fechaInicio ?? undefined,
+        fecha_fin:              data.fechaFin ?? null,
+        descripcion_descuentos: data.descripcionDescuentos ?? null,
+        updated_at:             new Date().toISOString(),
+      })
+      .eq("id", data.contractId)
+    if (contractError) return { error: `Info guardada, pero error en contrato: ${contractError.message}` }
   }
 
   revalidatePath("/usuarios")
