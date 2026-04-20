@@ -101,10 +101,12 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
     const authEmail = authEmailMap.get(String(r.auth_user_id))
     if (authEmail && authEmail !== r.portal_email) {
       backfills.push(
-        supabaseAdmin
-          .from("tenants")
-          .update({ portal_email: authEmail })
-          .eq("id", String(r.id))
+        Promise.resolve(
+          supabaseAdmin
+            .from("tenants")
+            .update({ portal_email: authEmail })
+            .eq("id", String(r.id))
+        )
       )
     }
   }
