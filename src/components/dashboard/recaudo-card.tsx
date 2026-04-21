@@ -61,18 +61,9 @@ export function RecaudoCard({ data }: { data: ProyectadoVsReal[] }) {
                       <td className="py-1.5 font-medium text-slate-700">{r.mes}</td>
                       <td className="py-1.5 text-right font-mono text-slate-600">{formatCOP(r.proyectado)}</td>
                       <td className="hidden sm:table-cell py-1.5 text-right font-mono">
-                        {r.recaudado > 0 ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="text-emerald-700">{formatCOP(r.recaudado)}</span>
-                            {r.recaudadoVencido > 0 && (
-                              <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                                +tardío
-                              </span>
-                            )}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
+                        {r.recaudado > 0
+                          ? <span className="text-emerald-700">{formatCOP(r.recaudado)}</span>
+                          : <span className="text-slate-300">—</span>}
                       </td>
                       <td className="hidden md:table-cell py-1.5 text-right font-mono">
                         {r.ppOtorgado > 0

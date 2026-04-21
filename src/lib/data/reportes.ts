@@ -23,12 +23,9 @@ export type ProyectadoVsReal = {
   mes: string
   month: number
   proyectado: number
-  recaudado: number        // total collected for this invoice month (atTiempo + vencido)
-  recaudadoATiempo: number // paid on time (RECAUDADO clasificacion)
-  recaudadoVencido: number // paid late for this invoice month (VENCIDO clasificacion)
-  ppOtorgado: number
-  pendiente: number
-  recaudadoCash: number    // cash actually received this calendar month (by fecha_recaudo)
+  recaudado: number   // cash recibido este mes (fecha_recaudo)
+  ppOtorgado: number  // descuento PP concedido
+  pendiente: number   // proyectado - recaudado - ppOtorgado
   diferencia: number
 }
 
@@ -106,7 +103,7 @@ export async function getMonthlyCollections(year = 2026): Promise<MonthlyCollect
 }
 
 export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal[]> {
-  const [proyRows, invRows, cashRows] = await Promise.all([
+  const [proyRows, recRows] = await Promise.all([
     execute(`
       SELECT
         month,
@@ -116,24 +113,11 @@ export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal
       GROUP BY month
       ORDER BY month
     `),
-    // Invoice basis: group by the month the invoice belongs to (fecha_factura)
     execute(`
       SELECT
-        EXTRACT(MONTH FROM fecha_factura)::int AS month,
-        COALESCE(SUM(valor_final) FILTER (WHERE siesa_clasificacion = 'RECAUDADO'), 0)::numeric AS recaudado_a_tiempo,
-        COALESCE(SUM(valor_final) FILTER (WHERE siesa_clasificacion = 'VENCIDO'),   0)::numeric AS recaudado_vencido,
+        EXTRACT(MONTH FROM fecha_recaudo)::int          AS month,
+        COALESCE(SUM(valor_final), 0)::numeric          AS recaudado,
         COALESCE(SUM(pronto_pago_aplicado), 0)::numeric AS pp_otorgado
-      FROM payments
-      WHERE EXTRACT(YEAR FROM fecha_factura) = ${year}
-        AND siesa_clasificacion IN ('RECAUDADO', 'VENCIDO')
-      GROUP BY month
-      ORDER BY month
-    `),
-    // Cash basis: group by when cash was actually received (fecha_recaudo)
-    execute(`
-      SELECT
-        EXTRACT(MONTH FROM fecha_recaudo)::int         AS month,
-        COALESCE(SUM(valor_final), 0)::numeric         AS recaudado_cash
       FROM payments
       WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
         AND siesa_clasificacion IN ('RECAUDADO', 'VENCIDO')
@@ -144,17 +128,13 @@ export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal
 
   return MONTH_LABELS.map((label, i) => {
     const m = i + 1
-    const pRow    = (proyRows  as Array<Record<string, unknown>>).find((r) => Number(r.month) === m)
-    const iRow    = (invRows   as Array<Record<string, unknown>>).find((r) => Number(r.month) === m)
-    const cRow    = (cashRows  as Array<Record<string, unknown>>).find((r) => Number(r.month) === m)
-    const proyectado       = Number(pRow?.proyectado          ?? 0)
-    const recaudadoATiempo = Number(iRow?.recaudado_a_tiempo  ?? 0)
-    const recaudadoVencido = Number(iRow?.recaudado_vencido   ?? 0)
-    const ppOtorgado       = Number(iRow?.pp_otorgado         ?? 0)
-    const recaudadoCash    = Number(cRow?.recaudado_cash      ?? 0)
-    const recaudado        = recaudadoATiempo + recaudadoVencido
-    const pendiente        = Math.max(proyectado - recaudado - ppOtorgado, 0)
-    return { mes: label, month: m, proyectado, recaudado, recaudadoATiempo, recaudadoVencido, ppOtorgado, pendiente, recaudadoCash, diferencia: recaudado - proyectado }
+    const pRow = (proyRows as Array<Record<string, unknown>>).find((r) => Number(r.month) === m)
+    const rRow = (recRows  as Array<Record<string, unknown>>).find((r) => Number(r.month) === m)
+    const proyectado = Number(pRow?.proyectado  ?? 0)
+    const recaudado  = Number(rRow?.recaudado   ?? 0)
+    const ppOtorgado = Number(rRow?.pp_otorgado ?? 0)
+    const pendiente  = Math.max(proyectado - recaudado - ppOtorgado, 0)
+    return { mes: label, month: m, proyectado, recaudado, ppOtorgado, pendiente, diferencia: recaudado - proyectado }
   })
 }
 
