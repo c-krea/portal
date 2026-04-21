@@ -12,14 +12,16 @@ export async function getDashboardData() {
 }
 
 async function getPortfolioStats() {
-  const [rows1, rows2] = await Promise.all([
+  const [rows1, rows2, rows3] = await Promise.all([
     execute(`SELECT ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado), 0) * 1.19) AS portfolio_total FROM projections WHERE year = 2026`),
-    execute(`SELECT COUNT(DISTINCT tenant_id)::int AS active_clients FROM contracts WHERE status IN ('activo', 'critico')`),
+    execute(`SELECT COUNT(DISTINCT unit_id)::int AS active_clients FROM contracts WHERE status IN ('activo', 'critico')`),
+    execute(`SELECT COUNT(*)::int AS total_units FROM units`),
   ])
 
   return {
     portfolioTotal: Number(rows1[0]?.portfolio_total ?? 0),
     activeClients: Number(rows2[0]?.active_clients ?? 0),
+    totalUnits: Number(rows3[0]?.total_units ?? 0),
   }
 }
 

@@ -9,6 +9,11 @@ import { AlertTriangle, TrendingUp, Clock, Flame } from "lucide-react"
 export default async function DashboardPage() {
   const { portfolio, mora, chart } = await getDashboardData()
 
+  const occupancyPercent =
+    portfolio.totalUnits > 0
+      ? Math.round((portfolio.activeClients / portfolio.totalUnits) * 100)
+      : 0
+
   const moraRatio =
     portfolio.activeClients > 0
       ? Math.round((mora.clientesEnMora / portfolio.activeClients) * 100)
@@ -60,7 +65,7 @@ export default async function DashboardPage() {
       <PageHeader title="Resumen del Portafolio" />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
             Recaudo Proyectado 2026
@@ -109,6 +114,26 @@ export default async function DashboardPage() {
               <div
                 className="h-full rounded-full bg-rose-500"
                 style={{ width: `${moraRatio}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+            Ocupación
+          </p>
+          <p className="mt-1 text-2xl font-bold text-slate-900">
+            {occupancyPercent}%
+          </p>
+          <div className="mt-2 space-y-1">
+            <p className="text-xs text-slate-500">
+              {portfolio.activeClients} de {portfolio.totalUnits} locales ocupados
+            </p>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="h-full rounded-full bg-blue-500"
+                style={{ width: `${occupancyPercent}%` }}
               />
             </div>
           </div>

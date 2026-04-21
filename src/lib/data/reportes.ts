@@ -51,6 +51,7 @@ export async function getAgingBuckets(): Promise<AgingBucket[]> {
       COALESCE(SUM(valor_vencido), 0)::numeric   AS valor_vencido,
       COALESCE(SUM(interes_acumulado), 0)::numeric AS interes_acumulado
     FROM cartera
+    WHERE saldo > 0
     GROUP BY bucket
     ORDER BY bucket
   `)
@@ -85,7 +86,7 @@ export async function getMonthlyCollections(year = 2026): Promise<MonthlyCollect
       COUNT(*)::int                          AS count
     FROM payments
     WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
-      AND status != 'anulado'
+      AND siesa_clasificacion IN ('RECAUDADO', 'VENCIDO')
     GROUP BY month
     ORDER BY month
   `)
@@ -119,7 +120,7 @@ export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal
         COALESCE(SUM(pronto_pago_aplicado), 0)::numeric AS pp_otorgado
       FROM payments
       WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
-        AND status != 'anulado'
+        AND siesa_clasificacion IN ('RECAUDADO', 'VENCIDO')
       GROUP BY month
       ORDER BY month
     `),
@@ -143,7 +144,7 @@ export async function getReporteSummary(year = 2026): Promise<ReporteSummary> {
   const [carteraRow, pagosRow] = await Promise.all([
     execute(`
       SELECT
-        COALESCE(SUM(saldo), 0)::numeric             AS total_cartera,
+        COALESCE(SUM(saldo) FILTER (WHERE saldo > 0), 0)::numeric AS total_cartera,
         COALESCE(SUM(valor_vencido) FILTER (WHERE dias_mora > ${grace}), 0)::numeric AS total_vencido,
         COALESCE(SUM(interes_acumulado), 0)::numeric AS total_interes
       FROM cartera
@@ -152,7 +153,7 @@ export async function getReporteSummary(year = 2026): Promise<ReporteSummary> {
       SELECT COALESCE(SUM(valor_final), 0)::numeric AS total_recaudado
       FROM payments
       WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
-        AND status != 'anulado'
+        AND siesa_clasificacion IN ('RECAUDADO', 'VENCIDO')
     `),
   ])
 

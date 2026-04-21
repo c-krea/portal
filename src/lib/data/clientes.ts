@@ -12,6 +12,37 @@ export type ClienteRow = {
   isVacant?: boolean
 }
 
+export type LocalesKPIs = {
+  totalUnits: number
+  occupiedUnits: number
+  carteraTotal: number
+  localesEnMora: number
+  recaudadoEsteMes: number
+}
+
+export async function getLocalesKPIs(): Promise<LocalesKPIs> {
+  const rows = await execute(`
+    SELECT
+      (SELECT COUNT(*) FROM units)                                        AS total_units,
+      (SELECT COUNT(DISTINCT unit_id) FROM contracts
+        WHERE status IN ('activo', 'critico'))                            AS occupied_units,
+      (SELECT COALESCE(SUM(saldo), 0) FROM cartera WHERE saldo > 0)      AS cartera_total,
+      (SELECT COUNT(DISTINCT tenant_id) FROM cartera
+        WHERE dias_mora > 0 AND valor_vencido > 0)                       AS locales_en_mora,
+      (SELECT COALESCE(SUM(valor_final), 0) FROM payments
+        WHERE date_trunc('month', fecha_recaudo) = date_trunc('month', CURRENT_DATE)
+          AND siesa_clasificacion IN ('RECAUDADO', 'VENCIDO'))            AS recaudado_este_mes
+  `)
+  const r = rows[0] as Record<string, unknown>
+  return {
+    totalUnits:       Number(r.total_units       ?? 0),
+    occupiedUnits:    Number(r.occupied_units    ?? 0),
+    carteraTotal:     Number(r.cartera_total     ?? 0),
+    localesEnMora:    Number(r.locales_en_mora   ?? 0),
+    recaudadoEsteMes: Number(r.recaudado_este_mes ?? 0),
+  }
+}
+
 export async function getClienteRows(): Promise<ClienteRow[]> {
   const rows = await execute(`
     SELECT

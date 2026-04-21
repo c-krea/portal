@@ -10,7 +10,7 @@ import { X, ImageIcon } from "lucide-react"
 type SortKey = "unitNumber" | "tenantName" | "kwh" | "desvPct" | "totalEnergia"
 type SortDir = "asc" | "desc"
 
-function ValidationBadge({ vs }: { vs: MedidorAdminRow["validationStatus"] }) {
+function ValidationBadge({ vs }: { vs: string | null }) {
   if (vs === "aprobado")
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
