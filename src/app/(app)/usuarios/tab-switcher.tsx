@@ -38,11 +38,10 @@ function CreateAccountButton({ tenantId }: { tenantId: string }) {
 function lastSignInLabel(iso: string | null): string {
   if (!iso) return "Nunca"
   const d = new Date(iso)
-  const diffDays = Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24))
-  if (diffDays === 0) return "Hoy"
-  if (diffDays === 1) return "Ayer"
-  if (diffDays < 30) return `Hace ${diffDays} días`
-  return d.toLocaleDateString("es-CO", { day: "2-digit", month: "short", year: "numeric" })
+  return d.toLocaleString("es-CO", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  })
 }
 
 const ROLE_LABELS: Record<string, { label: string; cls: string }> = {
