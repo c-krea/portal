@@ -15,18 +15,94 @@ function periodoLabel(periodo: string) {
   return date.toLocaleDateString("es-CO", { month: "short", year: "numeric" })
 }
 
+function MeterDigitInput({
+  digits,
+  onChange,
+}: {
+  digits: string[]
+  onChange: (digits: string[]) => void
+}) {
+  const refs = useRef<(HTMLInputElement | null)[]>([])
+
+  function handleKeyDown(i: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace") {
+      if (digits[i] !== "") {
+        const next = [...digits]
+        next[i] = ""
+        onChange(next)
+      } else if (i > 0) {
+        refs.current[i - 1]?.focus()
+      }
+    } else if (e.key === "ArrowLeft" && i > 0) {
+      refs.current[i - 1]?.focus()
+    } else if (e.key === "ArrowRight" && i < 4) {
+      refs.current[i + 1]?.focus()
+    }
+  }
+
+  function handleInput(i: number, e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value.replace(/\D/g, "").slice(-1)
+    const next = [...digits]
+    next[i] = val
+    onChange(next)
+    if (val && i < 4) refs.current[i + 1]?.focus()
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault()
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 5)
+    const next = [...digits]
+    for (let j = 0; j < 5; j++) next[j] = pasted[j] ?? ""
+    onChange(next)
+    const lastFilled = Math.min(pasted.length, 4)
+    refs.current[lastFilled]?.focus()
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {digits.map((d, i) => (
+        <input
+          key={i}
+          ref={(el) => { refs.current[i] = el }}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={d}
+          onChange={(e) => handleInput(i, e)}
+          onKeyDown={(e) => handleKeyDown(i, e)}
+          onPaste={handlePaste}
+          onFocus={(e) => e.target.select()}
+          className="h-14 w-11 rounded-lg border-2 border-slate-300 bg-white text-center text-2xl font-bold tabular-nums text-slate-900 focus:border-blue-500 focus:outline-none"
+        />
+      ))}
+      {/* 6th square — decimal indicator, not editable */}
+      <div className="relative h-14 w-11 rounded-lg border-2 border-red-300 bg-red-50 flex items-center justify-center overflow-hidden">
+        <span className="text-2xl font-bold tabular-nums text-red-300">?</span>
+        {/* crossed-out overlay */}
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 44 56" preserveAspectRatio="none">
+          <line x1="0" y1="0" x2="44" y2="56" stroke="#fca5a5" strokeWidth="2" />
+          <line x1="44" y1="0" x2="0" y2="56" stroke="#fca5a5" strokeWidth="2" />
+        </svg>
+      </div>
+    </div>
+  )
+}
+
 export function MedidorForm({
   periodo,
   lecturaAnteriorRef,
+  tarifaKwh,
   history,
 }: {
   periodo: string
   lecturaAnteriorRef: number
+  tarifaKwh: number
   history: PortalMedidorHistoryRow[]
 }) {
   const router = useRouter()
   const [state, action, pending] = useActionState(submitLectura, initial)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [digits, setDigits] = useState(["", "", "", "", ""])
 
   useEffect(() => {
     if (state.success) router.refresh()
@@ -153,7 +229,7 @@ export function MedidorForm({
             <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
               Lectura anterior:{" "}
               <span className="font-semibold text-slate-900">
-                {lecturaAnteriorRef.toLocaleString("es-CO")} kWh
+                {String(Math.floor(lecturaAnteriorRef)).padStart(5, "0")} kWh
               </span>
             </div>
 
@@ -162,18 +238,53 @@ export function MedidorForm({
                 Lectura actual (kWh) <span className="text-rose-500">*</span>
               </label>
               <input
-                type="number"
+                type="hidden"
                 name="lecturaActual"
-                min={lecturaAnteriorRef}
-                step="0.01"
-                required
-                placeholder={`Mínimo ${lecturaAnteriorRef}`}
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-lg font-semibold tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={digits.join("")}
               />
-              <p className="mt-1 text-xs text-slate-400">
-                Número que aparece en la pantalla del contador eléctrico.
+              <MeterDigitInput digits={digits} onChange={setDigits} />
+              <p className="mt-1.5 text-xs text-slate-400">
+                Ingresa los 5 dígitos negros del contador. El dígito rojo (decimal) no se registra.
               </p>
             </div>
+
+            {/* ── Live preview ── */}
+            {digits.some(d => d !== "") && (() => {
+              const lecturaActual = Number(digits.join("") || "0")
+              const consumo = Math.max(0, lecturaActual - Math.floor(lecturaAnteriorRef))
+              const total = consumo * tarifaKwh
+              const allFilled = digits.every(d => d !== "")
+              return (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 divide-y divide-slate-200 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm text-slate-500">Lectura anterior</span>
+                    <span className="font-semibold tabular-nums text-slate-700">
+                      {String(Math.floor(lecturaAnteriorRef)).padStart(5, "0")} kWh
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm text-slate-500">Lectura este mes</span>
+                    <span className="font-semibold tabular-nums text-slate-700">
+                      {digits.join("").padStart(5, "0")} kWh
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm text-slate-500">Diferencia</span>
+                    <span className="font-semibold tabular-nums text-slate-900">
+                      {consumo.toLocaleString("es-CO")} kWh
+                    </span>
+                  </div>
+                  {allFilled && tarifaKwh > 0 && (
+                    <div className="flex items-center justify-between px-4 py-3 bg-emerald-50">
+                      <span className="text-sm font-medium text-emerald-700">Total estimado energía</span>
+                      <span className="font-bold tabular-nums text-emerald-800">
+                        $ {Math.round(total).toLocaleString("es-CO")}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
 
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">

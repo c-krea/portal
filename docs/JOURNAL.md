@@ -2,6 +2,222 @@
 
 ---
 
+## 2026-04-22 — Session 27: Electricity Billing Research + Medidor Portal UX
+
+### What we did
+
+Deep research session: analyzed Excel `Consumo Energia xlocales 2026.xlsx` (15 months, Jan 2025–Mar 2026), cross-referenced with DB, and designed the full electricity billing feature. No code shipped yet — research and design only.
+
+Also shipped several medidor portal UX improvements (same session).
+
+---
+
+### Medidor portal UX shipped
+
+**Digit input redesign** (`src/app/(portal)/portal/medidor/form.tsx`):
+- Replaced single number input with 5 individual digit boxes + 1 red crossed-out box
+- Red box = decimal digit on real meter — always changing, so crossed out, non-editable
+- Auto-advance on type, backspace goes back, paste fills all 5
+- Hidden input submits the 5 digits joined as whole number
+
+**Live preview panel** (appears as digits are typed):
+- Lectura anterior / Lectura este mes / Diferencia / Total estimado energía
+- Total only shows once all 5 digits filled AND tarifa > 0
+- `tarifaKwh` fetched from previous period's meter_readings row
+
+**Submitted state redesign** (`src/app/(portal)/portal/medidor/page.tsx`):
+- "Lectura anterior del mes" — now large, prominent (slate card)
+- "Lectura enviada este mes" — same green card
+- "Consumo del mes" — new blue card showing the difference in kWh
+
+**Zero-padding display** — all meter readings in the portal now show as 5-digit zero-padded strings (`09057` not `9,057.8`). Helper `meterDisplay(value)` = `String(Math.floor(value)).padStart(5, "0")`.
+- Applied ONLY to this medidor client view + electric bill context. Not in admin views.
+
+**Bug fixes**:
+- `prevRows` query now excludes current period (`AND periodo < '${periodo}'`) so lectura anterior doesn't accidentally return the current month's own reading
+- `withinDeadline` temporarily hardcoded to `true` for testing — **must revert to `today <= 10` before go-live**
+
+---
+
+### Electricity billing — full research findings
+
+#### How the current Excel works (source of truth)
+File: `Consumo Energia xlocales 2026.xlsx` — 15 monthly sheets.
+
+**The formula (Excel column F):**
+```
+Pago = MROUND( consumo_kWh × tarifa , 50 )
+```
+
+**Tarifa derivation:**
+```
+tarifa = Valor Factura (total COP) ÷ kWh Factura (utility's reported kWh)
+```
+This is computed ONCE per invoice per month. Same tarifa applied to all units on that invoice.
+
+**Important:** Unit meter total ≠ utility invoice kWh (~43% discrepancy in Jan 2025). Different measurement periods (meters read 7th–7th, utility bills 19th–19th). This is expected and normal — the formula still works because tarifa is derived from the invoice, not from summing all unit meters.
+
+#### The 6 invoices — confirmed unit mapping
+
+| Address | Provider | Units |
+|---------|----------|-------|
+| Cra 27 10 65 (F2) | NUE | 101–126, 801–807 |
+| Cra 27 10 71 (IMPARES) | ENEL | 201, 203, 205, 207, 209, 211, 213 |
+| Cra 27 10 73 (PARES) | ENEL | 202, 204, 206, 208, 210, 212, 214 |
+| Calle 11 27 33 (IMPARES) | NEU | 501, 503, 505, 507, 509, 511, 513, 515, 517, 519 |
+| Calle 11 27 39 (PARES) | NEU REYMON | 502, 504, 506A, 506B, 508, 510, 512, 514, 516, 518, 520 |
+| Cra 27 10 79 | ENEL | 301–416 |
+
+506A and 506B confirmed as separate units in DB (`ENT5-506A`, `ENT5-506B`).
+Units 808–821 (internal C-Krea departments) do NOT pay electricity — excluded from billing.
+
+#### Monthly workflow (real process)
+1. End of month: utility sends 6 invoices (one per address above)
+2. Admin inputs for each invoice: `Valor Factura` (COP) + `kWh Factura`
+3. Portal computes `tarifa = valor ÷ kwh`
+4. Each unit's charge = `MROUND(consumo × tarifa, 50)` using its address group's tarifa
+5. Client submits reading days 1–10 of following month
+
+#### Historical data status
+- All data in `meter_readings` up to March 2026 was imported from ERP/Excel — `submitted_by = null`
+- `tarifa_kwh` column is unreliable for historical data (0 for most units, import errors for some like 108–109 showing 3664.43)
+- `total_energia` column IS correct (imported pre-calculated from Excel)
+- Treat all pre-portal data as legacy — don't try to recalculate from tarifa_kwh
+
+---
+
+### Proposed DB design (not yet built — pending approval)
+
+**1. Tag units with their address group (one-time):**
+```sql
+ALTER TABLE units ADD COLUMN electricity_group text;
+-- values: 'CRA2710065', 'CRA2710071', 'CRA2710073',
+--         'CLL112733', 'CLL112739', 'CRA2710079'
+```
+
+**2. New table `electricity_invoices`:**
+```sql
+CREATE TABLE electricity_invoices (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id uuid NOT NULL,
+  periodo text NOT NULL,           -- '2026-04'
+  electricity_group text NOT NULL, -- which of the 6 addresses
+  direccion text NOT NULL,         -- human label
+  proveedor text NOT NULL,         -- NUE, ENEL, NEU, NEU REYMON
+  fecha_factura date,
+  valor_factura numeric NOT NULL,
+  kwh_factura numeric NOT NULL,
+  tarifa_kwh numeric GENERATED ALWAYS AS (valor_factura / kwh_factura) STORED,
+  created_at timestamptz DEFAULT now()
+);
+```
+
+**Charge calculation per unit per month:**
+```
+unit_total_energia = MROUND(unit_kwh × invoice.tarifa_kwh, 50)
+```
+
+### Open decisions before building
+- Admin screen: one page with 6 invoice rows per month, or separate form per invoice?
+- Does the charge get written back to `meter_readings.total_energia` once admin enters invoice, or computed on the fly?
+- Decimal cleanup in DB: 1,142 rows with decimal lecturas need to be floored — awaiting green light
+
+---
+
+## 2026-04-21 — Session 26: Recaudo Data Pipeline Audit
+
+### What we did
+
+Deep audit of why payment numbers differ between the portal and Power BI. Traced every filter from the original Excel setup through the live ERP sync. Full findings in `docs/recaudo-cartera-audit.md`.
+
+### Key findings
+
+1. **Excel data was pre-cleaned by the accounting team** — it already had credit notes, reversals, and noise removed before we received it. Our queries worked because the data was already clean, not because the queries were robust.
+
+2. **001-RK duplication exists in BOTH Excel and ERP** — this was confirmed by a live test (a $301,000 payment appears twice in both). So the duplication is consistent and expected, not a problem introduced by the ERP sync.
+
+3. **`siesa_clasificacion` is completely unreliable** — proved three ways:
+   - Filtering to RECAUDADO + VENCIDO gives a negative all-time total (-$4.6B)
+   - NO PROYECTADO alone totals $12.6B all-time (impossible for real rent)
+   - Live test (MATICES COMUNICACION VISUAL SAS, NIT 900547519): the same payment gets RECAUDADO on the `001-RK` row and NO PROYECTADO on the `RK` row. Same money, same date, different classification. Never use this field as a filter.
+
+4. **`siesa_cruce` is the reliable filter** — FVS = real invoice payment. NVS = credit note. RK = reversal. Only FVS rows represent genuine rent collection.
+
+5. **One Siesa data entry error confirmed** — FUSION GRAFIK SAS (NIT 900984500), RK-485 + 001-RK-485, cruce FVS-45643, $4,215,750,000 each. Handled by a value threshold filter, not deletion.
+
+### The 4 correct filters (apply in this order)
+
+| Order | Filter | What it removes |
+|-------|--------|-----------------|
+| 1st | Zona = C-KREA | Other companies (applied at sync time via NIT matching) |
+| 2nd | `siesa_cruce LIKE 'FVS-%'` | Credit notes, reversals, cancellations |
+| 3rd | 001-RK dedup | Bookkeeping duplicate rows |
+| 4th | `valor_final < 1,000,000,000` | Siesa data entry errors |
+
+### Results with correct filters — March 2026
+
+| Portal (4 filters) | Power BI | Gap |
+|--------------------|----------|-----|
+| $242,322,859 | $236,800,000 | $5.5M (2.3%) |
+
+Gap is small and unexplained. Previous gap before this audit was much larger (portal showed wrong numbers in both directions depending on which broken filter was applied).
+
+### What changed in the codebase
+
+Applied all 4 filters to `src/lib/data/pagos.ts` — all three functions updated:
+
+**`getPagosKPIs`** — added `siesa_cruce LIKE 'FVS-%'` and `valor_final < 1000000000` to the `deduped` CTE. The 001-RK dedup was already there. Removed the old `siesa_clasificacion` filter.
+
+**`getPagosBuckets`** — same two filters added to its `deduped` CTE.
+
+**`getPagos`** — same three filters added. Also fixed a pre-existing bug: `LEFT JOIN contracts ON tenant_id` was duplicating rows for the 12 multi-unit tenants. Replaced with a correlated subquery for `unit_number` (same pattern used in `getPagosBuckets`).
+
+**Verified in DB before and after**: March 2026 KPI = $242,322,859. Bucket totals (temprano $113.4M + tardio $99.6M + mora $29.3M) = $242.3M exactly. KPI and buckets are now consistent.
+
+### Open questions
+
+- Why does the row count jump from ~50 to 128+ per month starting May 2025? Possible Siesa config change.
+- What explains the remaining $5.5M gap vs Power BI for March 2026?
+
+---
+
+## 2026-04-21 — Session 25: PP Histórico + Pagos Month Filter (v2.7.0)
+
+### What shipped
+
+- **Pagos month filter**: URL-based `?month=YYYY-MM` param. KPI cards + table both filter to selected month. Dropdown shows last 12 months. Defaults to current month. "Mes anterior" KPI compares to the month before the selected one.
+- **Sidebar reorder**: Resumen → Proyecciones → Mora → Pagos → Gastos → Medidores → Locales → Usuarios
+- **PP histórico feature** (biggest change):
+  - DB: `pp_historico_pct NUMERIC(5,2)` + `pp_historico_pagos INTEGER` added to `tenants` table
+  - Backfilled per-tenant historical PP usage rate from all payments (tenants with ≥10 payments get real rate; <10 get 17.99% global fallback)
+  - All projection queries updated to apply expected PP per-tenant, per-row
+  - Phase discount exclusion enforced: `CASE WHEN p.descuento_proyectado > 0 THEN 0 ELSE pp_pct × pp_historico_pct END`
+  - Dashboard `getProyectadoVsReal` + `getPortfolioStats` updated to use expected projection
+  - Proyecciones UI: new "Recaudo esperado" KPI card, formula explainer updated, chart uses `proyectadoEsperado`, detail table has "PP hist." column with green/amber/grey badges
+
+### Key decisions
+
+- **Expected vs conservative**: switched from conservative (PP=0) to expected (PP × historical rate). Conservative was making cumplimiento always look low. Expected is more realistic for day-to-day tracking.
+- **Per-tenant, never global**: each tenant's historical rate is applied individually. Global average (17.99%) only used as temporary fallback for thin-history tenants (<10 payments).
+- **Phase discount exclusivity bug fixed**: original implementation wrongly applied `c.pronto_pago_pct` to ALL 12 months including those with active phase discounts. Fix: per-row CASE WHEN check on `p.descuento_proyectado > 0`.
+- **No stored data changed**: `projections` table unchanged. Expected PP computed on the fly in query layer. Means rates auto-refresh as payment history grows.
+- **PP hist. badge**: grey = fallback (<10 payments), amber = low-moderate usage, green = ≥30% usage rate.
+
+### Monthly impact (conservative → expected)
+
+- Jan–May: −$2.1–2.8M/month (many phase discounts still active → PP blocked for those months)
+- Jun–Dec: −$6.0–6.6M/month (phase discounts expire → more contracts PP-eligible)
+- Annual total: ~$3,113M → ~$3,079M expected
+
+### Data facts confirmed
+
+- 66 tenants updated with PP rates
+- Highest PP usage: IN DESIGN 55%, MI MUG 53%, TICETTE STILE 50%
+- Lowest: BECERRA 0% (140 payments, never once), FUSION GRAFIK 1%, IMPROEXPRESS 2%
+- IMAGENN (biggest tenant): 6% — minimal impact on projection
+
+---
+
 ## 2026-04-20 — Session 23: Meter Validation Upgrade (v2.6.0)
 
 ### What shipped

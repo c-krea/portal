@@ -6,6 +6,61 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [2.9.0] — 2026-04-22
+
+### Added
+- **Electricity billing — full feature** (`/medidores/facturas`):
+  - New DB table `electricity_invoices` — admin enters 6 invoices per month (one per address group), tarifa auto-computed as `valor_factura ÷ kwh_factura`
+  - New `electricity_group` column on `units` — all 84 units tagged to one of 6 address groups (CRA2710065, CRA2710071, CRA2710073, CLL112733, CLL112739, CRA2710079)
+  - Admin page at `/medidores/facturas` with month/year selector, 6-row invoice table, live tarifa display, and upsert save
+  - Link from `/medidores` page to facturas sub-page
+  - New `src/lib/data/electricity.ts` — `getElectricityInvoices`, `getElectricityTarifaForUnit`, `ELECTRICITY_GROUPS` constant
+- **Client portal medidor — full redesign** (`/portal/medidor`):
+  - Digit input: 5 individual boxes (one digit each) + 1 red crossed-out box (decimal indicator, non-editable). Auto-advance, backspace, paste support.
+  - Live preview panel: lectura anterior / lectura este mes / diferencia / total estimado (shown once all 5 digits filled and tarifa > 0)
+  - Submitted view: 4 cards — lectura anterior, lectura enviada, consumo del mes, total energía a pagar
+  - Total energía card: green when tarifa available, grey "Tarifa pendiente de liquidación" when admin hasn't entered invoice yet
+  - Photo placeholder stretches to match height of 4 cards
+  - All meter readings display as 5-digit zero-padded strings (`09057` not `9,057.8`) — electric meter context only
+  - Client portal tarifa now sourced from `electricity_invoices` (real invoice data) instead of historical `meter_readings.tarifa_kwh`
+
+### Fixed
+- `prevRows` query now excludes current period (`AND periodo < '${periodo}'`) — prevents current month's own reading from being used as lectura anterior
+
+---
+
+## [2.8.0] — 2026-04-21
+
+### Changed
+- **Pagos — correct payment filters applied across all three queries** (`getPagosKPIs`, `getPagosBuckets`, `getPagos`):
+  - Added `siesa_cruce LIKE 'FVS-%'` — keeps only real invoice payments, excludes credit notes (NVS), reversals (RK), cancellations
+  - Added `valor_final < 1,000,000,000` — excludes Siesa data entry errors (confirmed bad entry: FUSION GRAFIK SAS RK-485, $4.2B, April 2024)
+  - Existing 001-RK dedup retained — removes bookkeeping duplicate rows
+  - `siesa_clasificacion` filter removed entirely — proved unreliable in both directions (same payment gets different classifications on its two rows)
+- **`getPagos` list query**: replaced `LEFT JOIN contracts` (caused row duplication for 12 multi-unit tenants) with correlated subquery for `unit_number`
+
+### Result
+- Pagos KPI "Recaudado" for March 2026: $242,322,859 (vs Power BI $236.8M — 2.3% gap, down from much larger errors before)
+- Bucket cards (temprano / tardio / mora) now sum exactly to KPI total
+- Full audit and filter rationale: `docs/recaudo-cartera-audit.md`
+
+---
+
+## [2.7.0] — 2026-04-21
+
+### Added
+- **PP histórico por cliente**: per-tenant historical early-payment rate stored on `tenants.pp_historico_pct`. Computed from full ERP payment history. Tenants with <10 payments use global average (17.99%) as fallback.
+- **Expected projection model**: all projection queries now apply per-tenant PP rate. Phase discount exclusivity enforced per row — PP = 0 in any month where a phase discount is active.
+- Proyecciones page: "Recaudo esperado" KPI card, "PP esperado" card, formula explainer updated, chart shows expected amounts, detail table has "PP hist." column.
+- Dashboard `portfolioTotal` + `getProyectadoVsReal` both use expected projection.
+- Pagos page: month filter dropdown (`?month=YYYY-MM`). KPI cards and table both filter to selected month.
+- Sidebar reordered: Resumen → Proyecciones → Mora → Pagos → Gastos → Medidores → Locales → Usuarios.
+
+### Fixed
+- Projection queries were applying `c.pronto_pago_pct` to all 12 months including those with active phase discounts — now correctly 0 for those months.
+
+---
+
 ## [2.6.0] — 2026-04-20
 
 ### Added

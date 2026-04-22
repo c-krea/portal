@@ -4,8 +4,9 @@ import { PageHeader } from "@/components/layout/page-header"
 import { getMedidoresAdmin, getUnitsWithMeters } from "@/lib/data/medidores"
 import { formatCOP } from "@/lib/formatters"
 import { execute } from "@/lib/db/executor"
-import { CheckCircle, Clock, AlertCircle, Zap } from "lucide-react"
+import { CheckCircle, Clock, AlertCircle, Zap, FileText } from "lucide-react"
 import { MedidoresAdminTable } from "@/components/medidores/medidores-admin-table"
+import Link from "next/link"
 
 const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
 
@@ -53,6 +54,16 @@ export default async function MedidoresPage({
   return (
     <>
       <PageHeader title="Medidores de Energía" />
+
+      <div className="mb-5 flex justify-end">
+        <Link
+          href={`/medidores/facturas?periodo=${periodo}`}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+        >
+          <FileText className="h-4 w-4 text-slate-500" />
+          Facturas de Energía
+        </Link>
+      </div>
 
       {/* Year + Period tabs */}
       <div className="mb-5 flex flex-wrap items-center gap-3">
