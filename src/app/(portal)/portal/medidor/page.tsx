@@ -35,7 +35,7 @@ export default async function MedidorPage() {
 
   const periodo = currentPeriodo()
   const today = new Date().getDate()
-  const withinDeadline = true // TODO: revert to `today <= 10` after testing
+  const withinDeadline = today <= 10
 
   const companies = await execute(`SELECT id FROM companies LIMIT 1`)
   const companyId = String(companies[0].id)
