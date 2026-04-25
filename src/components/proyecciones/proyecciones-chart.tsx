@@ -20,9 +20,12 @@ type Row = {
   baseNeta: number
   iva: number
   proyectado: number
+  ppEsperado: number
+  proyectadoEsperado: number
 }
 
-const NAVY = "#1e3a5f"
+const NAVY     = "#1e3a5f"
+const NAVY_DIM = "#4a6fa5"
 
 function CustomTooltip({
   active,
@@ -36,7 +39,7 @@ function CustomTooltip({
   if (!active || !payload?.length) return null
   const d = payload[0].payload
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl" style={{ width: 220 }}>
+    <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xl" style={{ width: 230 }}>
       <p className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p>
       <div className="space-y-1 text-xs">
         <div className="flex justify-between">
@@ -44,24 +47,20 @@ function CustomTooltip({
           <span className="font-mono font-medium text-slate-800">{formatCOP(d.canonBruto)}</span>
         </div>
         <div className="flex justify-between text-rose-600">
-          <span>− Descuentos</span>
+          <span>− Dcto. fase</span>
           <span className="font-mono font-medium">{formatCOP(d.descuentos)}</span>
         </div>
-        <div className="flex justify-between text-rose-600">
-          <span>− Pronto pago</span>
-          <span className="font-mono font-medium">{formatCOP(d.prontoPago)}</span>
-        </div>
-        <div className="flex justify-between border-t border-slate-100 pt-1">
-          <span className="text-slate-600">Base neta</span>
-          <span className="font-mono font-medium text-slate-800">{formatCOP(d.baseNeta)}</span>
-        </div>
         <div className="flex justify-between text-amber-600">
-          <span>+ IVA 19%</span>
-          <span className="font-mono font-medium">{formatCOP(d.iva)}</span>
+          <span>− PP esperado</span>
+          <span className="font-mono font-medium">{formatCOP(d.ppEsperado)}</span>
+        </div>
+        <div className="flex justify-between border-t border-slate-100 pt-1 text-slate-400">
+          <span>Máx. c/IVA</span>
+          <span className="font-mono">{formatCOP(d.proyectado)}</span>
         </div>
         <div className="flex justify-between border-t border-slate-200 pt-1">
-          <span className="font-semibold" style={{ color: NAVY }}>Total neto</span>
-          <span className="font-mono font-bold" style={{ color: NAVY }}>{formatCOP(d.proyectado)}</span>
+          <span className="font-semibold" style={{ color: NAVY }}>Esperado</span>
+          <span className="font-mono font-bold" style={{ color: NAVY }}>{formatCOP(d.proyectadoEsperado)}</span>
         </div>
       </div>
     </div>
@@ -92,9 +91,9 @@ export function ProyeccionesChart({ data }: { data: Row[] }) {
             domain={[0, max * 1.1]}
           />
           <Tooltip content={<CustomTooltip />} cursor={{ fill: "#f1f5f9", radius: 8 }} />
-          <Bar dataKey="proyectado" radius={[6, 6, 0, 0]} maxBarSize={48} fill={NAVY}>
+          <Bar dataKey="proyectadoEsperado" radius={[6, 6, 0, 0]} maxBarSize={48} fill={NAVY}>
             {data.map((_, i) => (
-              <Cell key={i} fill={NAVY} />
+              <Cell key={i} fill={i < new Date().getMonth() ? NAVY : NAVY_DIM} />
             ))}
           </Bar>
         </BarChart>

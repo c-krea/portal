@@ -2,6 +2,120 @@
 
 ---
 
+## 2026-04-24 — Session 30: PP histórico + CKR-20 (PP+phase stacking) closure
+
+### What we did
+
+Reviewed the uncommitted PP histórico per-tenant model (Section 2 of `docs/REVIEW_PLAN.md`). Verified `tenants.pp_historico_pct` populated in production (65/66 tenants, avg 22.93%, max 54.84%, 51 with ≥10 payments). Confirmed against real Siesa data that **PP + phase discount STACK**, contradicting the mutual-exclusivity rule originally shipped.
+
+### CKR-20 closed: removed mutual exclusivity from all 8 spots
+
+Stripped the `CASE WHEN p.descuento_proyectado > 0 THEN 0 ELSE … END` (or equivalent) wrapper from:
+- `src/lib/invoice-engine.ts:209` — invoice generation engine
+- `src/lib/data/dashboard.ts:18` — portfolio total
+- `src/lib/data/reportes.ts:112` — proyectado vs real chart
+- `src/lib/data/pagos.ts:116` — proyectado_mes KPI
+- `src/lib/data/proyecciones.ts` — 4 spots (breakdown, detalle, mensual)
+
+DB sanity check on 2026 projections:
+- Conservative max (no PP): $3,113,676,785
+- OLD mutex PP: $57,518,108
+- NEW stack PP: $73,702,168 (**+$16.2M previously missed**)
+
+### Why this matters
+
+A tenant in their phase-discount window who pays before day 10 still earns PP. We were under-discounting expected revenue. New "Recaudo esperado" projects ~0.5% lower for 2026 — closer to actual Power BI behavior (the 0.68 collection-rate hypothesis stays open as a separate question).
+
+### Sidebar reorder (UX)
+
+Moved Locales from position 4 (between Mora and Pagos) to position 5 (right below Pagos). German preference — Locales is a static reference, sits closer to billing flow.
+
+---
+
+## 2026-04-24 — Session 29: ERP Ocupación sync + data discrepancies audit
+
+### What we did
+
+Extended `scripts/sync-csf.ts` to include the `ckrea-ocupacion` endpoint (3rd sync target, alongside cartera + payments). Ran dry-run, surfaced 15 real discrepancies, and produced a verification doc for the CKREA manager to reconcile against ERP.
+
+### The ERP-as-source-of-truth decision
+
+From now on, ERP (Siesa) is the single source of truth for occupancy. Portal syncs FROM ERP, never the reverse. This formalizes the workflow: when a tenant leaves, admin closes contract in ERP → Portal auto-updates on next sync. No more manual corrections in Portal DB.
+
+### Tenant identity model (confirmed — no schema changes needed)
+
+- **NIT = permanent tenant identity.** Same legal entity = same `tenants.id` forever.
+- **Contracts are lifecycle units.** Come and go. `status = 'activo' | 'critico' | 'vencido' | 'terminado'`.
+- **Cartera ties to `tenant_id`, not to contract.** Debt persists across contract lifecycle — a tenant can leave the local but keep an outstanding balance.
+
+This model works with existing schema. The fix is process, not code.
+
+### The ERP data problem — 4 patterns found
+
+Cross-referenced ERP (`Ocupacion SIESA.xlsx`, 84 occupied rows) against Portal DB. ERP reports only `Activo` (56) + `Critico` (28) — never `Inactivo`. All 85th+ units = vacant by omission.
+
+1. **Contracts not closed when tenant leaves** (4 units): 111, 312, 313, 506A. ERP still shows `Critico` months after tenant physically left. Manager's Excel confirmed them vacant.
+2. **Records missing NIT/nombre** (4 units): 311, 503, 505, 804. ERP has canon + `Critico` status but `DOCUMENTO` and `RAZON_SOCIAL` are NULL. Portal has the real tenant (all have active payment history + cartera).
+3. **Tenant mismatch ERP vs Portal** (3 units): 120 (Becerra vs Fabian), 121 (Neografick vs Sonia Sierra), 126 (Dinamo in Portal, absent in ERP).
+4. **Multi-local consolidation mismatch**: IMAGENN & PUNTO has 4 locals (508/510/512/514) — ERP splits canon by local ($2.99M/$2.73M/$2.84M/$2.74M), Portal has all $11.309M consolidated in 508. Totals match.
+
+### Sync script extensions
+
+- Added `CKREA_COMPANY_ID` constant
+- Added `DISPONIBLES_OVERRIDE = ['312','313','506A']` — manager-confirmed vacant despite ERP. Bypass until ERP admin closes them.
+- **Fantasma detection**: `!nit || !erpNombre` → auto-terminate DB contract with reason `ERP_SIN_INQUILINO`. (Disabled until manager confirms — these 4 turned out to be real active tenants with missing NIT in ERP, not vacants)
+- **Multi-row per LOC dedup**: prefer `Activo` > `Critico` > first. (Moot — all 84 LOCs are unique.)
+- CLI flags: `APPLY` (default false = dry-run), `DEBUG`
+- Diff types: `UNIDAD_NO_EN_DB`, `SIN_CONTRATO_EN_DB`, `INQUILINO_DIFERENTE`, `CANON_DIFERENTE`, `DEBE_TERMINAR`
+
+### Sync NOT applied
+
+Dry-run surfaced suspicious items where auto-termination would delete real tenants (the 4 fantasmas are active with debt). Decision: **do not apply sync until manager verifies the list**. Sent `docs/revision-ocupacion-erp.html` to manager for verification.
+
+### Deliverable
+
+- `docs/revision-ocupacion-erp.html` — professional Spanish doc for CKREA manager. Structure: context → 4 tables (one per category) → patterns → proposed workflow → next steps. Print-friendly CSS (`@media print`). Manager verifies against physical reality → admin fixes ERP → Portal syncs automatically.
+
+### Key gotcha for future
+
+**ERP never uses `Inactivo`.** Only `Activo` + `Critico`. A local disappears from the ocupacion endpoint when vacant (or gets a fantasma row with NULL NIT). Any sync logic that assumes `ESTADO = 'Inactivo'` exists is wrong — caught this on first dry-run when 50 false positives surfaced.
+
+**Null NIT + canon present ≠ vacant.** It's a data entry gap — the contract exists in ERP with canon but no tenant link. Requires manual verification before treating as vacant.
+
+---
+
+## 2026-04-23 — Session 28: Supabase IT Connection Guide
+
+### What we did
+
+No code shipped. Full session focused on unblocking IT's sync script and documenting the integration clearly.
+
+### Root cause found — siesa_sync connection failure
+
+IT ran the corrected Python script (keyword args, no URL) and still got `Tenant or user not found`. Investigated via Supabase MCP — user exists, can login, has password. Real cause: **PgBouncer (port 6543) keeps its own user registry separate from PostgreSQL**. Users created via SQL are not auto-registered in PgBouncer. Pooler doesn't know the user → rejects connection.
+
+Fix: switch to **port 5432** (direct connection, no pooler). Different host: `db.bosylehvmtwtqkrlievy.supabase.co`. No suffix needed on username. For a sync script, direct connection is perfectly fine.
+
+### 24/7 sync discussion
+
+User wants Supabase always up to date, not just 3x/day. Decision: **cron job every 5 minutes** is the right approach — not a persistent connection. Script is idempotent (upsert), safe to run 288x/day. 5-minute lag is practically real-time for a rental payment portal. IT configures via Task Scheduler (Windows) or cron (Linux).
+
+### Docs created this session
+
+- `docs/supabase-fix-conexion.html` — already existed, reviewed with user
+- `docs/supabase-it-guide.html` — **new**. Full IT reference: context + architecture diagram, connection fix with working Python code, test script, 3 endpoint field mapping tables (payments/cartera/tenants), common errors table. Tone: collaborative reference, not a wall. Password placeholder — German sends separately.
+- `docs/csf-integration-options.html` — reviewed for context (not modified)
+
+### Key gotcha for future
+
+`Tenant or user not found` from Supabase pooler does NOT always mean wrong username format. If keyword args + correct suffix still fails, the user was created via SQL and is not registered in PgBouncer. Fix = port 5432, not PgBouncer config.
+
+### IT firewall theory — ruled out
+
+IT suggested corporate firewall blocking Supabase IPs. Ruled out: firewall block → timeout/refused, not a FATAL response. Getting FATAL = reaching the pooler = network is fine.
+
+---
+
 ## 2026-04-22 — Session 27: Electricity Billing Research + Medidor Portal UX
 
 ### What we did
@@ -1152,3 +1266,54 @@ Build a **Projection Generator** UI inside the portal (Phase 4):
 - Create admin user in Supabase Auth (germanwarfare07@gmail.com + raw_user_meta_data role:admin)
 - Fix any bugs found in live testing
 - Then: Linear cleanup, mobile nav, CRON_SECRET env var add
+
+---
+
+## 2026-04-22 — Power BI meeting prep + invoice analysis + financial rule discoveries
+
+### What happened
+
+**CSF sync:** `npm run sync-csf` — 2,797 payments + 171 cartera confirmed. No new data since last sync.
+
+**Power BI projection gap ($162M vs $239M):**
+- Our March projection: $239M (75 active contracts, canon − descuento + IVA 19%)
+- Power BI March projection: $162M
+- Gap: $77M (−32%). Tested all formula variants — none explain it.
+- Strongest hypothesis: $239M × 68% ≈ $162M exactly. Power BI likely applies a historical collection rate, not total invoiced amount. Need to confirm at meeting.
+
+**Power BI recaudo gap ($231M vs $236M) — continued from prior session:**
+- Added projection gap section + question 8 to `docs/powerbi-meeting.html`.
+- File is self-contained HTML presentation for today's alignment meeting.
+
+**Excel "Facturas Ckrea Enero.xlsx" analysis:**
+- 79 rows (January 2026 invoices). Excel SALDO total: $210.5M. DB January payments: $194.7M. Gap: $15.8M.
+- Root cause: Excel = invoice basis (what was billed in Jan). DB = cash basis (what was received in Jan).
+- ~12 clients paid Jan invoice in Feb → in Excel, not in Jan DB.
+- 3 clients (VISUAL GRAPHIC, FAJARDO, FUSION GRAFIK) paid prior-period invoices in Jan → in DB Jan, not in Excel.
+- Several clients barely paid in Jan (TATIANA $125K vs $2.7M billed, PROHERCOL $43K, PEDRAZA $100K).
+- Excel date errors: MATICES 123/125 show "2026-11-10" (November) — typo, likely Jan/Feb.
+
+**Retefuente discovery (3.5% withholding tax):**
+- Column O of Excel. Applied to base_neta (pre-IVA) for PJ (juridical/company) clients.
+- Formula: PJ total = (canon − descuento) × 1.155 [= 1.19 − 0.035]. PN unchanged (× 1.19).
+- `tenants.juridica` field: only 2/66 marked true — ~30 company clients (SAS, SA, etc.) are wrong.
+- Impact is tiny today (only 2 PJ in DB) but significant once data fixed. Linear: CKR-22 (data fix) → CKR-21 (formula).
+
+**PP + phase discount STACK (rule reversal):**
+- Prior rule: PP = 0 when phase discount active (mutual exclusivity). Enforced everywhere.
+- New finding: MEDIOS IMPRESOS Jan invoice = 20% phase discount AND 10% PP both applied simultaneously.
+- Both discounts apply: phase reduces base, then PP is 10% of that same base. They are NOT mutually exclusive.
+- Linear: CKR-20 to fix code. Need to remove `CASE WHEN descuento_proyectado > 0 THEN 0` from ~6 spots.
+- Also need to update `project_state.md` critical gotcha + financial-rules-engine-spec.md.
+
+### Decisions made
+
+- Invoice basis vs cash basis is an intentional design difference between Excel and portal. DB is authoritative for actual cash flow.
+- Do NOT add retefuente to projections until juridica data is fixed first (CKR-22 blocks CKR-21).
+- PP stacking fix (CKR-20) is highest priority code change — pure code, no data dependency.
+
+### Files changed this session
+
+- `docs/powerbi-meeting.html` — added projection gap section + open question 8
+- `docs/powerbi-meeting-prep.md` — Key Finding 7 (electricity matching confirmed)
+- No code changes to portal — analysis session only

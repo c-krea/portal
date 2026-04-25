@@ -55,15 +55,17 @@ export default async function ProyeccionesPage() {
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">IVA (19%)</p>
-          <p className="mt-1 text-sm sm:text-xl font-bold text-amber-600 tabular-nums">+ {formatCOP(breakdown.totalIVA)}</p>
-          <p className="mt-0.5 text-xs text-slate-400">Sobre base neta</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">PP esperado</p>
+          <p className="mt-1 text-sm sm:text-xl font-bold text-amber-600 tabular-nums">− {formatCOP(breakdown.ppEsperado)}</p>
+          <p className="mt-0.5 text-xs text-slate-400">Descuento PP por historial</p>
         </div>
 
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 sm:p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wider text-blue-600">Total neto c/IVA</p>
-          <p className="mt-1 text-sm sm:text-xl font-bold text-blue-900 tabular-nums">{formatCOP(breakdown.netoConIVA)}</p>
-          <p className="mt-0.5 text-xs text-blue-500">Recaudo proyectado {year}</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-blue-600">Recaudo esperado</p>
+          <p className="mt-1 text-sm sm:text-xl font-bold text-blue-900 tabular-nums">{formatCOP(breakdown.netoEsperado)}</p>
+          <p className="mt-0.5 text-xs text-blue-500">
+            Máx. {formatCOP(breakdown.netoConIVA)}
+          </p>
         </div>
       </div>
 
@@ -72,19 +74,21 @@ export default async function ProyeccionesPage() {
         <p className="text-xs text-slate-500">
           <span className="font-medium text-slate-700">Cómo se calcula:</span>
           {" "}Canon bruto <span className="font-mono font-medium text-slate-900">{formatCOP(breakdown.canonBruto)}</span>
-          {" "}− Descuentos fase <span className="font-mono font-medium text-rose-600">{formatCOP(breakdown.totalDescuentos)}</span>
+          {" "}− Dcto. fase <span className="font-mono font-medium text-rose-600">{formatCOP(breakdown.totalDescuentos)}</span>
           {" "}= Base neta <span className="font-mono font-medium text-slate-900">{formatCOP(breakdown.canonBruto - breakdown.totalDescuentos)}</span>
-          {" "}× 1.19 IVA = <span className="font-mono font-bold text-blue-700">{formatCOP(breakdown.netoConIVA)}</span>
-          <span className="ml-3 text-slate-400">· Pronto pago se aplica solo si el cliente paga antes del día 10</span>
+          {" "}× 1.19 IVA = <span className="font-mono font-medium text-slate-700">{formatCOP(breakdown.netoConIVA)}</span>
+          {" "}− PP esperado <span className="font-mono font-medium text-amber-600">{formatCOP(breakdown.ppEsperado)}</span>
+          {" "}= <span className="font-mono font-bold text-blue-700">{formatCOP(breakdown.netoEsperado)}</span>
+          <span className="ml-3 text-slate-400">· PP aplicado según historial de pago de cada cliente</span>
         </p>
       </div>
 
       {/* ── Monthly chart ── */}
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-slate-800">Recaudo proyectado por mes — {year} (c/IVA)</p>
+          <p className="text-sm font-semibold text-slate-800">Recaudo esperado por mes — {year} (c/IVA)</p>
           <p className="text-xs text-slate-400">
-            Prom. mensual: <span className="font-medium text-slate-700">{formatCOP(Math.round(breakdown.netoConIVA / 12))}</span>
+            Prom. mensual: <span className="font-medium text-slate-700">{formatCOP(Math.round(breakdown.netoEsperado / 12))}</span>
           </p>
         </div>
         <ProyeccionesChart data={mensual} />

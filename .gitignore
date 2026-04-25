@@ -45,8 +45,9 @@ next-env.d.ts
 
 # Generated / local-only
 graphify-out/
+/data/
 *.xlsx
 ~$*.xlsx
 sentry-wizard-installation-error-*.log
 Archive (DONT OPEN)/
-docs/INSIGHTS_v1.md
+docs/audits/INSIGHTS_v1.md

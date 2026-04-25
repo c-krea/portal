@@ -13,7 +13,17 @@ export async function getDashboardData() {
 
 async function getPortfolioStats() {
   const [rows1, rows2, rows3] = await Promise.all([
-    execute(`SELECT ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado), 0) * 1.19) AS portfolio_total FROM projections WHERE year = 2026`),
+    execute(`
+      SELECT ROUND(COALESCE(SUM(
+        (p.canon_proyectado - p.descuento_proyectado)
+        * (1 - (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
+        * 1.19
+      ), 0)) AS portfolio_total
+      FROM projections p
+      JOIN contracts c ON p.contract_id = c.id
+      JOIN tenants t   ON c.tenant_id   = t.id
+      WHERE p.year = 2026
+    `),
     execute(`SELECT COUNT(DISTINCT unit_id)::int AS active_clients FROM contracts WHERE status IN ('activo', 'critico')`),
     execute(`SELECT COUNT(*)::int AS total_units FROM units`),
   ])

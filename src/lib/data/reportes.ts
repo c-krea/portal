@@ -106,12 +106,18 @@ export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal
   const [proyRows, recRows] = await Promise.all([
     execute(`
       SELECT
-        month,
-        ROUND(COALESCE(SUM(canon_proyectado - descuento_proyectado), 0) * 1.19)::numeric AS proyectado
-      FROM projections
-      WHERE year = ${year}
-      GROUP BY month
-      ORDER BY month
+        p.month,
+        ROUND(COALESCE(SUM(
+          (p.canon_proyectado - p.descuento_proyectado)
+          * (1 - (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
+          * 1.19
+        ), 0))::numeric AS proyectado
+      FROM projections p
+      JOIN contracts c ON p.contract_id = c.id
+      JOIN tenants t   ON c.tenant_id   = t.id
+      WHERE p.year = ${year}
+      GROUP BY p.month
+      ORDER BY p.month
     `),
     execute(`
       SELECT

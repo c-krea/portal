@@ -6,6 +6,30 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [Unreleased] — 2026-04-24
+
+### Added
+- **PP histórico per tenant** (`tenants.pp_historico_pct`): per-client historical pronto-pago rate computed from full ERP payment history. Tenants with <10 payments fall back to global average (17.99%). Drives "Recaudo esperado" KPI on `/proyecciones`, dashboard portfolio total, and `proyectado` chart on reportes.
+- **Sidebar reorder**: Locales moved to position 5 (right below Pagos).
+- **ERP Ocupación sync** (`scripts/sync-csf.ts`): 3rd sync target alongside cartera + payments. Fetches `ckrea-ocupacion` endpoint, groups by LOC (Activo > Critico > first), detects fantasma rows (NULL NIT), compares canon/tenant/status against Portal DB. Generates diff report with 5 types: `UNIDAD_NO_EN_DB`, `SIN_CONTRATO_EN_DB`, `INQUILINO_DIFERENTE`, `CANON_DIFERENTE`, `DEBE_TERMINAR`
+- CLI flags on sync script: `APPLY` (default false = dry-run), `DEBUG`
+- `DISPONIBLES_OVERRIDE` constant in sync script for manager-confirmed vacants (312, 313, 506A)
+
+### Changed
+- **PP + phase discount STACK** (CKR-20 — rule reversal). Real Siesa data (MEDIOS IMPRESOS Jan invoice) confirms 20% phase + 10% PP applied simultaneously. Removed mutual-exclusivity from 8 spots: invoice-engine.ts, dashboard.ts, reportes.ts, pagos.ts, proyecciones.ts (×4). 2026 expected PP discount rises ~$16M (from $57.5M → $73.7M).
+- **Proyecciones KPI cards renamed**: `IVA (19%)` → `PP esperado`, `Total neto c/IVA` → `Recaudo esperado`. New row-level columns `pp_historico_pct` / `pp_historico_pagos`.
+
+### Docs
+- `docs/revision-ocupacion-erp.html` — manager verification doc: 4-category breakdown of ERP vs Portal discrepancies (15 units), print-friendly CSS, proposed ERP workflow
+- `docs/supabase-it-guide.html` — IT integration guide: connection fix, Python test script, 3-endpoint field mapping, common errors table, cron job instructions for 24/7 sync
+
+### Decided (no code change)
+- **ERP is source of truth for occupancy**: Portal syncs FROM ERP, never the reverse
+- **NIT = permanent tenant identity**: contracts come and go, cartera ties to tenant_id not contract
+- Sync NOT yet applied — awaits manager verification of flagged units
+
+---
+
 ## [2.9.0] — 2026-04-22
 
 ### Added

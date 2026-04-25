@@ -29,7 +29,7 @@ function formatDate(raw: string | null): string {
 
 type SortKey = keyof Pick<
   ProyeccionDetalle,
-  "unitNumber" | "cliente" | "fechaInicio" | "mesesTranscurridos" | "canonMensual" | "descuentoPct" | "prontoPagoPct" | "netoAnualIVA" | "status"
+  "unitNumber" | "cliente" | "fechaInicio" | "mesesTranscurridos" | "canonMensual" | "descuentoPct" | "prontoPagoPct" | "ppHistoricoPct" | "netoEsperadoIVA" | "status"
 >
 
 type SortDir = "asc" | "desc"
@@ -42,7 +42,8 @@ const COLS: { key: SortKey; label: string; align: "left" | "right" | "center"; h
   { key: "canonMensual",       label: "Canon / mes",      align: "right",  hide: "hidden sm:table-cell" },
   { key: "descuentoPct",       label: "Dcto %",           align: "right",  hide: "hidden md:table-cell" },
   { key: "prontoPagoPct",      label: "PP elegible",      align: "right",  hide: "hidden lg:table-cell" },
-  { key: "netoAnualIVA",       label: "Neto anual c/IVA", align: "right" },
+  { key: "ppHistoricoPct",     label: "PP hist.",         align: "right",  hide: "hidden lg:table-cell" },
+  { key: "netoEsperadoIVA",    label: "Esperado anual",   align: "right" },
   { key: "status",             label: "Estado",           align: "center" },
 ]
 
@@ -120,7 +121,25 @@ export function DetalleTable({ data }: { data: ProyeccionDetalle[] }) {
                   <span className="text-slate-300">—</span>
                 )}
               </td>
-              <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{formatCOP(row.netoAnualIVA)}</td>
+              <td className="hidden lg:table-cell px-4 py-2.5 text-right text-slate-600">
+                {row.prontoPagoPct > 0 ? (
+                  <span
+                    title={`Basado en ${row.ppHistoricoPagos} pagos`}
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                      row.ppHistoricoPagos < 10
+                        ? "bg-slate-100 text-slate-500"
+                        : row.ppHistoricoPct >= 30
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-amber-50 text-amber-700"
+                    }`}
+                  >
+                    {row.ppHistoricoPct.toFixed(0)}%
+                  </span>
+                ) : (
+                  <span className="text-slate-300">—</span>
+                )}
+              </td>
+              <td className="px-4 py-2.5 text-right font-mono font-semibold text-slate-900">{formatCOP(row.netoEsperadoIVA)}</td>
               <td className="px-4 py-2.5 text-center">
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[row.status] ?? "bg-slate-100 text-slate-500"}`}>
                   {STATUS_LABEL[row.status] ?? row.status}
