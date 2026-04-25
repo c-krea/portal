@@ -25,10 +25,11 @@ C-krea Portal/
 │   │   └── validate_projections.py   ← Reconciliation script vs C-KREA GB.xlsx
 │   └── 06_siesa_integration/
 │       └── (PENDING — will contain XML format spec, field mapping, sync logic)
-├── source_data/
-│   ├── PRD_C-krea_vf.pdf            ← Original PRD (image-based, 7 pages)
+├── data/                              ← Raw Excel inputs (gitignored)
 │   ├── C-KREA GB.xlsx               ← Internal financial projections 2026
-│   └── ckrea.xlsx                    ← Siesa ERP export (5 sheets)
+│   ├── ckrea.xlsx                    ← Siesa ERP export (5 sheets)
+│   ├── Consumo Energia xlocales 2026.xlsx
+│   └── Facturas Ckrea Enero.xlsx
 └── (future: /src, /supabase, etc.)
 ```
 

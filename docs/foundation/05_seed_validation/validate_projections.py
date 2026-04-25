@@ -36,7 +36,7 @@ except ImportError:
 # ─── CONFIG ──────────────────────────────────────────────────────────────────
 
 TOLERANCE_COP = 1.0  # Allow $1 COP rounding tolerance
-EXCEL_FILE = "C-KREA GB.xlsx"
+EXCEL_FILE = "data/C-KREA GB.xlsx"
 SHEET_NAME = "2. PROYECCION MENSUAL"
 SEED_FILE = "002_seed_data.sql"
 MONTHS = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO',
