@@ -23,6 +23,7 @@ Format: [YYYY-MM-DD] — description
 
 ### Fixed
 - `.gitignore`: `data/` → `/data/` (was matching `src/lib/data/` too, blocked staging modified files).
+- **`pp_historico_pct` undercount** (WOR-69): old backfill double-counted RK + 001-RK paired rows AND skipped NO PROYECTADO rows that carried PP discount, leaving most tenants stuck near the 17.99% global fallback. New formula deduplicates paired rows on `(siesa_cruce, fecha_recaudo)` and includes all classifications. Global rate moves 17.99% → 38.07%; per-tenant averages move 22.93% → 41.94%; tenants with real (non-fallback) rate go 51 → 62. 2026 `recaudo_esperado` drops $51.9M ($3,039M → $2,987M) — projections now reflect actual PP behavior. Backfill saved as idempotent `scripts/backfill-pp-historico.sql`.
 
 ### Docs
 - `docs/revision-ocupacion-erp.html` — manager verification doc: 4-category breakdown of ERP vs Portal discrepancies (15 units), print-friendly CSS, proposed ERP workflow

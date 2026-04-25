@@ -2,6 +2,49 @@
 
 ---
 
+## 2026-04-24 — Session 32: WOR-69 — pp_historico_pct backfill bug fix
+
+### What we did
+
+Closed WOR-69. Original `pp_historico_pct` backfill (Session 30) had two compounding bugs:
+
+1. **Double-counted paired rows.** Siesa emits two rows per cash movement (`RK` + `001-RK`). Old denominator counted both, halving the visible PP rate.
+2. **Skipped NO PROYECTADO PP wins.** Real PP-applied invoices that landed in Siesa's `NO PROYECTADO` bucket were excluded from both numerator and denominator, so the actual PP behavior never made it into the rate.
+
+Combined effect: most tenants stuck on or near the 17.99% global fallback even when they pay early consistently.
+
+### Fix
+
+New backfill (`scripts/backfill-pp-historico.sql`, idempotent):
+- Deduplicate on `(tenant_id, siesa_cruce, fecha_recaudo)` — collapses RK pair to one cash movement.
+- Filter to `siesa_cruce LIKE 'FVS-%'` + `valor_final < 1B` (matches `getPagos*` filters in `src/lib/data/pagos.ts`).
+- Numerator = deduped rows where `pronto_pago_aplicado > 0`. No classification gate.
+- Denominator = all deduped rows.
+- ≥10 deduped pagos → real per-tenant rate. <10 → global rate (computed from same dataset).
+
+### Impact
+
+| metric | before | after |
+|---|---|---|
+| global PP rate | 17.99% | 38.07% |
+| avg per-tenant PP rate | 22.93% | 41.94% |
+| tenants with real (non-fallback) rate | 51 | 62 |
+| 2026 `recaudo_esperado` | $3,039M | $2,987M (−$51.9M) |
+
+The drop is correct: more PP discount expected → less net cash projected. Projections now match what these tenants actually do.
+
+### Examples
+
+- ACRIGROUP: 1.69% → 7.26% (was missing 7 of 9 PP wins from NO PROYECTADO + dedup)
+- NIETO VILLALBA: 17.99% (fallback) → 67.50% (40 real payments emerged from RK dedup)
+- NC GRAPHICS: 17.99% (fallback) → 50% (10 deduped pagos, 5 PP wins surfaced)
+
+### Why save the SQL as a script
+
+Original backfill was a one-off ad-hoc query — not in any migration or script. WOR-69 made me reverse-engineer it from the data. Now `scripts/backfill-pp-historico.sql` is the canonical formula. Re-runnable after every payments sync if/when we want a fresh recompute.
+
+---
+
 ## 2026-04-24 — Session 31: Pagos month filter + classification rewrite + NC GRAPHICS fix
 
 ### What we did
