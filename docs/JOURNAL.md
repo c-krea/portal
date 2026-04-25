@@ -2,6 +2,30 @@
 
 ---
 
+## 2026-04-24 — Session 31: Pagos month filter + classification rewrite + NC GRAPHICS fix
+
+### What we did
+
+Reviewed and shipped Section 3 of `docs/REVIEW_PLAN.md`. Three concerns bundled.
+
+**Pagos month filter** — `/pagos?month=YYYY-MM` dropdown. KPIs, buckets, and table all scope to the chosen month. URL is the source of truth (shareable + back/forward survives).
+
+**Payment classification rewrite** (resolves the long-running Power BI gap chase):
+- Dropped `siesa_clasificacion IN ('RECAUDADO','VENCIDO')` filter — proven unreliable: the same payment shows different values on duplicate rows. See `docs/audits/payment-classification-logic.md`.
+- New filter: `siesa_cruce LIKE 'FVS-%'` (real invoice payments — excludes NVS credit notes, RK reversals).
+- Dedup paired RK + 001-RK rows (Siesa emits both for one cash movement).
+- Exclude standalone 001-RK entries whose per-tenant total matches the prior month's electricity bill (those are electricity payments, not canon receipts).
+- Hard cap `valor_final < 1,000,000,000` to drop the $4.2B FUSION GRAFIK April 2024 data-entry error.
+- New buckets `temprano` (day 1–10) / `tardio` (day 11+) / `mora` (tenant has prior-month outstanding cartera) — driven by date and cartera saldo, not Siesa classification.
+
+**NC GRAPHICS contract fix**: their `pronto_pago_pct` was 0 (only contract of 78 set to 0). Real Siesa data shows they DO get 10% PP every cycle. Updated to 10. Linear WOR-69 tracks the related undercount in `pp_historico_pagos` (NO PROYECTADO classification excluded from histórico calc).
+
+### Why this matters
+
+Pagos KPIs were silently wrong before today. Bucket sums didn't reconcile to the KPI total because the classification field disagreed with itself across rows. Anyone comparing portal → Power BI was chasing an unanswerable question. Now the rules are: invoice-side filter (FVS-) + dedup + electricity carve-out, all documented in audits/.
+
+---
+
 ## 2026-04-24 — Session 30: PP histórico + CKR-20 (PP+phase stacking) closure
 
 ### What we did

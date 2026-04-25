@@ -18,6 +18,11 @@ Format: [YYYY-MM-DD] — description
 ### Changed
 - **PP + phase discount STACK** (CKR-20 — rule reversal). Real Siesa data (MEDIOS IMPRESOS Jan invoice) confirms 20% phase + 10% PP applied simultaneously. Removed mutual-exclusivity from 8 spots: invoice-engine.ts, dashboard.ts, reportes.ts, pagos.ts, proyecciones.ts (×4). 2026 expected PP discount rises ~$16M (from $57.5M → $73.7M).
 - **Proyecciones KPI cards renamed**: `IVA (19%)` → `PP esperado`, `Total neto c/IVA` → `Recaudo esperado`. New row-level columns `pp_historico_pct` / `pp_historico_pagos`.
+- **Pagos page month filter + payment classification rewrite**: dropdown selects month (`?month=YYYY-MM`); KPIs, buckets, and table all scope to selection. Replaced unreliable `siesa_clasificacion` filter with: `siesa_cruce LIKE 'FVS-%'` + RK/001-RK dedup + standalone-electricity exclusion + `valor_final < 1B` (excludes the $4.2B FUSION GRAFIK April 2024 data-entry error). New buckets `temprano`/`tardio`/`mora` driven by cartera saldo, not Siesa classification. KPI "Mes anterior" replaced by "Pendiente Recaudo" (vs proyectado).
+- **NC GRAPHICS contract fix**: `pronto_pago_pct` 0 → 10 (was the only contract of 78 set to 0; ERP applies 10% in practice).
+
+### Fixed
+- `.gitignore`: `data/` → `/data/` (was matching `src/lib/data/` too, blocked staging modified files).
 
 ### Docs
 - `docs/revision-ocupacion-erp.html` — manager verification doc: 4-category breakdown of ERP vs Portal discrepancies (15 units), print-friendly CSS, proposed ERP workflow
