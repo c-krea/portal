@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conexión Supabase — Guía IT · Portal C-Krea</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --dark: #1a1a2e;
+    --accent: #0f3460;
+    --highlight: #e94560;
+    --bg: #ffffff;
+    --light-bg: #f8f9fa;
+    --border: #e5e7eb;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --green: #15803d;
+    --green-bg: #f0fdf4;
+    --green-border: #bbf7d0;
+    --blue: #1d4ed8;
+    --blue-bg: #eff6ff;
+    --blue-border: #bfdbfe;
+    --yellow-bg: #fffbeb;
+    --yellow-border: #fde68a;
+    --red-bg: #fef2f2;
+    --red: #991b1b;
+    --red-border: #fca5a5;
+    --amber: #92400e;
+    --amber-bg: #fffbeb;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text);
+    background: #f0f0f5;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+    background: var(--bg);
+    box-shadow: 0 1px 30px rgba(0,0,0,0.08);
+  }
+
+  /* ── Header ── */
+  .header {
+    background: var(--dark);
+    padding: 48px 52px 40px;
+    position: relative;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 4px;
+    background: var(--highlight);
+  }
+  .header h1 { color: #fff; font-size: 22px; font-weight: 700; line-height: 1.3; }
+  .header .sub { color: #b0b0c0; font-size: 13px; margin-top: 8px; }
+  .badge {
+    position: absolute; top: 24px; right: 36px;
+    background: rgba(255,255,255,0.1);
+    color: #d1d5db;
+    font-size: 11px; font-weight: 600;
+    padding: 4px 12px; border-radius: 20px;
+    letter-spacing: 0.5px; text-transform: uppercase;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+
+  /* ── Layout ── */
+  .content { padding: 44px 52px 56px; }
+
+  /* ── Section headers ── */
+  .section-label {
+    font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1px;
+    color: var(--muted); margin-bottom: 12px;
+  }
+  h2 {
+    font-size: 16px; font-weight: 700;
+    color: var(--dark); margin: 36px 0 10px;
+  }
+  h2:first-of-type { margin-top: 0; }
+  h3 { font-size: 14px; font-weight: 600; color: var(--dark); margin-bottom: 8px; }
+  p { font-size: 13.5px; line-height: 1.7; margin-bottom: 10px; color: #374151; }
+
+  /* ── Flow diagram ── */
+  .flow {
+    display: flex; align-items: center; gap: 10px;
+    flex-wrap: wrap;
+    background: var(--light-bg);
+    border-radius: 10px; padding: 14px 18px;
+    margin: 14px 0 20px;
+    border: 1px solid var(--border);
+  }
+  .flow-node {
+    background: #fff; border: 1.5px solid #d1d5db;
+    border-radius: 6px; padding: 6px 12px;
+    font-size: 12px; font-weight: 600;
+    white-space: nowrap; line-height: 1.4;
+    text-align: center;
+  }
+  .flow-node small { display: block; font-weight: 400; color: var(--muted); font-size: 10.5px; margin-top: 1px; }
+  .flow-node.dark { border-color: var(--dark); background: var(--dark); color: #fff; }
+  .flow-node.dark small { color: #9ca3af; }
+  .flow-node.green { border-color: #16a34a; background: var(--green-bg); color: var(--green); }
+  .flow-arrow { color: #9ca3af; font-size: 16px; font-weight: 700; }
+
+  /* ── Boxes ── */
+  .box {
+    border-radius: 8px; padding: 16px 20px;
+    margin: 12px 0 18px; border-left: 4px solid;
+    font-size: 13.5px; line-height: 1.7;
+  }
+  .box-red    { background: var(--red-bg);    border-color: #ef4444; }
+  .box-green  { background: var(--green-bg);  border-color: #22c55e; }
+  .box-blue   { background: var(--blue-bg);   border-color: #3b82f6; }
+  .box-yellow { background: var(--yellow-bg); border-color: #f59e0b; }
+  .box strong { display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+  .box p { margin-bottom: 4px; font-size: 13px; }
+  .box p:last-child { margin-bottom: 0; }
+
+  /* ── Code ── */
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; background: #f1f3f5;
+    color: #d63384; padding: 2px 6px; border-radius: 4px;
+  }
+  .code-block {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px; background: #1a1a2e;
+    color: #e2e8f0; border-radius: 8px;
+    padding: 20px 22px; margin: 10px 0 18px;
+    overflow-x: auto; line-height: 1.75;
+  }
+  .code-block .c  { color: #64748b; }        /* comment */
+  .code-block .kw { color: #93c5fd; }        /* keyword */
+  .code-block .st { color: #86efac; }        /* string */
+  .code-block .fn { color: #fde68a; }        /* function */
+  .code-block .num{ color: #f9a8d4; }        /* number */
+  .code-block .hl { color: #fb923c; font-weight: 600; } /* highlight */
+
+  /* ── Tables ── */
+  .table-wrap {
+    overflow-x: auto; margin: 12px 0 20px;
+    border-radius: 8px; border: 1px solid var(--border);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  thead th {
+    background: var(--dark); color: #fff;
+    font-weight: 600; text-align: left;
+    padding: 10px 14px; white-space: nowrap;
+    font-size: 11.5px;
+  }
+  tbody td {
+    padding: 9px 14px; border-bottom: 1px solid var(--border);
+    vertical-align: top; line-height: 1.55;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(even) td { background: #f9fafb; }
+  .cell-ok  { color: var(--green); font-weight: 600; }
+  .cell-err { color: var(--red);   font-weight: 600; }
+  .cell-key { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #d63384; background: #f1f3f5; padding: 1px 5px; border-radius: 3px; white-space: nowrap; }
+
+  /* ── Endpoint cards ── */
+  .endpoint-card {
+    border: 1.5px solid var(--border); border-radius: 10px;
+    margin-bottom: 20px; overflow: hidden;
+  }
+  .endpoint-header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 18px; background: var(--light-bg);
+    border-bottom: 1px solid var(--border);
+  }
+  .endpoint-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--dark); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .endpoint-meta { flex: 1; }
+  .endpoint-meta h3 { font-size: 14px; font-weight: 700; margin-bottom: 2px; }
+  .endpoint-meta p { font-size: 12px; color: var(--muted); margin: 0; }
+  .endpoint-body { padding: 16px 18px; }
+  .endpoint-url {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    background: var(--light-bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 12px; margin-bottom: 12px;
+    color: var(--text);
+  }
+  .upsert-key {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #fef3c7; border: 1px solid #fde68a;
+    border-radius: 6px; padding: 4px 10px;
+    font-size: 11.5px; color: #92400e; font-weight: 600;
+    margin-bottom: 12px;
+  }
+
+  /* ── Divider ── */
+  hr { border: none; height: 1px; background: var(--border); margin: 36px 0; }
+
+  /* ── Footer ── */
+  .footer {
+    padding: 22px 52px; border-top: 2px solid var(--highlight);
+    background: var(--light-bg);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .footer p { font-size: 11.5px; color: var(--muted); margin: 0; }
+
+  @media print {
+    body { background: #fff; }
+    .page { box-shadow: none; }
+    .header, thead th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .box, .code-block, .endpoint-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .endpoint-card { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <span class="badge">Interno · IT</span>
+    <h1>Script de Sincronización IT → Supabase</h1>
+    <p class="sub">Guía de conexión y referencia de tablas &nbsp;·&nbsp; Portal C-Krea &nbsp;·&nbsp; Abril 2026</p>
+  </div>
+
+  <div class="content">
+
+    <!-- 1. CONTEXTO -->
+    <div class="section-label">01 — Contexto</div>
+    <h2>¿Qué estamos construyendo?</h2>
+    <p>
+      El Portal C-Krea necesita datos del ERP CSF (pagos, cartera, contratos) para reemplazar el proceso manual de Excel.
+      La API del ERP vive en una IP privada que Vercel no puede alcanzar directamente, así que acordamos la
+      arquitectura más segura: <strong>IT corre un script desde dentro de la red y empuja los datos a nuestra base de datos Supabase.</strong>
+      Vercel luego lee de Supabase normalmente — sin tocar el ERP jamás.
+    </p>
+
+    <div class="flow">
+      <div class="flow-node dark">ERP CSF<small>Red interna</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node">Script IT<small>Programado (noche o cada hora)</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node green">Supabase<small>Base de datos en la nube</small></div>
+      <span class="flow-arrow">→</span>
+      <div class="flow-node dark">Portal C-Krea<small>Vercel</small></div>
+    </div>
+
+    <div class="box box-blue">
+      <strong>Usuario de base de datos creado para IT</strong>
+      <p>Ya creamos el usuario <code>siesa_sync</code> en Supabase con permisos de escritura sobre las tablas que el script necesita. No requieren crear nada adicional en Supabase — solo conectar y escribir.</p>
+    </div>
+
+    <hr>
+
+    <!-- 2. PROBLEMA DE CONEXIÓN -->
+    <div class="section-label">02 — El problema actual</div>
+    <h2>Por qué falla la conexión</h2>
+    <p>
+      El script ya usa el formato correcto de usuario (<code>siesa_sync.bosylehvmtwtqkrlievy</code> — necesario para el pooler de Supabase).
+      Pero la contraseña contiene caracteres especiales (<code>&amp;</code>, <code>!</code>, <code>*</code>) que rompen el parsing cuando
+      se pasan como URL. Python lee solo la parte antes del primer <code>&amp;</code> y envía una contraseña incompleta.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th></th><th>Método</th><th>Resultado</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="cell-err">❌ Falla</td>
+            <td><code>psycopg2.connect("postgresql://siesa_sync.xxx:<strong>r2A&amp;Y!...</strong>@host:6543/postgres")</code></td>
+            <td>Python corta la contraseña en <code>&amp;</code> → credenciales inválidas → <em>Tenant or user not found</em></td>
+          </tr>
+          <tr>
+            <td class="cell-ok">✓ Funciona</td>
+            <td>Pasar cada parámetro por separado con <code>host=</code>, <code>password=</code>, etc.</td>
+            <td>Python no interpreta la contraseña como URL — caracteres especiales llegan intactos</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <hr>
+
+    <!-- 3. CÓDIGO DE PRUEBA -->
+    <div class="section-label">03 — Código de prueba</div>
+    <h2>Script para verificar la conexión</h2>
+    <p>Copiar y ejecutar. Si imprime <em>"Conexion OK"</em> y un número mayor a 0, todo está funcionando correctamente.</p>
+
+    <div class="code-block"><span class="kw">import</span> psycopg2
+
+<span class="c"># ── Datos de conexión ───────────────────────────────────────────────</span>
+DB_HOST     = <span class="st">"aws-0-us-east-1.pooler.supabase.com"</span>
+DB_PORT     = <span class="num">6543</span>
+DB_NAME     = <span class="st">"postgres"</span>
+DB_USER     = <span class="st">"siesa_sync.bosylehvmtwtqkrlievy"</span>   <span class="c"># sufijo obligatorio para el pooler</span>
+DB_PASSWORD = <span class="st">"[CONTRASEÑA_ENTREGADA_POR_GERMAN]"</span>   <span class="c"># no poner en URL — usar este parámetro</span>
+
+<span class="c"># ── Prueba de conexión ──────────────────────────────────────────────</span>
+<span class="kw">def</span> <span class="fn">test_connection</span>():
+    <span class="kw">try</span>:
+        conn = psycopg2.<span class="fn">connect</span>(
+            host=DB_HOST,
+            port=DB_PORT,
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            sslmode=<span class="st">"require"</span>          <span class="c"># Supabase requiere SSL</span>
+        )
+        cur = conn.<span class="fn">cursor</span>()
+
+        <span class="c"># Prueba 1: ¿conecta?</span>
+        cur.<span class="fn">execute</span>(<span class="st">"SELECT NOW();"</span>)
+        <span class="fn">print</span>(<span class="st">"✓ Conexion OK:"</span>, cur.<span class="fn">fetchone</span>()[<span class="num">0</span>])
+
+        <span class="c"># Prueba 2: ¿puede leer payments?</span>
+        cur.<span class="fn">execute</span>(<span class="st">"SELECT COUNT(*) FROM payments;"</span>)
+        count = cur.<span class="fn">fetchone</span>()[<span class="num">0</span>]
+        <span class="fn">print</span>(<span class="st">f"✓ Tabla payments accesible: {count} registros"</span>)
+
+        <span class="c"># Prueba 3: ¿puede leer cartera?</span>
+        cur.<span class="fn">execute</span>(<span class="st">"SELECT COUNT(*) FROM cartera;"</span>)
+        <span class="fn">print</span>(<span class="st">f"✓ Tabla cartera accesible: {cur.fetchone()[0]} registros"</span>)
+
+        conn.<span class="fn">close</span>()
+        <span class="fn">print</span>(<span class="st">"</span><span class="hl">→ Listo. Conexion y permisos verificados.</span><span class="st">"</span>)
+
+    <span class="kw">except</span> Exception <span class="kw">as</span> e:
+        <span class="fn">print</span>(<span class="st">"✗ Error:"</span>, e)
+
+<span class="fn">test_connection</span>()</div>
+
+    <div class="box box-yellow">
+      <strong>Nota sobre la contraseña</strong>
+      <p>La contraseña real será enviada por German por un canal seguro (no por este documento). Reemplazar <code>[CONTRASEÑA_ENTREGADA_POR_GERMAN]</code> con el valor recibido — siempre como parámetro separado, nunca dentro de la URL.</p>
+    </div>
+
+    <hr>
+
+    <!-- 4. QUÉ ESCRIBIR EN SUPABASE -->
+    <div class="section-label">04 — Tablas y campos</div>
+    <h2>Qué debe escribir el script en Supabase</h2>
+    <p>
+      El script consume tres endpoints del ERP y escribe en tres tablas de Supabase. La lógica es siempre <strong>upsert</strong>:
+      si el registro ya existe se actualiza, si es nuevo se inserta. Nunca se eliminan registros — la base de datos mantiene
+      historial completo.
+    </p>
+
+    <div class="box box-green">
+      <strong>Comportamiento del upsert</strong>
+      <p>✓ Registro nuevo → se inserta.</p>
+      <p>✓ Registro existente con datos iguales → se omite (sin cambios).</p>
+      <p>✓ Registro existente con datos diferentes → se actualiza.</p>
+      <p>✓ Correr el script múltiples veces es seguro — nunca crea duplicados.</p>
+    </div>
+
+    <!-- Endpoint 1 -->
+    <div class="endpoint-card">
+      <div class="endpoint-header">
+        <div class="endpoint-num">1</div>
+        <div class="endpoint-meta">
+          <h3>Pagos / Recaudo</h3>
+          <p>Registros de pagos recibidos. Mezcla C-Krea y Raymond — Supabase maneja la separación internamente.</p>
+        </div>
+      </div>
+      <div class="endpoint-body">
+        <div class="endpoint-url">GET /api/v1/reportes/recaudo-cartera/</div>
+        <div class="upsert-key">🔑 Upsert key: <code>Docto</code> → campo <code>siesa_docto</code></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Campo ERP (API)</th><th>Campo Supabase (tabla <code>payments</code>)</th><th>Notas</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><span class="cell-key">Docto</span></td><td><span class="cell-key">siesa_docto</span></td><td>Identificador único del pago ← upsert key</td></tr>
+              <tr><td><span class="cell-key">Cruce</span></td><td><span class="cell-key">siesa_cruce</span></td><td></td></tr>
+              <tr><td><span class="cell-key">Clasificacion</span></td><td><span class="cell-key">siesa_clasificacion</span></td><td>Solo incluir <code>RECAUDADO</code> y <code>VENCIDO</code> — excluir <code>NO PROYECTADO</code></td></tr>
+              <tr><td><span class="cell-key">FechaRecaudo</span></td><td><span class="cell-key">fecha_recaudo</span></td><td></td></tr>
+              <tr><td><span class="cell-key">FechaPp</span></td><td><span class="cell-key">fecha_pronto_pago</span></td><td></td></tr>
+              <tr><td><span class="cell-key">FechaVcto</span></td><td><span class="cell-key">fecha_vencimiento</span></td><td></td></tr>
+              <tr><td><span class="cell-key">FechaFact</span></td><td><span class="cell-key">fecha_factura</span></td><td></td></tr>
+              <tr><td><span class="cell-key">ValorAplicado</span></td><td><span class="cell-key">valor_aplicado</span></td><td></td></tr>
+              <tr><td><span class="cell-key">ProntoPago</span></td><td><span class="cell-key">pronto_pago_aplicado</span></td><td></td></tr>
+              <tr><td><span class="cell-key">ValorFinal</span></td><td><span class="cell-key">valor_final</span></td><td></td></tr>
+              <tr><td><span class="cell-key">Documento</span></td><td><span class="cell-key">tenant_nit</span></td><td>Hacer <code>.strip()</code> — la API devuelve NITs con espacios en blanco al final</td></tr>
+              <tr><td><span class="cell-key">Cliente</span></td><td><span class="cell-key">tenant_name</span></td><td></td></tr>
+              <tr><td><span class="cell-key">Asesor</span></td><td><span class="cell-key">company_identifier</span></td><td><code>MANUFACTURAS REYMON</code> = Raymond; resto = C-Krea</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="box box-red" style="margin-top:4px;">
+          <strong>⚠ Importante — excluir NO PROYECTADO</strong>
+          <p>El ERP incluye 91 filas con <code>Clasificacion = "NO PROYECTADO"</code> que representan ~$200M de valores ficticios (artefactos del ERP, no pagos reales). Filtrar antes de escribir en Supabase:</p>
+          <p><code>if row["Clasificacion"] not in ("RECAUDADO", "VENCIDO"): continue</code></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Endpoint 2 -->
+    <div class="endpoint-card">
+      <div class="endpoint-header">
+        <div class="endpoint-num">2</div>
+        <div class="endpoint-meta">
+          <h3>Cartera / Facturas pendientes</h3>
+          <p>Saldos por factura. Mezcla C-Krea y Raymond — Supabase maneja la separación.</p>
+        </div>
+      </div>
+      <div class="endpoint-body">
+        <div class="endpoint-url">GET /api/v1/reportes/cartera-cliente/</div>
+        <div class="upsert-key">🔑 Upsert key: <code>RowId</code> → campo <code>siesa_row_id</code></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Campo ERP (API)</th><th>Campo Supabase (tabla <code>cartera</code>)</th><th>Notas</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><span class="cell-key">RowId</span></td><td><span class="cell-key">siesa_row_id</span></td><td>Identificador único ← upsert key</td></tr>
+              <tr><td><span class="cell-key">Factura</span></td><td><span class="cell-key">siesa_factura</span></td><td></td></tr>
+              <tr><td><span class="cell-key">IdSucursal</span></td><td><span class="cell-key">siesa_sucursal</span></td><td></td></tr>
+              <tr><td><span class="cell-key">Obs</span></td><td><span class="cell-key">observacion</span></td><td></td></tr>
+              <tr><td><span class="cell-key">FechaFactura</span></td><td><span class="cell-key">fecha_factura</span></td><td></td></tr>
+              <tr><td><span class="cell-key">FechaProntoPago</span></td><td><span class="cell-key">fecha_pronto_pago</span></td><td></td></tr>
+              <tr><td><span class="cell-key">FechaVence</span></td><td><span class="cell-key">fecha_vence</span></td><td></td></tr>
+              <tr><td><span class="cell-key">Financia</span></td><td><span class="cell-key">dias_financia</span></td><td></td></tr>
+              <tr><td><span class="cell-key">Dias</span></td><td><span class="cell-key">dias_mora</span></td><td></td></tr>
+              <tr><td><span class="cell-key">VrVencido</span></td><td><span class="cell-key">valor_vencido</span></td><td></td></tr>
+              <tr><td><span class="cell-key">Saldo</span></td><td><span class="cell-key">saldo</span></td><td></td></tr>
+              <tr><td><span class="cell-key">VrCorriente</span></td><td><span class="cell-key">valor_corriente</span></td><td></td></tr>
+              <tr><td><span class="cell-key">Documento</span></td><td><span class="cell-key">tenant_nit</span></td><td>Hacer <code>.strip()</code> igual que en pagos</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Endpoint 3 -->
+    <div class="endpoint-card">
+      <div class="endpoint-header">
+        <div class="endpoint-num">3</div>
+        <div class="endpoint-meta">
+          <h3>Ocupación / Contratos activos</h3>
+          <p>Inquilinos, cánones y descuentos por local. Ya filtrado solo C-Krea desde el ERP.</p>
+        </div>
+      </div>
+      <div class="endpoint-body">
+        <div class="endpoint-url">GET /api/v1/reportes/ckrea-ocupacion/</div>
+        <div class="upsert-key">🔑 Upsert key (tenants): <code>DOCUMENTO</code> (NIT) &nbsp;·&nbsp; Upsert key (units): <code>LOC</code></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Campo ERP (API)</th><th>Campo Supabase</th><th>Tabla</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><span class="cell-key">LOC</span></td><td><span class="cell-key">unit_number</span></td><td><code>units</code></td></tr>
+              <tr><td><span class="cell-key">DOCUMENTO</span></td><td><span class="cell-key">nit</span></td><td><code>tenants</code></td></tr>
+              <tr><td><span class="cell-key">RAZON_SOCIAL</span></td><td><span class="cell-key">name</span></td><td><code>tenants</code></td></tr>
+              <tr><td><span class="cell-key">PRECIO</span></td><td><span class="cell-key">canon</span></td><td><code>tenants</code></td></tr>
+              <tr><td><span class="cell-key">DESCUENTO</span></td><td><span class="cell-key">descuento_fase</span></td><td><code>tenants</code></td></tr>
+              <tr><td><span class="cell-key">PRONTO_PAGO</span></td><td><span class="cell-key">pp_pct</span></td><td><code>tenants</code></td></tr>
+              <tr><td><span class="cell-key">INGRESO</span></td><td><span class="cell-key">contract_start</span></td><td><code>tenants</code></td></tr>
+              <tr><td><span class="cell-key">ESTADO</span></td><td><span class="cell-key">status</span></td><td><code>tenants</code> · <code>Activo</code> / <code>Inactivo</code></td></tr>
+              <tr><td><span class="cell-key">UNO</span></td><td><span class="cell-key">mora_1_30</span></td><td><code>tenants</code> · Mora 1–30 días</td></tr>
+              <tr><td><span class="cell-key">ONCE</span></td><td><span class="cell-key">mora_31_60</span></td><td><code>tenants</code> · Mora 31–60 días</td></tr>
+              <tr><td><span class="cell-key">VEINTIUNO</span></td><td><span class="cell-key">mora_61_90</span></td><td><code>tenants</code> · Mora 61–90 días</td></tr>
+              <tr><td><span class="cell-key">CRITICO</span></td><td><span class="cell-key">mora_critica</span></td><td><code>tenants</code> · Mora >90 días</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- 5. ERRORES COMUNES -->
+    <div class="section-label">05 — Referencia rápida</div>
+    <h2>Errores más comunes</h2>
+    <p>Si el script lanza un error, esta tabla cubre los casos más frecuentes:</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Error</th><th>Causa probable</th><th>Solución</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Tenant or user not found</code></td>
+            <td>Usuario en la URL sin sufijo del proyecto, o contraseña cortada por <code>&amp;</code></td>
+            <td>Usar parámetros separados (<code>host=</code>, <code>password=</code>) — nunca URL. Usuario debe ser <code>siesa_sync.bosylehvmtwtqkrlievy</code></td>
+          </tr>
+          <tr>
+            <td><code>password authentication failed</code></td>
+            <td>Contraseña incorrecta o copiada con espacios extra</td>
+            <td>Verificar que la contraseña esté copiada exactamente, sin espacios al inicio o final</td>
+          </tr>
+          <tr>
+            <td><code>SSL connection required</code></td>
+            <td>Falta el parámetro <code>sslmode</code></td>
+            <td>Agregar <code>sslmode="require"</code> a la conexión</td>
+          </tr>
+          <tr>
+            <td><code>permission denied for table X</code></td>
+            <td>El rol <code>siesa_sync</code> no tiene acceso a esa tabla específica</td>
+            <td>Avisar a German — se agrega el permiso en Supabase en minutos</td></tr>
+          <tr>
+            <td><code>connection refused</code> / timeout</td>
+            <td>Puerto bloqueado por firewall local, o host incorrecto</td>
+            <td>Verificar que el host sea exactamente <code>aws-0-us-east-1.pooler.supabase.com</code> y puerto <code>6543</code>. Probar con puerto 5432 (conexión directa) para descartar firewall</td>
+          </tr>
+          <tr>
+            <td><code>column X does not exist</code></td>
+            <td>Nombre de columna incorrecto en el INSERT/upsert</td>
+            <td>Revisar la tabla de mapeo en la sección 04 de este documento — los nombres en Supabase pueden diferir de los del ERP</td>
+          </tr>
+          <tr>
+            <td>Script conecta pero <code>COUNT(*) = 0</code></td>
+            <td>El rol <code>siesa_sync</code> puede conectar pero no ver filas (RLS activo)</td>
+            <td>Avisar a German — se verifica que RLS permita acceso al rol</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="box box-blue" style="margin-top: 8px;">
+      <strong>¿Algo que no está en esta lista?</strong>
+      <p>Copiar el error completo (tal como aparece en la terminal) y enviarlo a German — con eso se identifica la causa exacta rápidamente. El error exacto importa más que la descripción.</p>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <p>C-Krea PayControl Portal &nbsp;·&nbsp; Documento interno de trabajo</p>
+    <p>Preparado por German Burgos &nbsp;·&nbsp; Abril 2026 &nbsp;·&nbsp; Confidencial</p>
+  </div>
+
+</div>
+</body>
+</html>
