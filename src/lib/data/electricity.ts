@@ -24,22 +24,22 @@ export interface ElectricityInvoice {
 }
 
 export async function getElectricityInvoices(
-  companyId: string,
+  empresaId: string,
   periodo: string,
 ): Promise<ElectricityInvoice[]> {
   const rows = await execute(`
     SELECT
       id,
-      electricity_group,
+      grupo_energia                  AS electricity_group,
       direccion,
       proveedor,
-      fecha_factura::text  AS fecha_factura,
-      valor_factura::numeric AS valor_factura,
-      kwh_factura::numeric   AS kwh_factura,
-      tarifa_kwh::numeric    AS tarifa_kwh,
+      fecha_factura::text            AS fecha_factura,
+      valor_factura::numeric         AS valor_factura,
+      kwh_factura::numeric           AS kwh_factura,
+      tarifa_kwh::numeric            AS tarifa_kwh,
       notas
-    FROM electricity_invoices
-    WHERE company_id = '${companyId}' AND periodo = '${periodo}'
+    FROM v2.facturas_energia
+    WHERE empresa_id = '${empresaId}'::uuid AND periodo = '${periodo}'
   `)
 
   const byGroup = new Map(rows.map((r) => [String(r.electricity_group), r]))
@@ -61,17 +61,17 @@ export async function getElectricityInvoices(
 }
 
 export async function getElectricityTarifaForUnit(
-  companyId: string,
+  empresaId: string,
   unitId: string,
   periodo: string,
 ): Promise<number> {
   const rows = await execute(`
     SELECT ei.tarifa_kwh::numeric AS tarifa_kwh
-    FROM electricity_invoices ei
-    JOIN units u ON u.electricity_group = ei.electricity_group
-    WHERE ei.company_id = '${companyId}'
+    FROM v2.facturas_energia ei
+    JOIN v2.locales u ON u.grupo_energia = ei.grupo_energia
+    WHERE ei.empresa_id = '${empresaId}'::uuid
       AND ei.periodo    = '${periodo}'
-      AND u.id          = '${unitId}'
+      AND u.id          = '${unitId}'::uuid
     LIMIT 1
   `)
   return rows[0] ? Number(rows[0].tarifa_kwh) : 0

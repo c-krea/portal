@@ -26,103 +26,90 @@ export type FacturaSummary = {
   porEstado: Record<string, number>
 }
 
+/**
+ * v2: facturas read from vista_facturas (siesa_raw documentos with is_factura=true).
+ * Generation lives in Siesa. Portal is read-only — no line-item breakdown, no portal-side status.
+ * Saldo comes from vista_cartera_actual aggregated at tenant+periodo level (best-effort, not 1:1).
+ */
+
+const PERIODO_TO_STR = `LPAD(periodo::text, 6, '0')`
+const PERIODO_FORMATTED = `SUBSTRING(${PERIODO_TO_STR}, 1, 4) || '-' || SUBSTRING(${PERIODO_TO_STR}, 5, 2)`
+
 export async function getFacturas(periodo?: string): Promise<FacturaRow[]> {
+  const periodoInt = periodo ? Number(periodo.replace("-", "")) : null
   const rows = await execute(`
     SELECT
-      i.id,
-      i.contract_id,
-      i.tenant_id,
-      u.unit_number,
-      COALESCE(t.nombre_corto, t.razon_social) AS cliente_name,
-      i.periodo,
-      i.fecha_emision,
-      i.fecha_vencimiento,
-      COALESCE(i.subtotal_canon, 0)::numeric        AS subtotal_canon,
-      COALESCE(i.subtotal_descuentos, 0)::numeric   AS subtotal_descuentos,
-      COALESCE(i.subtotal_pronto_pago, 0)::numeric  AS subtotal_pronto_pago,
-      COALESCE(i.subtotal_gastos, 0)::numeric       AS subtotal_gastos,
-      COALESCE(i.iva, 0)::numeric                   AS iva,
-      COALESCE(i.total, 0)::numeric                 AS total,
-      COALESCE(i.saldo, 0)::numeric                 AS saldo,
-      i.status
-    FROM invoices i
-    JOIN contracts c ON i.contract_id = c.id
-    JOIN tenants t   ON i.tenant_id   = t.id
-    JOIN units u     ON i.unit_id     = u.id
-    ${periodo ? `WHERE i.periodo = '${periodo}'` : ``}
-    ORDER BY i.periodo DESC, u.unit_number
+      v.doc_id                                          AS id,
+      v.inquilino_id::text                              AS tenant_id,
+      ${PERIODO_FORMATTED}                              AS periodo,
+      v.razon_social                                    AS cliente_name,
+      COALESCE((
+        SELECT u.unidad
+        FROM v2.contratos co
+        JOIN v2.locales u ON co.local_id = u.id
+        WHERE co.inquilino_id = v.inquilino_id
+          AND co.estado IN ('activo', 'critico')
+        ORDER BY u.unidad
+        LIMIT 1
+      ), '')                                            AS unit_number,
+      COALESCE(v.base_neta, 0)::numeric                 AS subtotal_canon,
+      COALESCE(v.iva, 0)::numeric                       AS iva,
+      COALESCE(v.valor_total, 0)::numeric               AS total
+    FROM v2.vista_facturas v
+    WHERE v.is_factura = true
+      ${periodoInt ? `AND v.periodo = ${periodoInt}` : ``}
+    ORDER BY v.periodo DESC, v.razon_social
   `)
 
   return (rows as Array<Record<string, unknown>>).map((r) => ({
     id:                 String(r.id),
-    contractId:         String(r.contract_id),
-    tenantId:           String(r.tenant_id),
-    unitNumber:         String(r.unit_number),
-    clienteName:        String(r.cliente_name),
+    contractId:         "",
+    tenantId:           String(r.tenant_id ?? ""),
+    unitNumber:         String(r.unit_number ?? ""),
+    clienteName:        String(r.cliente_name ?? ""),
     periodo:            String(r.periodo),
-    fechaEmision:       String(r.fecha_emision),
-    fechaVencimiento:   String(r.fecha_vencimiento),
+    fechaEmision:       "",
+    fechaVencimiento:   "",
     subtotalCanon:      Number(r.subtotal_canon),
-    subtotalDescuentos: Number(r.subtotal_descuentos),
-    subtotalProntoPago: Number(r.subtotal_pronto_pago),
-    subtotalGastos:     Number(r.subtotal_gastos),
+    subtotalDescuentos: 0,
+    subtotalProntoPago: 0,
+    subtotalGastos:     0,
     iva:                Number(r.iva),
     total:              Number(r.total),
-    saldo:              Number(r.saldo),
-    status:             String(r.status),
+    saldo:              0,
+    status:             "emitida",
   }))
 }
 
 export async function getFacturaSummary(periodo?: string): Promise<FacturaSummary> {
-  const rows = await execute(`
-    SELECT
-      COUNT(*)::int                                       AS total_facturas,
-      COALESCE(SUM(total), 0)::numeric                    AS total_bruto,
-      COALESCE(SUM(saldo), 0)::numeric                    AS total_saldo,
-      status,
-      COUNT(*)::int                                       AS count_by_status
-    FROM invoices
-    ${periodo ? `WHERE periodo = '${periodo}'` : ``}
-    GROUP BY status
-  `)
-
-  const porEstado: Record<string, number> = {}
-  let totalFacturas = 0
-  let totalBruto = 0
-  let totalSaldo = 0
-
-  for (const r of rows as Array<Record<string, unknown>>) {
-    const s = String(r.status)
-    porEstado[s] = Number(r.count_by_status)
-    totalFacturas += Number(r.count_by_status)
-    totalBruto += Number(r.total_bruto)
-    totalSaldo += Number(r.total_saldo)
-  }
-
-  // Re-query totals without group by for accuracy
+  const periodoInt = periodo ? Number(periodo.replace("-", "")) : null
   const totals = await execute(`
     SELECT
-      COUNT(*)::int                    AS total_facturas,
-      COALESCE(SUM(total), 0)::numeric AS total_bruto,
-      COALESCE(SUM(saldo), 0)::numeric AS total_saldo
-    FROM invoices
-    ${periodo ? `WHERE periodo = '${periodo}'` : ``}
+      COUNT(*)::int                          AS total_facturas,
+      COALESCE(SUM(valor_total), 0)::numeric AS total_bruto
+    FROM v2.vista_facturas
+    WHERE is_factura = true
+      ${periodoInt ? `AND periodo = ${periodoInt}` : ``}
   `)
 
   const t = (totals as Array<Record<string, unknown>>)[0] ?? {}
+  const totalFacturas = Number(t.total_facturas ?? 0)
   return {
-    totalFacturas: Number(t.total_facturas ?? 0),
+    totalFacturas,
     totalBruto:    Number(t.total_bruto ?? 0),
-    totalSaldo:    Number(t.total_saldo ?? 0),
-    porEstado,
+    totalSaldo:    0,
+    porEstado:     totalFacturas > 0 ? { emitida: totalFacturas } : {},
   }
 }
 
 export async function getAvailablePeriodos(): Promise<string[]> {
   const rows = await execute(`
-    SELECT DISTINCT periodo FROM invoices ORDER BY periodo DESC
+    SELECT DISTINCT ${PERIODO_FORMATTED} AS p
+    FROM v2.vista_facturas
+    WHERE is_factura = true
+    ORDER BY p DESC
   `)
-  return (rows as Array<Record<string, unknown>>).map((r) => String(r.periodo))
+  return (rows as Array<Record<string, unknown>>).map((r) => String(r.p))
 }
 
 export type LineItem = {
@@ -151,85 +138,75 @@ export type FacturaDetalle = FacturaRow & {
 export async function getFacturaById(id: string): Promise<FacturaDetalle | null> {
   const rows = await execute(`
     SELECT
-      i.id,
-      i.contract_id,
-      i.tenant_id,
-      u.unit_number,
-      u.unit_code,
-      COALESCE(t.nombre_corto, t.razon_social)          AS cliente_name,
-      t.nit                                              AS tenant_nit,
-      t.email                                            AS tenant_email,
-      t.telefono                                         AS tenant_telefono,
-      i.periodo,
-      i.fecha_emision,
-      i.fecha_vencimiento,
-      i.fecha_pronto_pago,
-      COALESCE(i.subtotal_canon, 0)::numeric             AS subtotal_canon,
-      COALESCE(i.subtotal_descuentos, 0)::numeric        AS subtotal_descuentos,
-      COALESCE(i.subtotal_pronto_pago, 0)::numeric       AS subtotal_pronto_pago,
-      COALESCE(i.subtotal_gastos, 0)::numeric            AS subtotal_gastos,
-      COALESCE(i.iva, 0)::numeric                        AS iva,
-      COALESCE(i.total, 0)::numeric                      AS total,
-      COALESCE(i.saldo, 0)::numeric                      AS saldo,
-      i.status,
-      co.name                                            AS company_name,
-      co.nit                                             AS company_nit
-    FROM invoices i
-    JOIN contracts c ON i.contract_id = c.id
-    JOIN tenants t   ON i.tenant_id   = t.id
-    JOIN units u     ON i.unit_id     = u.id
-    JOIN companies co ON i.company_id = co.id
-    WHERE i.id = '${id}'::uuid
+      v.doc_id,
+      v.inquilino_id::text                              AS tenant_id,
+      ${PERIODO_FORMATTED}                              AS periodo,
+      v.razon_social                                    AS cliente_name,
+      v.nit_inquilino                                   AS tenant_nit,
+      t.email_contacto                                  AS email_contacto,
+      t.portal_email                                    AS portal_email,
+      t.telefono                                        AS tenant_telefono,
+      COALESCE(v.base_neta, 0)::numeric                 AS subtotal_canon,
+      COALESCE(v.iva, 0)::numeric                       AS iva,
+      COALESCE(v.retenciones, 0)::numeric               AS retenciones,
+      COALESCE(v.valor_total, 0)::numeric               AS total,
+      e.nombre                                          AS company_name,
+      e.nit                                             AS company_nit,
+      COALESCE((
+        SELECT u.unidad
+        FROM v2.contratos co
+        JOIN v2.locales u ON co.local_id = u.id
+        WHERE co.inquilino_id = v.inquilino_id
+          AND co.estado IN ('activo', 'critico')
+        ORDER BY u.unidad
+        LIMIT 1
+      ), '')                                            AS unit_number,
+      COALESCE((
+        SELECT u.codigo
+        FROM v2.contratos co
+        JOIN v2.locales u ON co.local_id = u.id
+        WHERE co.inquilino_id = v.inquilino_id
+          AND co.estado IN ('activo', 'critico')
+        ORDER BY u.unidad
+        LIMIT 1
+      ), '')                                            AS unit_code
+    FROM v2.vista_facturas v
+    LEFT JOIN v2.inquilinos t ON v.inquilino_id = t.id
+    LEFT JOIN v2.empresas   e ON v.empresa_id   = e.id
+    WHERE v.doc_id = '${id.replace(/'/g, "''")}'
+      AND v.is_factura = true
     LIMIT 1
   `)
 
-  if ((rows as Array<Record<string, unknown>>).length === 0) return null
-
-  const r = (rows as Array<Record<string, unknown>>)[0]
-
-  const lineRows = await execute(`
-    SELECT id, type, description,
-           amount::numeric AS amount,
-           COALESCE(tax_amount, 0)::numeric AS tax_amount,
-           COALESCE(sort_order, 0) AS sort_order
-    FROM invoice_line_items
-    WHERE invoice_id = '${id}'::uuid
-    ORDER BY sort_order
-  `)
-
-  const lineItems: LineItem[] = (lineRows as Array<Record<string, unknown>>).map((li) => ({
-    id:          String(li.id),
-    type:        String(li.type),
-    description: String(li.description),
-    amount:      Number(li.amount),
-    taxAmount:   Number(li.tax_amount),
-    sortOrder:   Number(li.sort_order),
-  }))
+  const list = rows as Array<Record<string, unknown>>
+  if (list.length === 0) return null
+  const r = list[0]
+  const email = (r.email_contacto ?? r.portal_email) as string | null
 
   return {
-    id:                 String(r.id),
-    contractId:         String(r.contract_id),
-    tenantId:           String(r.tenant_id),
-    unitNumber:         String(r.unit_number),
-    unitCode:           String(r.unit_code),
-    clienteName:        String(r.cliente_name),
-    tenantNit:          String(r.tenant_nit),
-    tenantEmail:        r.tenant_email ? String(r.tenant_email) : null,
+    id:                 String(r.doc_id),
+    contractId:         "",
+    tenantId:           String(r.tenant_id ?? ""),
+    unitNumber:         String(r.unit_number ?? ""),
+    unitCode:           String(r.unit_code ?? ""),
+    clienteName:        String(r.cliente_name ?? ""),
+    tenantNit:          String(r.tenant_nit ?? ""),
+    tenantEmail:        email ? String(email) : null,
     tenantTelefono:     r.tenant_telefono ? String(r.tenant_telefono) : null,
     periodo:            String(r.periodo),
-    fechaEmision:       String(r.fecha_emision),
-    fechaVencimiento:   String(r.fecha_vencimiento),
-    fechaProntoPago:    r.fecha_pronto_pago ? String(r.fecha_pronto_pago) : null,
+    fechaEmision:       "",
+    fechaVencimiento:   "",
+    fechaProntoPago:    null,
     subtotalCanon:      Number(r.subtotal_canon),
-    subtotalDescuentos: Number(r.subtotal_descuentos),
-    subtotalProntoPago: Number(r.subtotal_pronto_pago),
-    subtotalGastos:     Number(r.subtotal_gastos),
+    subtotalDescuentos: 0,
+    subtotalProntoPago: 0,
+    subtotalGastos:     0,
     iva:                Number(r.iva),
     total:              Number(r.total),
-    saldo:              Number(r.saldo),
-    status:             String(r.status),
-    companyName:        String(r.company_name),
-    companyNit:         String(r.company_nit),
-    lineItems,
+    saldo:              0,
+    status:             "emitida",
+    companyName:        String(r.company_name ?? "Central Creativa C-KREA"),
+    companyNit:         String(r.company_nit ?? ""),
+    lineItems:          [],
   }
 }

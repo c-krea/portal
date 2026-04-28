@@ -51,3 +51,7 @@ graphify-out/
 sentry-wizard-installation-error-*.log
 Archive (DONT OPEN)/
 docs/audits/INSIGHTS_v1.md
+
+# Local-only tooling + DB backups
+.claude/
+backups/

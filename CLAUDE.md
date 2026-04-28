@@ -2,6 +2,24 @@
 
 # C-Krea PayControl — Project CLAUDE.md
 
+## Session Start Protocol — MUST RUN FIRST (every single session)
+
+Before ANY work or reading code:
+
+1. Run `linear issue list --team WOR --project "C-Krea Portal" --all-states --sort priority` → note open issues.
+   (Workspace: `workspacegb29`. Project name is exact, hyphenated `C-Krea Portal`. CLI errors without `--sort`.)
+2. Read **last 5 entries** in `docs/JOURNAL.md`.
+3. Read `~/.claude/memory/german-profile.md`.
+4. Scan **Reusable Functions** list below (skip if not yet defined).
+5. Quick health check:
+   - `vercel ls` → latest deployment status.
+   - `sentry-cli issues list -o german-burgos -p javascript-nextjs -s unresolved` → unresolved errors. Auth fail → report "Sentry: auth not configured" and move on.
+   - Flag broken/suspicious before new work.
+6. If relevant: check or rebuild `graphify-out/GRAPH_REPORT.md`.
+7. One-line summary: *"in flight: WOR-X, WOR-Y. Last journal: Z (Session N). Health: deploy OK / X Sentry issues. Ready to continue?"*
+
+Run checklist **before any code, planning, or analysis**. Confirm in first response.
+
 ## What this is
 Commercial rental payment control portal for ~85 units in Central Kreativa, Bogotá.
 Replaces manual Excel tracking. Single source of truth for all tenant payments, invoices, gastos, and Siesa ERP sync.
@@ -81,6 +99,12 @@ Invoice chain: `Canon → minus phase discount → IVA (19%) → minus pronto pa
 ## Environment variables
 See `.env.local`. Never commit this file. Supabase keys + DB URL required for any DB work.
 DATABASE_URL needs the DB password from Supabase → Settings → Database.
+
+## Supabase access (MCP via PAT)
+- **Only path**: Supabase MCP launcher at `.claude/supabase-mcp.sh` → `@supabase/mcp-server-supabase@latest --project-ref=$SUPABASE_PROJECT_REF`
+- **Auth**: PAT in `.env.local` → `SUPABASE_ACCESS_TOKEN` + `SUPABASE_PROJECT_REF` (project ref `bosylehvmtwtqkrlievy`)
+- **No Supabase CLI** — not installed, not used. Use MCP tools (`execute_sql`, `list_tables`, `apply_migration`).
+- Destructive ops gated by global CLAUDE.md safety rule: confirm before `DROP/DELETE/TRUNCATE/ALTER`.
 
 ## Siesa integration
 - Pull: query SQL Server copy → portal

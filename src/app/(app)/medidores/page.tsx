@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { PageHeader } from "@/components/layout/page-header"
 import { getMedidoresAdmin, getUnitsWithMeters } from "@/lib/data/medidores"
 import { formatCOP } from "@/lib/formatters"
-import { execute } from "@/lib/db/executor"
+import { getEmpresaCkreaId } from "@/lib/empresa"
 import { CheckCircle, Clock, AlertCircle, Zap, FileText } from "lucide-react"
 import { MedidoresAdminTable } from "@/components/medidores/medidores-admin-table"
 import Link from "next/link"
@@ -36,12 +36,11 @@ export default async function MedidoresPage({
   const periodo = periodoParam ?? defaultPeriodo
   const PERIODOS = buildPeriodos(selectedYear)
 
-  const companies = await execute(`SELECT id FROM companies LIMIT 1`)
-  const companyId = String(companies[0].id)
+  const empresaId = await getEmpresaCkreaId()
 
   const [rows, units] = await Promise.all([
-    getMedidoresAdmin(companyId, periodo),
-    getUnitsWithMeters(companyId),
+    getMedidoresAdmin(empresaId, periodo),
+    getUnitsWithMeters(empresaId),
   ])
 
   const registradas  = rows.filter((r) => r.status === "registrada")

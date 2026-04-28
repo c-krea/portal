@@ -3,25 +3,27 @@
 import { supabaseAdmin } from "@/lib/db/executor"
 import { revalidatePath } from "next/cache"
 
-export async function updatePortalEmail(tenantId: string, email: string) {
+export async function updatePortalEmail(inquilinoId: string, email: string) {
   const trimmed = email.trim().toLowerCase()
   if (!trimmed || !trimmed.includes("@")) {
     return { error: "Email inválido" }
   }
 
-  // 1. Update tenants table
+  // 1. Update v2.inquilinos
   const { error: dbError } = await supabaseAdmin
-    .from("tenants")
+    .schema("v2")
+    .from("inquilinos")
     .update({ portal_email: trimmed })
-    .eq("id", tenantId)
+    .eq("id", inquilinoId)
   if (dbError) return { error: dbError.message }
 
-  // 2. If tenant already has an auth account, keep auth.users in sync
+  // 2. Sync auth.users if perfil exists
   const { data: profile } = await supabaseAdmin
-    .from("profiles")
+    .schema("v2")
+    .from("perfiles")
     .select("id")
-    .eq("tenant_id", tenantId)
-    .eq("role", "tenant")
+    .eq("inquilino_id", inquilinoId)
+    .eq("rol", "inquilino")
     .single()
 
   if (profile?.id) {
@@ -37,8 +39,8 @@ export async function updatePortalEmail(tenantId: string, email: string) {
 }
 
 export async function updateTenantUser(
-  tenantId: string,
-  unitIds: string[],
+  inquilinoId: string,
+  localIds: string[],
   data: {
     nombre: string
     razonSocial: string
@@ -64,28 +66,30 @@ export async function updateTenantUser(
   const bizEmail = data.businessEmail.trim().toLowerCase()
   if (bizEmail && !bizEmail.includes("@")) return { error: "Email de contacto inválido" }
 
-  // Update tenant fields
-  const { error: tenantError } = await supabaseAdmin
-    .from("tenants")
+  // Update inquilino
+  const { error: inquilinoError } = await supabaseAdmin
+    .schema("v2")
+    .from("inquilinos")
     .update({
       nombre_corto:    data.nombre.trim() || null,
       razon_social:    data.razonSocial.trim(),
       nit:             data.nit.trim() || null,
       telefono:        data.telefono.trim() || null,
       contacto_nombre: data.contactoNombre.trim() || null,
-      email:           bizEmail || null,
+      email_contacto:  bizEmail || null,
       portal_email:    portalEmail || null,
     })
-    .eq("id", tenantId)
-  if (tenantError) return { error: tenantError.message }
+    .eq("id", inquilinoId)
+  if (inquilinoError) return { error: inquilinoError.message }
 
-  // Sync portal email to auth if account exists
+  // Sync portal email to auth if perfil exists
   if (portalEmail) {
     const { data: profile } = await supabaseAdmin
-      .from("profiles")
+      .schema("v2")
+      .from("perfiles")
       .select("id")
-      .eq("tenant_id", tenantId)
-      .eq("role", "tenant")
+      .eq("inquilino_id", inquilinoId)
+      .eq("rol", "inquilino")
       .single()
     if (profile?.id) {
       const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
@@ -96,28 +100,30 @@ export async function updateTenantUser(
     }
   }
 
-  // Update unit fields — only if single unit to avoid ambiguity
-  if (unitIds.length === 1) {
-    const unitUpdate: Record<string, string> = {}
-    if (data.unitNumber.trim()) unitUpdate.unit_number = data.unitNumber.trim()
-    if (data.entrada.trim()) unitUpdate.entrada = data.entrada.trim()
-    if (Object.keys(unitUpdate).length > 0) {
-      const { error: unitError } = await supabaseAdmin
-        .from("units")
-        .update(unitUpdate)
-        .eq("id", unitIds[0])
-      if (unitError) return { error: `Tenant actualizado, pero error en local: ${unitError.message}` }
+  // Update local fields — only if single local to avoid ambiguity
+  if (localIds.length === 1) {
+    const localUpdate: Record<string, string> = {}
+    if (data.unitNumber.trim()) localUpdate.unidad = data.unitNumber.trim()
+    if (data.entrada.trim()) localUpdate.entrada = data.entrada.trim()
+    if (Object.keys(localUpdate).length > 0) {
+      const { error: localError } = await supabaseAdmin
+        .schema("v2")
+        .from("locales")
+        .update(localUpdate)
+        .eq("id", localIds[0])
+      if (localError) return { error: `Inquilino actualizado, pero error en local: ${localError.message}` }
     }
   }
 
   // Update contract fields if provided
   if (data.contractId && data.canonBase != null) {
     const { error: contractError } = await supabaseAdmin
-      .from("contracts")
+      .schema("v2")
+      .from("contratos")
       .update({
         canon_base:             data.canonBase,
-        descuento_pct:          data.descuentoPct ?? null,
-        pronto_pago_pct:        data.prontoPagoPct ?? null,
+        descuento_pct:          data.descuentoPct ?? 0,
+        pronto_pago_pct:        data.prontoPagoPct ?? 0,
         fecha_inicio:           data.fechaInicio ?? undefined,
         fecha_fin:              data.fechaFin ?? null,
         descripcion_descuentos: data.descripcionDescuentos ?? null,
@@ -131,30 +137,37 @@ export async function updateTenantUser(
   return { success: true }
 }
 
-export async function createTenantAccount(tenantId: string) {
-  const { data: tenant, error: fetchError } = await supabaseAdmin
-    .from("tenants")
-    .select("portal_email, nombre_corto, razon_social")
-    .eq("id", tenantId)
+export async function createTenantAccount(inquilinoId: string) {
+  const { data: inquilino, error: fetchError } = await supabaseAdmin
+    .schema("v2")
+    .from("inquilinos")
+    .select("portal_email, nombre_corto, razon_social, empresa_id")
+    .eq("id", inquilinoId)
     .single()
 
-  if (fetchError || !tenant) return { error: "Inquilino no encontrado" }
-  if (!tenant.portal_email) return { error: "Sin email configurado" }
+  if (fetchError || !inquilino) return { error: "Inquilino no encontrado" }
+  if (!inquilino.portal_email) return { error: "Sin email configurado" }
 
-  const fullName = (tenant.nombre_corto || tenant.razon_social) as string
+  const fullName = (inquilino.nombre_corto || inquilino.razon_social) as string
 
   const { data, error: authError } = await supabaseAdmin.auth.admin.createUser({
-    email: tenant.portal_email as string,
+    email: inquilino.portal_email as string,
     email_confirm: true,
-    user_metadata: { full_name: fullName, role: "tenant" },
+    user_metadata: { full_name: fullName, role: "inquilino" },
   })
 
   if (authError) return { error: authError.message }
 
-  // Trigger creates profile without tenant_id — patch it
+  // Trigger creates perfil — patch it with inquilino_id + rol
   await supabaseAdmin
-    .from("profiles")
-    .update({ tenant_id: tenantId, role: "tenant", full_name: fullName })
+    .schema("v2")
+    .from("perfiles")
+    .update({
+      inquilino_id: inquilinoId,
+      rol: "inquilino",
+      nombre_completo: fullName,
+      empresa_id: inquilino.empresa_id,
+    })
     .eq("id", data.user.id)
 
   revalidatePath("/usuarios")
@@ -170,8 +183,9 @@ export async function updateAdminUser(
   if (!data.fullName.trim()) return { error: "El nombre es obligatorio" }
 
   const { error: profileError } = await supabaseAdmin
-    .from("profiles")
-    .update({ full_name: data.fullName.trim(), email, role: data.role })
+    .schema("v2")
+    .from("perfiles")
+    .update({ nombre_completo: data.fullName.trim(), email, rol: data.role as "admin" | "finanzas" | "visor" | "inquilino" })
     .eq("id", userId)
   if (profileError) return { error: profileError.message }
 

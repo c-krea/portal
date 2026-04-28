@@ -1,6 +1,7 @@
 "use server"
 
-import { execute, supabaseAdmin } from "@/lib/db/executor"
+import { supabaseAdmin } from "@/lib/db/executor"
+import { getEmpresaCkreaId } from "@/lib/empresa"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -46,15 +47,15 @@ export async function registrarLectura(
   const totalEnergia = Math.round(kwh * tarifaKwh)
 
   try {
-    const companies = await execute(`SELECT id FROM companies LIMIT 1`)
-    const companyId = String(companies[0].id)
+    const empresaId = await getEmpresaCkreaId()
 
     const { error } = await supabaseAdmin
-      .from("meter_readings")
+      .schema("v2")
+      .from("lecturas_medidor")
       .upsert(
         {
-          company_id:       companyId,
-          unit_id:          unitId,
+          empresa_id:       empresaId,
+          local_id:         unitId,
           periodo,
           lectura_anterior: String(lecturaAnterior),
           lectura_actual:   String(lecturaActual),
@@ -63,7 +64,7 @@ export async function registrarLectura(
           total_energia:    String(totalEnergia),
           notas:            notas ?? null,
         },
-        { onConflict: "unit_id,periodo" },
+        { onConflict: "local_id,periodo" },
       )
     if (error) throw new Error(error.message)
 

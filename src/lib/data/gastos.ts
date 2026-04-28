@@ -20,7 +20,7 @@ export type GastoSummary = {
 }
 
 export type GastoChartRow = {
-  periodo: string          // "Ene", "Feb" …
+  periodo: string
   vigilancia: number
   reparaciones: number
   nomina: number
@@ -36,16 +36,15 @@ export async function getGastoRows(periodo?: string): Promise<GastoRow[]> {
   const rows = await execute(`
     SELECT
       g.id, g.periodo,
-      gt.name                                     AS gasto_type_name,
-      gt.category,
-      gt.allocation_method,
-      COALESCE(g.total_amount, 0)::numeric        AS total_amount,
-      g.description,
-      g.is_allocated
-    FROM gastos g
-    JOIN gasto_types gt ON gt.id = g.gasto_type_id
+      gt.nombre                                   AS gasto_type_name,
+      gt.categoria                                AS category,
+      gt.metodo_asignacion                        AS allocation_method,
+      COALESCE(g.monto_total, 0)::numeric         AS total_amount,
+      g.descripcion                               AS description
+    FROM v2.gastos g
+    JOIN v2.tipos_gasto gt ON gt.id = g.tipo_gasto_id
     ${periodo ? `WHERE g.periodo = '${periodo}'` : ""}
-    ORDER BY g.periodo DESC, gt.category, gt.name
+    ORDER BY g.periodo DESC, gt.categoria, gt.nombre
   `)
   return rows.map((r) => ({
     id: String(r.id),
@@ -55,15 +54,15 @@ export async function getGastoRows(periodo?: string): Promise<GastoRow[]> {
     allocationMethod: String(r.allocation_method),
     totalAmount: Number(r.total_amount ?? 0),
     description: r.description ? String(r.description) : null,
-    isAllocated: Boolean(r.is_allocated),
+    isAllocated: false,
   }))
 }
 
 export async function getGastoSummary(): Promise<GastoSummary> {
   const rows = await execute(`
     WITH monthly AS (
-      SELECT periodo, SUM(total_amount)::numeric AS total
-      FROM gastos GROUP BY periodo
+      SELECT periodo, SUM(monto_total)::numeric AS total
+      FROM v2.gastos GROUP BY periodo
     )
     SELECT
       SUM(total)::numeric                          AS total_ytd,
@@ -94,17 +93,17 @@ export async function getGastosForPeriodo(periodo: string): Promise<GastoChartRo
   const rows = await execute(`
     SELECT
       g.periodo,
-      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'vigilancia'),        0)::numeric AS vigilancia,
-      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'reparaciones'),      0)::numeric AS reparaciones,
-      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'nomina'),            0)::numeric AS nomina,
-      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'servicios_publicos'),0)::numeric AS servicios_publicos,
-      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'aseo_cafeteria'),    0)::numeric AS aseo_cafeteria,
-      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'publicidad'),        0)::numeric AS publicidad,
-      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'impuestos'),         0)::numeric AS impuestos,
-      COALESCE(SUM(g.total_amount) FILTER (WHERE gt.category = 'otros'),             0)::numeric AS otros,
-      COALESCE(SUM(g.total_amount),                                                  0)::numeric AS total
-    FROM gastos g
-    JOIN gasto_types gt ON gt.id = g.gasto_type_id
+      COALESCE(SUM(g.monto_total) FILTER (WHERE gt.categoria = 'vigilancia'),        0)::numeric AS vigilancia,
+      COALESCE(SUM(g.monto_total) FILTER (WHERE gt.categoria = 'reparaciones'),      0)::numeric AS reparaciones,
+      COALESCE(SUM(g.monto_total) FILTER (WHERE gt.categoria = 'nomina'),            0)::numeric AS nomina,
+      COALESCE(SUM(g.monto_total) FILTER (WHERE gt.categoria = 'servicios_publicos'),0)::numeric AS servicios_publicos,
+      COALESCE(SUM(g.monto_total) FILTER (WHERE gt.categoria = 'aseo_cafeteria'),    0)::numeric AS aseo_cafeteria,
+      COALESCE(SUM(g.monto_total) FILTER (WHERE gt.categoria = 'publicidad'),        0)::numeric AS publicidad,
+      COALESCE(SUM(g.monto_total) FILTER (WHERE gt.categoria = 'impuestos'),         0)::numeric AS impuestos,
+      COALESCE(SUM(g.monto_total) FILTER (WHERE gt.categoria = 'otros'),             0)::numeric AS otros,
+      COALESCE(SUM(g.monto_total),                                                   0)::numeric AS total
+    FROM v2.gastos g
+    JOIN v2.tipos_gasto gt ON gt.id = g.tipo_gasto_id
     WHERE g.periodo = '${periodo}'
     GROUP BY g.periodo
   `)

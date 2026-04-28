@@ -29,8 +29,9 @@ export async function updateFinancialRule(
 
   try {
     const { error } = await supabaseAdmin
-      .from("financial_rules")
-      .update({ rule_value: String(parsed.data.value) })
+      .schema("v2")
+      .from("reglas_financieras")
+      .update({ valor: String(parsed.data.value) })
       .eq("id", parsed.data.id)
     if (error) throw new Error(error.message)
 

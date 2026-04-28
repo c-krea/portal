@@ -60,26 +60,28 @@ export type ContractPhaseItem = {
 }
 
 export async function getTenantDetail(tenantId: string, unitNumber?: string): Promise<TenantDetail | null> {
-  const unitFilter = unitNumber ? `AND u.unit_number = '${unitNumber}'` : ""
+  const unitFilter = unitNumber ? `AND u.unidad = '${unitNumber}'` : ""
   const rows = await execute(`
     SELECT
       t.id, t.razon_social, t.nombre_corto, t.nit,
-      t.email, t.telefono, t.contacto_nombre, t.condicion_pago,
+      COALESCE(t.email_contacto, t.portal_email) AS email,
+      t.telefono, t.contacto_nombre, t.condicion_pago,
       c.id                                           AS contract_id,
-      c.status                                       AS contract_status,
+      c.estado                                       AS contract_status,
       c.fecha_inicio, c.fecha_fin,
       COALESCE(c.canon_base, 0)::numeric             AS canon_base,
       COALESCE(c.descuento_pct, 0)::numeric          AS descuento_pct,
       COALESCE(c.pronto_pago_pct, 0)::numeric        AS pronto_pago_pct,
       c.descripcion_descuentos,
-      u.unit_number, u.entrada,
+      u.unidad                                       AS unit_number,
+      u.entrada,
       u.area_m2::numeric                             AS area_m2,
       u.clasificacion
-    FROM tenants t
-    LEFT JOIN contracts c
-      ON c.tenant_id = t.id
-      AND c.status IN ('activo', 'critico', 'vencido', 'terminado')
-    LEFT JOIN units u ON c.unit_id = u.id
+    FROM v2.inquilinos t
+    LEFT JOIN v2.contratos c
+      ON c.inquilino_id = t.id
+      AND c.estado IN ('activo', 'critico', 'vencido', 'terminado')
+    LEFT JOIN v2.locales u ON c.local_id = u.id
     WHERE t.id = '${tenantId}' ${unitFilter}
     ORDER BY c.created_at DESC NULLS LAST
     LIMIT 1
@@ -128,20 +130,21 @@ export type TenantContract = {
 export async function getTenantContracts(tenantId: string): Promise<TenantContract[]> {
   const rows = await execute(`
     SELECT
-      c.id AS contract_id, c.status AS contract_status,
+      c.id AS contract_id, c.estado AS contract_status,
       c.fecha_inicio, c.fecha_fin,
       COALESCE(c.canon_base, 0)::numeric        AS canon_base,
       COALESCE(c.descuento_pct, 0)::numeric     AS descuento_pct,
       COALESCE(c.pronto_pago_pct, 0)::numeric   AS pronto_pago_pct,
       c.descripcion_descuentos,
-      u.unit_number, u.entrada,
+      u.unidad AS unit_number,
+      u.entrada,
       u.area_m2::numeric AS area_m2,
       u.clasificacion
-    FROM contracts c
-    LEFT JOIN units u ON c.unit_id = u.id
-    WHERE c.tenant_id = '${tenantId}'
-      AND c.status IN ('activo', 'critico', 'vencido', 'terminado')
-    ORDER BY c.status = 'activo' DESC, c.status = 'critico' DESC, c.fecha_inicio DESC
+    FROM v2.contratos c
+    LEFT JOIN v2.locales u ON c.local_id = u.id
+    WHERE c.inquilino_id = '${tenantId}'
+      AND c.estado IN ('activo', 'critico', 'vencido', 'terminado')
+    ORDER BY c.estado = 'activo' DESC, c.estado = 'critico' DESC, c.fecha_inicio DESC
   `)
   return rows.map((r) => ({
     contractId: String(r.contract_id),
@@ -162,15 +165,16 @@ export async function getTenantContracts(tenantId: string): Promise<TenantContra
 export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]> {
   const rows = await execute(`
     SELECT
-      id, siesa_factura, fecha_factura, fecha_vence,
+      row_id::text                                AS id,
+      factura                                     AS siesa_factura,
+      fecha_factura,
+      fecha_vencimiento                           AS fecha_vence,
       COALESCE(dias_mora, 0)                      AS dias_mora,
       COALESCE(saldo, 0)::numeric                 AS saldo,
-      COALESCE(valor_vencido, 0)::numeric         AS valor_vencido,
-      COALESCE(interes_acumulado, 0)::numeric     AS interes_acumulado,
-      observacion
-    FROM cartera
-    WHERE tenant_id = '${tenantId}'
-    ORDER BY fecha_vence DESC NULLS LAST
+      COALESCE(vr_vencido, 0)::numeric            AS valor_vencido
+    FROM v2.vista_cartera_actual
+    WHERE inquilino_id = '${tenantId}'
+    ORDER BY fecha_vencimiento DESC NULLS LAST
   `)
   return rows.map((r) => ({
     id: String(r.id),
@@ -180,21 +184,23 @@ export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]>
     diasMora: Number(r.dias_mora ?? 0),
     saldo: Number(r.saldo ?? 0),
     valorVencido: Number(r.valor_vencido ?? 0),
-    interesAcumulado: Number(r.interes_acumulado ?? 0),
-    observacion: r.observacion ? String(r.observacion) : null,
+    interesAcumulado: 0,
+    observacion: null,
   }))
 }
 
 export async function getTenantPayments(tenantId: string): Promise<PagoHistorialItem[]> {
   const rows = await execute(`
     SELECT
-      id, fecha_recaudo,
+      ROW_NUMBER() OVER (ORDER BY fecha_recaudo DESC, docto, cruce)::text AS id,
+      fecha_recaudo,
       COALESCE(valor_aplicado, 0)::numeric        AS valor_aplicado,
       COALESCE(pronto_pago_aplicado, 0)::numeric  AS pronto_pago_aplicado,
       COALESCE(valor_final, 0)::numeric           AS valor_final,
-      concepto, siesa_docto, siesa_cruce, siesa_clasificacion, status
-    FROM payments
-    WHERE tenant_id = '${tenantId}'
+      docto                                       AS siesa_docto,
+      cruce                                       AS siesa_cruce
+    FROM v2.vista_pagos
+    WHERE inquilino_id = '${tenantId}'
     ORDER BY fecha_recaudo DESC
     LIMIT 50
   `)
@@ -204,33 +210,10 @@ export async function getTenantPayments(tenantId: string): Promise<PagoHistorial
     valorAplicado: Number(r.valor_aplicado ?? 0),
     prontoPagoAplicado: Number(r.pronto_pago_aplicado ?? 0),
     valorFinal: Number(r.valor_final ?? 0),
-    concepto: r.concepto ? String(r.concepto) : null,
+    concepto: null,
     siesaDocto: r.siesa_docto ? String(r.siesa_docto) : null,
     siesaCruce: r.siesa_cruce ? String(r.siesa_cruce) : null,
-    siesaClasificacion: r.siesa_clasificacion ? String(r.siesa_clasificacion) : null,
-    status: String(r.status),
-  }))
-}
-
-export async function getContractPhases(contractId: string): Promise<ContractPhaseItem[]> {
-  const rows = await execute(`
-    SELECT
-      id, phase_number, name, start_date, end_date,
-      COALESCE(descuento_pct, 0)::numeric    AS descuento_pct,
-      COALESCE(pronto_pago_pct, 0)::numeric  AS pronto_pago_pct,
-      is_active
-    FROM contract_phases
-    WHERE contract_id = '${contractId}'
-    ORDER BY phase_number
-  `)
-  return rows.map((r) => ({
-    id: String(r.id),
-    phaseNumber: Number(r.phase_number),
-    name: String(r.name),
-    startDate: String(r.start_date),
-    endDate: r.end_date ? String(r.end_date) : null,
-    descuentoPct: Number(r.descuento_pct ?? 0),
-    prontoPagoPct: Number(r.pronto_pago_pct ?? 0),
-    isActive: Boolean(r.is_active),
+    siesaClasificacion: null,
+    status: "RECAUDADO",
   }))
 }

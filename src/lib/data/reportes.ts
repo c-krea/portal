@@ -23,9 +23,9 @@ export type ProyectadoVsReal = {
   mes: string
   month: number
   proyectado: number
-  recaudado: number   // cash recibido este mes (fecha_recaudo)
-  ppOtorgado: number  // descuento PP concedido
-  pendiente: number   // proyectado - recaudado - ppOtorgado
+  recaudado: number
+  ppOtorgado: number
+  pendiente: number
   diferencia: number
 }
 
@@ -48,9 +48,8 @@ export async function getAgingBuckets(): Promise<AgingBucket[]> {
       END AS bucket,
       COUNT(*)::int                              AS count,
       COALESCE(SUM(saldo), 0)::numeric           AS saldo,
-      COALESCE(SUM(valor_vencido), 0)::numeric   AS valor_vencido,
-      COALESCE(SUM(interes_acumulado), 0)::numeric AS interes_acumulado
-    FROM cartera
+      COALESCE(SUM(vr_vencido), 0)::numeric      AS valor_vencido
+    FROM v2.vista_cartera_actual
     WHERE saldo > 0
     GROUP BY bucket
     ORDER BY bucket
@@ -73,7 +72,7 @@ export async function getAgingBuckets(): Promise<AgingBucket[]> {
       count:            Number(row?.count ?? 0),
       saldo:            Number(row?.saldo ?? 0),
       valorVencido:     Number(row?.valor_vencido ?? 0),
-      interesAcumulado: Number(row?.interes_acumulado ?? 0),
+      interesAcumulado: 0,
     }
   })
 }
@@ -84,9 +83,8 @@ export async function getMonthlyCollections(year = 2026): Promise<MonthlyCollect
       EXTRACT(MONTH FROM fecha_recaudo)::int AS month,
       COALESCE(SUM(valor_final), 0)::numeric AS recaudado,
       COUNT(*)::int                          AS count
-    FROM payments
+    FROM v2.vista_pagos
     WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
-      AND siesa_clasificacion IN ('RECAUDADO', 'VENCIDO')
     GROUP BY month
     ORDER BY month
   `)
@@ -106,27 +104,26 @@ export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal
   const [proyRows, recRows] = await Promise.all([
     execute(`
       SELECT
-        p.month,
+        p.mes AS month,
         ROUND(COALESCE(SUM(
           (p.canon_proyectado - p.descuento_proyectado)
           * (1 - (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
           * 1.19
         ), 0))::numeric AS proyectado
-      FROM projections p
-      JOIN contracts c ON p.contract_id = c.id
-      JOIN tenants t   ON c.tenant_id   = t.id
-      WHERE p.year = ${year}
-      GROUP BY p.month
-      ORDER BY p.month
+      FROM v2.proyecciones p
+      JOIN v2.contratos c ON p.contrato_id = c.id
+      JOIN v2.inquilinos t ON c.inquilino_id = t.id
+      WHERE p.anio = ${year}
+      GROUP BY p.mes
+      ORDER BY p.mes
     `),
     execute(`
       SELECT
         EXTRACT(MONTH FROM fecha_recaudo)::int          AS month,
         COALESCE(SUM(valor_final), 0)::numeric          AS recaudado,
         COALESCE(SUM(pronto_pago_aplicado), 0)::numeric AS pp_otorgado
-      FROM payments
+      FROM v2.vista_pagos
       WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
-        AND siesa_clasificacion IN ('RECAUDADO', 'VENCIDO')
       GROUP BY month
       ORDER BY month
     `),
@@ -151,15 +148,13 @@ export async function getReporteSummary(year = 2026): Promise<ReporteSummary> {
     execute(`
       SELECT
         COALESCE(SUM(saldo) FILTER (WHERE saldo > 0), 0)::numeric AS total_cartera,
-        COALESCE(SUM(valor_vencido) FILTER (WHERE dias_mora > ${grace}), 0)::numeric AS total_vencido,
-        COALESCE(SUM(interes_acumulado), 0)::numeric AS total_interes
-      FROM cartera
+        COALESCE(SUM(vr_vencido) FILTER (WHERE dias_mora > ${grace}), 0)::numeric AS total_vencido
+      FROM v2.vista_cartera_actual
     `),
     execute(`
       SELECT COALESCE(SUM(valor_final), 0)::numeric AS total_recaudado
-      FROM payments
+      FROM v2.vista_pagos
       WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
-        AND siesa_clasificacion IN ('RECAUDADO', 'VENCIDO')
     `),
   ])
 
@@ -168,7 +163,7 @@ export async function getReporteSummary(year = 2026): Promise<ReporteSummary> {
   return {
     totalCartera:      Number(c.total_cartera ?? 0),
     totalVencido:      Number(c.total_vencido ?? 0),
-    totalInteres:      Number(c.total_interes ?? 0),
+    totalInteres:      0,
     totalRecaudado2026: Number(p.total_recaudado ?? 0),
   }
 }

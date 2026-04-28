@@ -4,7 +4,7 @@ export type UsuarioRow = {
   id: string
   fullName: string
   email: string
-  role: "admin" | "finance" | "viewer" | "tenant"
+  role: "admin" | "finanzas" | "visor" | "inquilino"
   tenantId: string | null
   tenantName: string | null
   isActive: boolean
@@ -54,15 +54,15 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
       t.contacto_nombre,
       t.tipo_cliente,
       t.portal_email,
-      t.email AS business_email,
-      STRING_AGG(u.unit_number, ', ' ORDER BY u.unit_number) AS units,
-      STRING_AGG(u.id::text, ',' ORDER BY u.unit_number)     AS unit_ids,
+      t.email_contacto AS business_email,
+      STRING_AGG(u.unidad, ', ' ORDER BY u.unidad) AS units,
+      STRING_AGG(u.id::text, ',' ORDER BY u.unidad) AS unit_ids,
       MIN(u.entrada)                     AS entrada,
       p.id AS auth_user_id,
       JSON_AGG(
         JSON_BUILD_OBJECT(
           'unitId',               u.id::text,
-          'unitNumber',           u.unit_number,
+          'unitNumber',           u.unidad,
           'entrada',              u.entrada,
           'contractId',           c.id::text,
           'canonBase',            c.canon_base::numeric,
@@ -71,15 +71,15 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
           'fechaInicio',          c.fecha_inicio::text,
           'fechaFin',             c.fecha_fin::text,
           'descripcionDescuentos',c.descripcion_descuentos
-        ) ORDER BY u.unit_number
+        ) ORDER BY u.unidad
       ) AS unit_contracts
-    FROM tenants t
-    JOIN contracts c ON c.tenant_id = t.id AND c.status = 'activo'
-    JOIN units u ON u.id = c.unit_id
-    LEFT JOIN profiles p ON p.tenant_id = t.id AND p.role = 'tenant'
-    WHERE t.is_active = true
-    GROUP BY t.id, t.nombre_corto, t.razon_social, t.portal_email, t.email, p.id
-    ORDER BY MIN(u.unit_number)
+    FROM v2.inquilinos t
+    JOIN v2.contratos c ON c.inquilino_id = t.id AND c.estado = 'activo'
+    JOIN v2.locales u ON u.id = c.local_id
+    LEFT JOIN v2.perfiles p ON p.inquilino_id = t.id AND p.rol = 'inquilino'
+    WHERE t.activo = true
+    GROUP BY t.id, t.nombre_corto, t.razon_social, t.portal_email, t.email_contacto, p.id
+    ORDER BY MIN(u.unidad)
   `)
 
   const authUserIds = rows.map(r => r.auth_user_id).filter(Boolean) as string[]
@@ -94,7 +94,7 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
     }
   }
 
-  // Backfill portal_email from auth.users for any tenant whose DB value is stale/missing
+  // Backfill portal_email from auth.users for any inquilino whose DB value is stale/missing
   const backfills: Promise<unknown>[] = []
   for (const r of rows) {
     if (!r.auth_user_id) continue
@@ -103,7 +103,8 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
       backfills.push(
         Promise.resolve(
           supabaseAdmin
-            .from("tenants")
+            .schema("v2")
+            .from("inquilinos")
             .update({ portal_email: authEmail })
             .eq("id", String(r.id))
         )
@@ -152,16 +153,16 @@ export async function getUsuarios(): Promise<UsuarioRow[]> {
   const rows = await execute(`
     SELECT
       p.id,
-      p.full_name,
+      p.nombre_completo  AS full_name,
       p.email,
-      p.role,
-      p.tenant_id,
+      p.rol              AS role,
+      p.inquilino_id     AS tenant_id,
       COALESCE(t.nombre_corto, t.razon_social) AS tenant_name,
-      p.is_active,
+      p.activo           AS is_active,
       p.created_at
-    FROM profiles p
-    LEFT JOIN tenants t ON p.tenant_id = t.id
-    WHERE p.role != 'tenant'
+    FROM v2.perfiles p
+    LEFT JOIN v2.inquilinos t ON p.inquilino_id = t.id
+    WHERE p.rol != 'inquilino'
     ORDER BY p.created_at DESC
   `)
 

@@ -19,13 +19,13 @@ async function getPortfolioStats() {
         * (1 - (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
         * 1.19
       ), 0)) AS portfolio_total
-      FROM projections p
-      JOIN contracts c ON p.contract_id = c.id
-      JOIN tenants t   ON c.tenant_id   = t.id
-      WHERE p.year = 2026
+      FROM v2.proyecciones p
+      JOIN v2.contratos c ON p.contrato_id = c.id
+      JOIN v2.inquilinos t ON c.inquilino_id = t.id
+      WHERE p.anio = 2026
     `),
-    execute(`SELECT COUNT(DISTINCT unit_id)::int AS active_clients FROM contracts WHERE status IN ('activo', 'critico')`),
-    execute(`SELECT COUNT(*)::int AS total_units FROM units`),
+    execute(`SELECT COUNT(DISTINCT local_id)::int AS active_clients FROM v2.contratos WHERE estado IN ('activo', 'critico')`),
+    execute(`SELECT COUNT(*)::int AS total_units FROM v2.locales`),
   ])
 
   return {
@@ -40,23 +40,22 @@ async function getMoraStats() {
 
   const rows = await execute(`
     SELECT
-      COALESCE(SUM(valor_vencido), 0)::numeric                                          AS total_mora,
+      COALESCE(SUM(vr_vencido), 0)::numeric                                             AS total_mora,
       COALESCE(SUM(saldo), 0)::numeric                                                  AS total_saldo,
-      COALESCE(SUM(interes_acumulado), 0)::numeric                                      AS total_interes,
-      COUNT(DISTINCT tenant_id)::int                                                    AS clientes_en_mora,
+      COUNT(DISTINCT inquilino_id)::int                                                 AS clientes_en_mora,
       ROUND(AVG(NULLIF(dias_mora, 0)), 0)::numeric                                      AS avg_dias_mora,
-      COALESCE(SUM(CASE WHEN dias_mora > 60 THEN valor_vencido ELSE 0 END), 0)::numeric AS mora_critica,
-      COALESCE(SUM(CASE WHEN dias_mora BETWEEN ${grace + 1} AND 60 THEN valor_vencido ELSE 0 END), 0)::numeric AS mora_activa
-    FROM cartera
-    WHERE valor_vencido > 0 AND dias_mora > ${grace}
-      AND tenant_id NOT IN (SELECT id FROM tenants WHERE juridica = true)
+      COALESCE(SUM(CASE WHEN dias_mora > 60 THEN vr_vencido ELSE 0 END), 0)::numeric    AS mora_critica,
+      COALESCE(SUM(CASE WHEN dias_mora BETWEEN ${grace + 1} AND 60 THEN vr_vencido ELSE 0 END), 0)::numeric AS mora_activa
+    FROM v2.vista_cartera_actual
+    WHERE vr_vencido > 0 AND dias_mora > ${grace}
+      AND juridica = false
   `)
 
   const r = (rows as Array<Record<string, unknown>>)[0] ?? {}
   return {
     totalMora:       Number(r.total_mora ?? 0),
     totalSaldo:      Number(r.total_saldo ?? 0),
-    totalInteres:    Number(r.total_interes ?? 0),
+    totalInteres:    0,
     clientesEnMora:  Number(r.clientes_en_mora ?? 0),
     avgDiasMora:     Number(r.avg_dias_mora ?? 0),
     moraCritica:     Number(r.mora_critica ?? 0),

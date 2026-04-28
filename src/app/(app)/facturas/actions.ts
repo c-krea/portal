@@ -1,9 +1,7 @@
 "use server"
 
-import { execute, supabaseAdmin } from "@/lib/db/executor"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
-import { generateInvoicesForPeriod } from "@/lib/invoice-engine"
 
 const schema = z.object({
   year:  z.coerce.number().int().min(2024).max(2030),
@@ -12,24 +10,12 @@ const schema = z.object({
 
 export type EmitState = { success?: boolean; error?: string }
 
-export async function emitirFactura(id: string): Promise<EmitState> {
-  try {
-    const { data: updated, error } = await supabaseAdmin
-      .from("invoices")
-      .update({ status: "emitida" })
-      .eq("id", id)
-      .select("id, status")
-
-    if (error) throw new Error(error.message)
-    if (!updated || updated.length === 0) return { error: "Factura no encontrada" }
-
-    revalidatePath("/facturas")
-    revalidatePath(`/facturas/${id}`)
-    return { success: true }
-  } catch (e) {
-    console.error(e)
-    return { error: "Error al emitir factura" }
-  }
+/**
+ * v2: facturas are emitted in Siesa ERP, not the portal. This stays a no-op
+ * so the existing "Emitir" button doesn't error. Phase F removes the button.
+ */
+export async function emitirFactura(_id: string): Promise<EmitState> {
+  return { error: "La emisión de facturas se realiza en Siesa ERP." }
 }
 
 export type GenerateState = {
@@ -41,6 +27,10 @@ export type GenerateState = {
   errors?: string[]
 }
 
+/**
+ * v2: facturas come from siesa_raw via vista_facturas. Generation no longer
+ * happens portal-side. Stub returns informative message; UI cleanup pending.
+ */
 export async function generarFacturas(
   _prev: GenerateState,
   formData: FormData,
@@ -55,35 +45,14 @@ export async function generarFacturas(
   }
 
   const { year, month } = parsed.data
+  const periodoStr = `${year}-${String(month).padStart(2, "0")}`
 
-  try {
-    const companies = await execute(`SELECT id FROM companies LIMIT 1`)
-    const companyId = String(companies[0].id)
-
-    const result = await generateInvoicesForPeriod(companyId, { year, month })
-
-    revalidatePath("/facturas")
-
-    if (result.created === 0 && result.skipped > 0) {
-      return {
-        success: true,
-        message: `Todas las facturas del período ya existen (${result.skipped} omitidas).`,
-        created: 0,
-        skipped: result.skipped,
-        errors: result.errors,
-      }
-    }
-
-    const periodoStr = `${year}-${String(month).padStart(2, "0")}`
-    return {
-      success: true,
-      message: `${result.created} factura${result.created !== 1 ? "s" : ""} generada${result.created !== 1 ? "s" : ""} para ${periodoStr}.${result.skipped > 0 ? ` ${result.skipped} omitida${result.skipped !== 1 ? "s" : ""} (ya existían).` : ""}`,
-      created: result.created,
-      skipped: result.skipped,
-      errors: result.errors,
-    }
-  } catch (e) {
-    console.error(e)
-    return { error: "Error al generar facturas. Intente de nuevo." }
+  revalidatePath("/facturas")
+  return {
+    success: true,
+    message: `Las facturas del período ${periodoStr} se sincronizan automáticamente desde Siesa ERP. La generación manual ya no es necesaria.`,
+    created: 0,
+    skipped: 0,
+    errors: [],
   }
 }

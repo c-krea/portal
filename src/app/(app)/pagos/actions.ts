@@ -1,6 +1,7 @@
 "use server"
 
-import { execute, supabaseAdmin } from "@/lib/db/executor"
+import { supabaseAdmin } from "@/lib/db/executor"
+import { getEmpresaCkreaId } from "@/lib/empresa"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { reconcilePayment } from "@/lib/reconciliation"
@@ -39,14 +40,13 @@ export async function registrarPago(
   const { tenantId, fechaRecaudo, valorAplicado, concepto, notes } = parsed.data
 
   try {
-    const companies = await execute(`SELECT id FROM companies LIMIT 1`)
-    const companyId = String(companies[0].id)
+    const empresaId = await getEmpresaCkreaId()
 
-    // Insert payment record
+    // Insert payment record (legacy public.payments — Phase F will retire this)
     const { data: insertedData, error: insertError } = await supabaseAdmin
       .from("payments")
       .insert({
-        company_id:     companyId,
+        company_id:     empresaId,
         tenant_id:      tenantId,
         fecha_recaudo:  fechaRecaudo,
         valor_aplicado: String(valorAplicado),

@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from "next/server"
-import { execute } from "@/lib/db/executor"
+import { getEmpresaCkreaId } from "@/lib/empresa"
 import { runInterestAccrual } from "@/lib/interest-engine"
 
 export const dynamic = "force-dynamic"
@@ -20,16 +20,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const companies = await execute(`SELECT id FROM companies`)
+    const empresaId = await getEmpresaCkreaId()
     const today = new Date().toISOString().slice(0, 10)
-    const results = []
+    const result = await runInterestAccrual(empresaId, today)
 
-    for (const company of companies as Array<Record<string, unknown>>) {
-      const result = await runInterestAccrual(String(company.id), today)
-      results.push({ companyId: company.id, ...result })
-    }
-
-    return NextResponse.json({ success: true, date: today, results })
+    return NextResponse.json({ success: true, date: today, results: [{ companyId: empresaId, ...result }] })
   } catch (e) {
     console.error("[cron/accrual]", e)
     return NextResponse.json(

@@ -50,20 +50,21 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Role-based routing: tenant → /portal, admin/others → /(app)
+  // Role-based routing: inquilino → /portal, admin/others → /(app)
   const admin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
   const { data: profile } = await admin
-    .from("profiles")
-    .select("role")
+    .schema("v2")
+    .from("perfiles")
+    .select("rol")
     .eq("id", user.id)
     .single()
 
-  const role = profile?.role
+  const rol = profile?.rol
 
-  if (role === "tenant") {
+  if (rol === "inquilino") {
     if (!pathname.startsWith("/portal")) {
       const url = request.nextUrl.clone()
       url.pathname = "/portal"

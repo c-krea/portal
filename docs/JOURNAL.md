@@ -2,7 +2,293 @@
 
 ---
 
-## 2026-04-24 — Session 32: WOR-69 — pp_historico_pct backfill bug fix
+## Session 37 — 2026-04-28: Phase G.0 + G.1 — v2 migration kickoff
+
+### Goal
+Start portal refactor `public.*` → `v2.*`. G.0 mapping doc + G.1 infrastructure (helpers, RLS, PostgREST exposure, Drizzle schema, TS helpers).
+
+### Decisions locked
+1. Sync raw→v2: IT cron 6h (already scripted) + portal cron offset 30min.
+2. 3 orphan legacy tables (`payment_applications`, `invoice_line_items`, `interest_accruals`): DELETE in Phase F (post-G).
+3. Branch: `refactor/v2-migration` (no main direct — 35-file scope).
+4. Multi-empresa: solo C-Krea.
+5. Estructura > tiempo.
+
+### G.0 — Mapping doc shipped
+`docs/foundation/01_schema_erd/v2/G_migration_map.md`. 25 `public.*` → 12 v2 + 4 vistas + 10 deletes. Field renames, file inventory (35 portal files, NOT 17 as prior estimate), cron schedule, RPC list, gates per phase.
+
+### G.1 — Infrastructure shipped
+1. Branch `refactor/v2-migration` created.
+2. `.gitignore` + `.claude/` + `backups/`.
+3. **Migration `v2_g1_helpers_and_rls`**:
+   - Helpers `v2.user_empresa_id()`, `v2.user_rol()`, `v2.user_inquilino_id()` (read `public.profiles` transitorio, mapean enum legacy → v2: admin→admin, finance→finanzas, viewer→visor, tenant→inquilino).
+   - RLS ON en 12/12 tablas v2.
+   - 45 policies espejo de `public.*` (admin/finanzas/inquilino + special `agente_chat` per-user, special `lecturas_medidor` tenant-reads-own).
+4. **PostgREST**: `ALTER ROLE authenticator SET pgrst.db_schemas = 'public, v2, graphql_public, storage'` + `NOTIFY pgrst, 'reload config'`.
+5. **Service_role grants**: ALL ON ALL en v2 + ALTER DEFAULT PRIVILEGES.
+6. **Drizzle TS**: `src/lib/db/schema/v2/{enums,tables,index}.ts` — 12 tablas + 6 enums con `pgSchema('v2')`.
+7. **Helpers TS**: `src/lib/db/v2.ts` (`v2()` retorna `supabaseAdmin.schema('v2')`) + `src/lib/empresa.ts` (`getEmpresaCkreaId()` lazy + cache per server boot, lookup por NIT `900123456`).
+8. **Verificación**: `npx tsc --noEmit` clean. SQL counts cuadran: 12 tablas + 4 vistas + 9 funciones + 45 policies.
+
+### Findings críticos
+- **C-Krea UUID**: `00000000-0000-0000-0000-000000000001` (en `public.companies`). Estrategia G.2: PRESERVAR → `public.profiles.company_id` matchea `v2.empresas.id` automático, no rewrite de auth.
+- **siesa_co_id**: `044`, **canal**: `R08`, **ccosto**: `285`.
+- **Arquitectura validada**: 12 tablas son ERP-mirror o portal-puro; resto (filtros, totales, vistas Drill A) son vistas/RPC. 9 portal-pure + 3 hybrid (locales/contratos/inquilinos guardan campos portal-only que vista no puede: `juridica`, `grupo_energia`, `fecha_fin`).
+
+### Errores y fixes
+- Migración 1ª intento: `ERROR: 42704: type "rol_usuario" does not exist`. Causa: enums viven en schema `v2`, no en search_path. Fix: schema-qualify todos los CASE expressions a `v2.rol_usuario`.
+- Query `companies.ruc` falló (col no existe). Fix: `SELECT *`, encontrado `nit` correcto.
+
+### Pendiente — G.2 (NEXT SESSION)
+Data migration FK-ordered en una transacción:
+1. `v2.empresas` (hardcode UUID + NIT)
+2. `v2.inquilinos` (UNION raw + LEFT JOIN public.tenants — captura ex-arrendatarios con deuda)
+3. `v2.locales` (raw.ocupacion + LEFT JOIN public.units para grupo_energia, area_m2)
+4. `v2.contratos` (raw.ocupacion + LEFT JOIN public.contracts para fecha_fin, ipc)
+5. `v2.proyecciones` (public.projections, drop pronto_pago_proyectado)
+6. `v2.tipos_gasto` (mapeo enum)
+7. `v2.gastos`
+8. `v2.reglas_financieras`
+9. `v2.lecturas_medidor` (mapeo enum)
+10. `v2.facturas_energia` (vacía hoy)
+11. `v2.perfiles` (auth.users + public.profiles, mapeo enum)
+
+Después G.2: reescribir helpers `v2.user_*()` para leer `v2.perfiles` (no más `public.profiles`).
+
+**Gate G.2**: row counts cuadran + Drill A 3-tenant (IMAGENN/MARTINEZ/REBELARTE) totales idénticos.
+
+### Pointers
+- Memory: `~/.claude/projects/-Users-workspace-Portal-Ckrea/memory/g_migration_state.md` (estado completo, IDs, FK order, decisiones).
+- Mapping doc: `docs/foundation/01_schema_erd/v2/G_migration_map.md`.
+- Branch: `refactor/v2-migration` (G.1 changes uncommitted en working tree).
+
+---
+
+## Session 36 — 2026-04-28: RLS on siesa_raw (defense-in-depth)
+
+### Goal
+Add Row-Level Security on the 5 `siesa_raw` tables so only the IT sync role (`siesa_sync`) can read/write, on top of existing GRANTs.
+
+### Pre-state audit
+- Inserter = DB role `siesa_sync` (login). 145 batches `source_system='siesa'` (last 2026-04-28 15:31). 13 batches `xlsx_phase_c` from local loader (`postgres`).
+- GRANTs: `siesa_sync` had SELECT/INSERT/UPDATE on all 5 tables. `anon`/`authenticated`/`service_role` had **none** — already grant-blocked.
+- RLS = OFF on all 5 tables. No policies.
+- Schema not in PostgREST exposure (no `usage` to anon/auth) → REST API can't see it.
+
+### Decision
+Belt-and-suspenders. GRANTs already lock the door; RLS adds an in-room guard. Done because Supabase Advisor flags non-RLS tables and we want explicit deny semantics.
+
+### Migration applied: `siesa_raw_rls_phase1`
+```sql
+ALTER TABLE siesa_raw.{cartera,recaudo,documentos,ocupacion,sync_batches}
+  ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY siesa_sync_all ON siesa_raw.<table>
+  FOR ALL TO siesa_sync USING (true) WITH CHECK (true);
+```
+- `postgres` (table owner) bypasses RLS automatically → local loader keeps working.
+- `sync_batches` included — without it IT batch protocol breaks.
+- Single `FOR ALL` policy chosen over split per-cmd: simpler, same effect (siesa_sync has no DELETE grant anyway).
+
+### Verification
+All 5 tables: `relrowsecurity=true`, policy `siesa_sync_all` → `{siesa_sync}` → cmd ALL. Confirmed via `pg_policies` query.
+
+### Watch next
+- Next IT sync run should produce a fresh `sync_batches` row with `source_system='siesa'`. Failure = RLS misconfig (unlikely — `siesa_sync` has explicit `FOR ALL` policy).
+- No notification needed to IT — their connection string and credentials unchanged.
+
+### Rollback (if ever needed)
+```sql
+DROP POLICY siesa_sync_all ON siesa_raw.<table>;
+ALTER TABLE siesa_raw.<table> DISABLE ROW LEVEL SECURITY;
+```
+
+### Follow-up: role attribute tighten (same session, 2026-04-28)
+
+**Problem:** Audit revealed `siesa_sync` was created with three admin flags that bypassed our new RLS:
+- `rolcreaterole=true` — could create new DB users
+- `rolcreatedb=true` — could create databases
+- `rolbypassrls=true` — **skipped RLS entirely**, making the just-added policy useless against this role
+
+**Fix (`siesa_sync_role_tighten`):**
+```sql
+ALTER ROLE siesa_sync NOCREATEROLE NOCREATEDB NOBYPASSRLS;
+```
+
+**Verified:** all 3 flags now false. Role is minimal-privilege:
+- can: login, USAGE on `siesa_raw`, SELECT/INSERT/UPDATE on 5 tables
+- cannot: create roles/dbs, bypass RLS, ALTER/DROP/TRUNCATE/DELETE, touch any other schema
+
+**Why it slipped through:** original `siesa_raw_schema_phase1` migration created the role without explicit `NOCREATEROLE NOCREATEDB NOBYPASSRLS`. Postgres defaults are role-dependent — Supabase managed envs sometimes inherit liberal defaults. Lesson: future migrations creating roles must declare these flags explicitly.
+
+---
+
+## Session 35 — 2026-04-26: Drill A 3-tenant deep-dive + vista bug fixes (Phase C.5)
+
+### Goal
+Verify v2 design against real raw data via end-to-end traces of 3 inquilinos with distinct profiles. Reconcile factura → recaudo → cartera per tenant. Catch any vista bugs before applying Phase D.
+
+### Drill A — 3 inquilinos walked end-to-end
+
+| Inquilino | NIT | Tipo | Locales | Canon/mes | Estado | Mora avg | Cartera abierta | Saldo a favor |
+|---|---|---|---|---|---|---|---|---|
+| IMAGENN & PUNTO SAS | 900809088 | PJ | 5 (E5) | $14.5M | Critico | +44d | $46.6M | 0 |
+| MARTINEZ CADENA | 53113929 | PN | 2 (E1) | $5.18M | Activo | -0.6d | 0 | $1.83M |
+| REBELARTE COMUNICACION | 901729544 | PJ | 3 (E4+Z8) | $4.85M | Activo | -0.5d | 0 | $8.16M |
+
+Reconciliación cierra al peso en los 3:
+- IMAGENN: facturado Q1 $51.23M − pagado en mismo periodo $5M = cartera abierta $46.6M ✓
+- MARTINEZ: 4 meses facturado $24.65M brutos − descuentos PP $1.04M = $23.6M; pagado $24.3M; cartera $0 ✓
+- REBELARTE: facturas + descuentos cuadran con depósitos previos ($8.16M) y mora −0.5d.
+
+### Bugs found + fixed
+
+1. **NIT `.0` artifact** (pandas float→str). 78/78 filas en `ocupacion.documento`, 317/317 en `documentos.tipo_cliente`. Otras columnas NIT (recaudo, cartera, documentos.doc) limpias. Fix loader: `strip_dot_zero=[cols]` config + `str.removesuffix('.0')` post-rename. Re-run loader idempotente. Las 78 ocupacion duplicadas (viejas .0 + nuevas clean) resueltas con `DELETE FROM ocupacion WHERE documento LIKE '%.0'`. Total ocupacion 84 ✓ (78 NIT + 6 vacantes null).
+2. **`vista_cartera_actual` join wrong**: usaba `inquilinos.nit = cartera.cliente`. Real: `cartera.cliente` es razón social + términos de crédito (`'KIADOM ... - CREDITO A 10 DIAS PP 10%'`). Fix: `cartera.documento`. `cliente` ahora expuesto como `razon_social_raw`.
+3. **`vista_facturas` join wrong**: mismo bug — `documentos.cliente` es razón social. Fix: `documentos.doc` (NIT). Renombré `documento` → `doc_id` (factura ID) y `prefijo_doc` ahora usa `SPLIT_PART(documento, '-', 2)` para extraer FVS/RK/NVS de `'001-FVS-69736'`.
+
+Verified post-fix: ocupacion 59 NITs → 59 in recaudo, 59 in documentos, 50 in cartera (9 al día sin saldo). Joins funcionan ✓.
+
+### Hallazgos no obvios
+
+- **`documentos` tiene 2 tipos de filas** para inquilinos PP: `tipo='Facturas'` (FVS-) y `tipo='Descuentos'` (`001-RK -` 2025+ o `044-CN -` 2024). Las Descuentos llevan `ventas` negativa, sin IVA/retenciones — son PP del 10% como docto contable separado de la factura. `vista_facturas` debe filtrar `tipo='Facturas'` o exponer `is_factura` flag (TODO #11).
+- **PP captado en 2 sistemas**: `recaudo.pronto_pago` (real-time, al cobro) + `documentos tipo='Descuentos'` (cierre contable). Misma transacción vista de 2 ángulos — no double-count. IMAGENN tiene PP solo en recaudo 2024, no en docs (rolling 4 meses no captura).
+- **Descuento de fase YA aplicado en `documentos.ventas`** (no separado). MARTINEZ E1L107 fact ventas $3,285,000 = $3,650,000 × 0.9. PP+fase stack confirmado: factura ya con desc fase, PP se aplica al cobro como docto adicional.
+- **Anomalía REBELARTE Z8L803**: facturó $1,160,000 en ene-feb pero $1,219,160 desde mar. Cambio fase contractual mid-Q1. ERP es source of truth, no normalizar.
+- **PJ retefuente 3.5%** confirmado en IMAGENN ($395,815 / $11,309,000) y REBELARTE ($75,600 / $2,160,000). MARTINEZ PN tiene retenciones=0 ✓.
+- **Saldos a favor reales**: REBELARTE $8.16M acumulados en 6 RK/NCF/CN-, MARTINEZ $1.83M depósito 2024-11-27. `vista_cartera_actual saldo > 0` los excluye correctamente. Design call para portal UI diferido.
+
+### Lessons
+
+- **No asumir tipo de columna por nombre**: `cliente` parecía obvio NIT. Sample real disipó. Drill antes de aplicar.
+- **Pandas float→str perdura**: cualquier columna NIT/ID que en xlsx sea numérica entra con `.0`. Cleaner explícito por columna en loader.
+- **3-tenant drill > 1-tenant**: el patrón Descuentos (RK-/CN-) era invisible en IMAGENN. MARTINEZ + REBELARTE lo destaparon.
+- **Verify join correctness con overlap drill**: `COUNT(DISTINCT a.col) FILTER (WHERE b.col IS NOT NULL)` post-fix detecta JOINs muertos rápido.
+
+### Status
+
+- Phase C.5 ✓ explorado, vistas corregidas.
+- Phase D ⏸ bloqueado por task #11 (decisión `tipo='Facturas'` en vista_facturas).
+- Drill B (reconciliación 2026Q1 portfolio-wide) y Drill C (column glossary) pendientes.
+- Linear WOR-71 sigue abierto (tipo_cliente IT mapping).
+
+---
+
+## Session 34 — 2026-04-26: v2 simplified schema designed + raw data loaded (Phases A→C)
+
+### What we did
+
+Major DB refactor. Goal: collapse `public.*` (25 tables, mixed concerns, repeated bugs around `siesa_clasificacion`, PP exclusivity, dedup) into a small derive-everything-from-raw model. New v2 lives in `docs/foundation/01_schema_erd/v2/`. **Schema NOT yet applied to prod** — sequenced as A (design) → B (backup) → C (load raw) → D (apply, deferred) → E–H (verify, archive, refactor portal, copilot).
+
+### Phase A — v2 design
+
+Wrote 3 SQL files. All Spanish naming. Lessons baked in.
+
+- `01_tablas.sql` — 12 tables (empresas, perfiles, inquilinos, locales, contratos, proyecciones, lecturas_medidor, facturas_energia, tipos_gasto, gastos, reglas_financieras, agente_chat) + 6 enums + indexes + `update_updated_at` trigger via DO block. Circular FK perfiles.inquilino_id → inquilinos.id handled.
+- `02_vistas.sql` — 4 views derive from `siesa_raw.*` + LEFT JOIN inquilinos by NIT:
+  - `vista_pagos`: 4 canonical filters (`cruce LIKE 'FVS-%'` + dedup via DISTINCT ON + `valor_final < 1B` + `id_zona='Z40'`)
+  - `vista_cartera_actual`: bucket_mora CASE + en_mora_real (dias>30)
+  - `vista_facturas`: `id_co='044' AND id_canal='R08'`
+  - `vista_mora_buckets`: aggregate excluding juridica
+- `03_rpcs.sql` — 5 RPCs (obtener_recaudo, obtener_cartera_actual, obtener_buckets_mora, obtener_recaudo_vs_proyectado, obtener_resumen_inquilino). All SECURITY INVOKER, GRANTed to authenticated + service_role, REVOKEd from public/anon. **`siesa_clasificacion` never accepted as filter.**
+
+### Phase B — backup
+
+Two artifacts in `backups/`:
+- `schema_snapshot_20260426.sql` — manually-assembled DDL via MCP (39 KB, 827 lines): 11 enums, 25 public + 5 siesa_raw tables, all PKs/UNIQUEs/FKs/CHECKs, 46 indexes, 7 functions, 15 triggers. **Not** included: RLS policies, grants, row data.
+- `ckrea_pre_v2_20260426_213512.dump` — pg_dump custom format, 535 KB, 326 TOC entries (full data + RLS + FKs).
+
+### Phase C — load raw from `SIESA connexion.xlsx`
+
+Wrote `scripts/load_siesa_raw.py` (pandas + psycopg2 execute_values). Idempotent UPSERT via row_hash (MD5 of canonical tuple). Single sync_batch per sheet. Loaded:
+
+- cartera 125 rows
+- recaudo 3221 rows
+- ocupacion 84 rows
+- documentos 419 rows  → **3849 total**
+
+Sanity check confirmed: 4 canonical filters work clean on raw data. Raw recaudo ~18% higher than legacy `public.payments` — proves new xlsx is more authoritative than the old import.
+
+### Connection saga (resolved)
+
+`pg_dump` and `psql` from local can't reach Supabase via direct port 5432 on free tier. Fix path:
+
+1. Stale local DB password → user reset in Supabase Settings → Database
+2. Pooler URL **required** (project-prefixed user): `postgres.<project_ref>:PASSWORD@aws-1-us-east-1.pooler.supabase.com:5432/postgres`
+3. `.env.local` DATABASE_URL updated. Production Vercel env var still pending update.
+
+### Schema rigidity bugs found & fixed during load
+
+Real ERP data violated NOT NULL on natural-key columns. Two surgical migrations applied:
+
+- `siesa_raw_recaudo_nullable_cruce`: row `001-RE-657` had null `cruce`. Dropped PK on `(docto, cruce, fecha_recaudo, valor_aplicado)`, added surrogate `id uuid` PK, recreated as `recaudo_natural_key UNIQUE NULLS NOT DISTINCT (...)`.
+- `siesa_raw_ocupacion_nullable_documento`: row `E1L111` had null `documento` (vacant locale, estado=Critico). Same surrogate-id + UNIQUE NULLS NOT DISTINCT pattern.
+
+Loader updated to use `ON CONFLICT ON CONSTRAINT recaudo_natural_key` / `ocupacion_natural_key`.
+
+### Why this matters
+
+ERP becomes the only source of truth. No more silent drift between `public.payments` and recaudo exports. PP, dedup, and the $4.2B FUSION GRAFIK outlier are all enforced in one place (`vista_pagos`) — every consumer (portal, copilot AI, RPCs) sees the same numbers.
+
+### Pending — explicit user redirect
+
+User redirected before Phase D: **next session must START with raw data exploration** ("clarification and understanding of that data") before applying v2 schema. Concrete first task: profile each siesa_raw.* table (counts, distinct values, null distributions, anomalies, prefixes), walk through example rows, map every xlsx column to plain-language meaning. Only then resume Phase D.
+
+### Other pending
+
+- Phase D: apply v2 schema (after data understanding)
+- Phase E: verify totals via new RPCs vs Power BI
+- Phase F: rename `public.*` → `_archive_*`
+- Phase G: refactor portal code to read views/RPCs
+- Phase H: copilot tool surface (separate repo) → same RPCs
+- Vercel env var DATABASE_URL → new pooler URL with current password
+
+---
+
+## Session 33 — 2026-04-25: Phase 1 — `siesa_raw` landing schema shipped + IT integration guide
+
+### What we did
+
+IT team has live SQL connection to Siesa and asked where to push the 4 raw exports (Cartera, Recaudo, Documentos, Ocupacion, all already filtered to C-Krea zone Z40 / canal R08). Decided **Option B**: separate landing schema (`siesa_raw`) for the IT job to UPSERT into, then portal ETL refactors `public.*` from there in Phase 2. Reasons over Option A (direct write to portal tables):
+
+- Isolation: schema lives outside PostgREST, no risk of leaking through API routes or RLS holes
+- Idempotency: IT re-runs are safe via `row_hash` change detection (MD5 of canonical column tuple)
+- Auditability: every row links to `siesa_raw.sync_batches` (id, started_at, finished_at, source, row_count, status, error)
+- Phase 2 is a pure refactor — no external coupling to swap
+
+### Phase 1 shipped (migration `siesa_raw_schema_phase1` applied)
+
+5 tables created:
+- `siesa_raw.sync_batches` — audit log (id, started_at, finished_at, source, row_count, status, error)
+- `siesa_raw.cartera` — PK `row_id` (Siesa already exposes a per-row id)
+- `siesa_raw.recaudo` — composite PK `(docto, cruce, fecha_recaudo, valor_aplicado)` (no single Siesa unique key)
+- `siesa_raw.documentos` — PK `documento`
+- `siesa_raw.ocupacion` — composite PK `(documento, local)` (one tenant can hold multiple locales)
+
+Every raw table carries 3 meta columns: `siesa_synced_at`, `sync_batch_id` (FK), `row_hash`.
+
+Permissions: new role `siesa_sync` gets `SELECT, INSERT, UPDATE` on the schema. `anon` and `authenticated` revoked. **No RLS** — access is controlled by grants only since the schema is not exposed via PostgREST.
+
+### IT-facing guide
+
+`docs/integrations/SIESA-Raw-Import-Guide-IT.html` — single self-contained Spanish page with: connection params, full DDL of the 5 tables, Raymond filter rules, idempotent UPSERT pattern, batch protocol (open → insert → close), operational notes. First draft was ~700 lines (TOC + redundant mapping tables + full Python script + expanded FAQs); rewrote to ~260 lines after user feedback — kept all technical substance, dropped the duplication.
+
+### Why this matters
+
+Schema source-of-truth is now ERP, full stop. Portal stops carrying assumptions; it derives. Phase 2 will rewrite `getPagos*`, cartera, ocupación queries to read through views/materialized tables fed from `siesa_raw`, preserving portal-only columns (juridica, pp_historico_pct, electricity_group) on the public side without touching ingest.
+
+### Gotcha for next session
+
+Tables are not visible by default in Supabase Table Editor — it lands on `public`. Use the schema dropdown to switch to `siesa_raw`. Documented this for the user mid-session; worth remembering.
+
+### Pending
+
+- Deliver `siesa_sync` password to IT via secure channel (not in repo, not in docs)
+- Phase 2: ETL function `refresh_from_siesa_raw()` + portal table refactor (Linear issue to be opened)
+
+---
+
+## Session 32 — 2026-04-24: WOR-69 — pp_historico_pct backfill bug fix
 
 ### What we did
 
@@ -45,7 +331,7 @@ Original backfill was a one-off ad-hoc query — not in any migration or script.
 
 ---
 
-## 2026-04-24 — Session 31: Pagos month filter + classification rewrite + NC GRAPHICS fix
+## Session 31 — 2026-04-24: Pagos month filter + classification rewrite + NC GRAPHICS fix
 
 ### What we did
 
@@ -69,7 +355,7 @@ Pagos KPIs were silently wrong before today. Bucket sums didn't reconcile to the
 
 ---
 
-## 2026-04-24 — Session 30: PP histórico + CKR-20 (PP+phase stacking) closure
+## Session 30 — 2026-04-24: PP histórico + CKR-20 (PP+phase stacking) closure
 
 ### What we did
 
@@ -99,7 +385,7 @@ Moved Locales from position 4 (between Mora and Pagos) to position 5 (right belo
 
 ---
 
-## 2026-04-24 — Session 29: ERP Ocupación sync + data discrepancies audit
+## Session 29 — 2026-04-24: ERP Ocupación sync + data discrepancies audit
 
 ### What we did
 
@@ -151,7 +437,7 @@ Dry-run surfaced suspicious items where auto-termination would delete real tenan
 
 ---
 
-## 2026-04-23 — Session 28: Supabase IT Connection Guide
+## Session 28 — 2026-04-23: Supabase IT Connection Guide
 
 ### What we did
 
@@ -183,7 +469,7 @@ IT suggested corporate firewall blocking Supabase IPs. Ruled out: firewall block
 
 ---
 
-## 2026-04-22 — Session 27: Electricity Billing Research + Medidor Portal UX
+## Session 27 — 2026-04-22: Electricity Billing Research + Medidor Portal UX
 
 ### What we did
 
@@ -305,7 +591,7 @@ unit_total_energia = MROUND(unit_kwh × invoice.tarifa_kwh, 50)
 
 ---
 
-## 2026-04-21 — Session 26: Recaudo Data Pipeline Audit
+## Session 26 — 2026-04-21: Recaudo Data Pipeline Audit
 
 ### What we did
 
@@ -362,7 +648,7 @@ Applied all 4 filters to `src/lib/data/pagos.ts` — all three functions updated
 
 ---
 
-## 2026-04-21 — Session 25: PP Histórico + Pagos Month Filter (v2.7.0)
+## Session 25 — 2026-04-21: PP Histórico + Pagos Month Filter (v2.7.0)
 
 ### What shipped
 
@@ -399,7 +685,7 @@ Applied all 4 filters to `src/lib/data/pagos.ts` — all three functions updated
 
 ---
 
-## 2026-04-20 — Session 23: Meter Validation Upgrade (v2.6.0)
+## Session 23 — 2026-04-20: Meter Validation Upgrade (v2.6.0)
 
 ### What shipped
 - **Hybrid validation**: seasonal same-month avg (primary) → full-history avg (fallback) → auto-approve (no history)
@@ -432,7 +718,7 @@ Applied all 4 filters to `src/lib/data/pagos.ts` — all three functions updated
 
 ---
 
-## 2026-04-20 — Session 22: Google Drive Photo Upload + Meter Auto-Validation (v2.5.0)
+## Session 22 — 2026-04-20: Google Drive Photo Upload + Meter Auto-Validation (v2.5.0)
 
 ### What shipped
 - **Google Drive integration**: tenant photos upload to `Medidores C-Krea / Local {N} / YYYY-MM.pdf` via OAuth2 refresh token (not service account — personal Gmail has no SA storage quota)
@@ -460,7 +746,7 @@ Applied all 4 filters to `src/lib/data/pagos.ts` — all three functions updated
 
 ---
 
-## 2026-04-19 — Session 21: Full Admin Mobile Pass (v2.4.0)
+## Session 21 — 2026-04-19: Full Admin Mobile Pass (v2.4.0)
 
 ### What shipped
 - **Route rename**: `/clientes` → `/locales` everywhere (nav, links, actions, revalidatePaths)
@@ -482,7 +768,7 @@ Applied all 4 filters to `src/lib/data/pagos.ts` — all three functions updated
 
 ---
 
-## 2026-04-19 — Session 20: Mobile, Portal P2, Tenant Accounts (v2.3.0)
+## Session 20 — 2026-04-19: Mobile, Portal P2, Tenant Accounts (v2.3.0)
 
 ### What shipped
 - **WOR-56**: `createTenantAccount` server action + "Crear cuenta" button in Usuarios/Inquilinos tab. Flow: sales enters email → click button → auth account created (`email_confirm: true`, no password) → tenant uses forgot-password to set their own.
@@ -510,7 +796,7 @@ Applied all 4 filters to `src/lib/data/pagos.ts` — all three functions updated
 
 ---
 
-## 2026-04-19 — Session 19: Usuarios Admin + Mobile Portal (v2.2.0)
+## Session 19 — 2026-04-19: Usuarios Admin + Mobile Portal (v2.2.0)
 
 ### What happened
 
@@ -554,7 +840,7 @@ Applied all 4 filters to `src/lib/data/pagos.ts` — all three functions updated
 
 ---
 
-## 2026-04-17 — Session 17: PP Reconciliation Model + Dashboard Tab Toggle (v2.1.0)
+## Session 17 — 2026-04-17: PP Reconciliation Model + Dashboard Tab Toggle (v2.1.0)
 
 ### What happened
 
@@ -597,7 +883,7 @@ Applied all 4 filters to `src/lib/data/pagos.ts` — all three functions updated
 
 ---
 
-## 2026-04-16 — Session 16: Mora + Locales UX Overhaul (v2.0.0)
+## Session 16 — 2026-04-16: Mora + Locales UX Overhaul (v2.0.0)
 
 ### What happened
 
@@ -631,7 +917,7 @@ Applied all 4 filters to `src/lib/data/pagos.ts` — all three functions updated
 
 ---
 
-## 2026-04-16 — Session 15: Gastos import, dashboard polish, medidores OCR prototype
+## Session 15 — 2026-04-16: Gastos import, dashboard polish, medidores OCR prototype
 
 ### What happened
 

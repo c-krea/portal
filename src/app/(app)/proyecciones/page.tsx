@@ -11,20 +11,19 @@ import {
 } from "@/lib/data/proyecciones"
 import { getFinancialRules } from "@/lib/data/configuracion"
 import { formatCOP, formatPercent } from "@/lib/formatters"
-import { execute } from "@/lib/db/executor"
+import { getEmpresaCkreaId } from "@/lib/empresa"
 
 export default async function ProyeccionesPage() {
-  const companies = await execute(`SELECT id FROM companies LIMIT 1`)
-  const companyId = String((companies as Array<Record<string, unknown>>)[0].id)
+  const empresaId = await getEmpresaCkreaId()
 
   const year = 2026
   const nextYear = year + 1
 
   const [breakdown, detalle, mensual, rules] = await Promise.all([
-    getProyeccionBreakdown(companyId, year),
-    getProyeccionDetalle(companyId, year),
-    getProyeccionMensual(companyId, year),
-    getFinancialRules(companyId),
+    getProyeccionBreakdown(empresaId, year),
+    getProyeccionDetalle(empresaId, year),
+    getProyeccionMensual(empresaId, year),
+    getFinancialRules(empresaId),
   ])
 
   const ipcRule  = rules.find((r) => r.ruleKey === "ipc_increment_pct")

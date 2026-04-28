@@ -4,32 +4,31 @@ import { NextRequest, NextResponse } from "next/server"
 /**
  * GET /facturas/export?periodo=YYYY-MM
  *
- * Exports invoices in Siesa "Documentos" sheet format (CSV).
- * Columns match ckrea.xlsx exactly:
- * documento, periodo, id_canal, canal, id_co, co, doc, cliente,
- * tipo_cliente, tipo, auxiliar, ventas, impuesto, retenciones
+ * v2: exports vista_facturas in Siesa "Documentos" sheet format (CSV).
+ * This is round-trip — facturas already come from Siesa, but the download lets
+ * users re-upload after manual edits. Hardcoded id_canal/canal/id_co/co/auxiliar
+ * match the C-Krea Siesa codes.
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const periodo = searchParams.get("periodo")
+  const periodoInt = periodo ? Number(periodo.replace("-", "")) : null
 
   const rows = await execute(`
     SELECT
-      COALESCE(i.siesa_documento, '001-FVS-' || UPPER(SUBSTRING(i.id::text, 1, 8))) AS documento,
-      REPLACE(i.periodo, '-', '')                                                     AS periodo_siesa,
-      t.nit                                                                           AS doc,
-      COALESCE(t.nombre_corto, t.razon_social)                                       AS cliente,
-      COALESCE(i.subtotal_canon, 0)::numeric - COALESCE(i.subtotal_descuentos, 0)::numeric AS ventas,
-      COALESCE(i.iva, 0)::numeric                                                    AS impuesto,
-      COALESCE(i.retenciones, 0)::numeric                                            AS retenciones
-    FROM invoices i
-    JOIN tenants t ON i.tenant_id = t.id
-    WHERE i.status IN ('emitida', 'pagada', 'parcial', 'vencida')
-      ${periodo ? `AND i.periodo = '${periodo}'` : ``}
-    ORDER BY i.periodo DESC, t.nit
+      v.doc_id                                                                             AS documento,
+      LPAD(v.periodo::text, 6, '0')                                                        AS periodo_siesa,
+      v.nit_inquilino                                                                      AS doc,
+      v.razon_social                                                                       AS cliente,
+      (COALESCE(v.base_neta, 0) - COALESCE(v.retenciones, 0))::numeric                     AS ventas,
+      COALESCE(v.iva, 0)::numeric                                                          AS impuesto,
+      COALESCE(v.retenciones, 0)::numeric                                                  AS retenciones
+    FROM v2.vista_facturas v
+    WHERE v.is_factura = true
+      ${periodoInt ? `AND v.periodo = ${periodoInt}` : ``}
+    ORDER BY v.periodo DESC, v.nit_inquilino
   `)
 
-  // CSV header — exact Documentos sheet column order
   const header = [
     "documento", "periodo", "id_canal", "canal", "id_co", "co",
     "doc", "cliente", "tipo_cliente", "tipo", "auxiliar",
@@ -44,23 +43,23 @@ export async function GET(req: NextRequest) {
   const lines: string[] = [header.join(",")]
 
   for (const r of rows as Array<Record<string, unknown>>) {
-    const ventas = Number(r.ventas).toFixed(2).replace(".", ",")
-    const impuesto = Number(r.impuesto).toFixed(2).replace(".", ",")
+    const ventas      = Number(r.ventas).toFixed(2).replace(".", ",")
+    const impuesto    = Number(r.impuesto).toFixed(2).replace(".", ",")
     const retenciones = Number(r.retenciones).toFixed(2).replace(".", ",")
 
     lines.push(
       [
         escape(String(r.documento)),
         escape(String(r.periodo_siesa)),
-        "R08",                         // id_canal — C-Krea channel code
-        "C-KREA",                      // canal
-        "044",                         // id_co — C-Krea company code
-        "Central Creativa C-KREA",     // co
-        escape(String(r.doc).trim()),  // NIT
+        "R08",
+        "C-KREA",
+        "044",
+        "Central Creativa C-KREA",
+        escape(String(r.doc).trim()),
         escape(String(r.cliente)),
-        "1003",                        // tipo_cliente
-        "Facturas",                    // tipo
-        "42201006",                    // auxiliar — Siesa rent account
+        "1003",
+        "Facturas",
+        "42201006",
         ventas,
         impuesto,
         retenciones,

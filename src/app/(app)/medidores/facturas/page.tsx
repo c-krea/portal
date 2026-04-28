@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { PageHeader } from "@/components/layout/page-header"
-import { execute } from "@/lib/db/executor"
+import { getEmpresaCkreaId } from "@/lib/empresa"
 import { getElectricityInvoices } from "@/lib/data/electricity"
 import { InvoiceForm } from "./invoice-form"
 import Link from "next/link"
@@ -40,10 +40,9 @@ export default async function FacturasEnergiaPage({
   const periodo = periodoParam ?? defaultPeriodo
   const PERIODOS = buildPeriodos(selectedYear)
 
-  const companies = await execute(`SELECT id FROM companies LIMIT 1`)
-  const companyId = String(companies[0].id)
+  const empresaId = await getEmpresaCkreaId()
 
-  const invoices = await getElectricityInvoices(companyId, periodo)
+  const invoices = await getElectricityInvoices(empresaId, periodo)
 
   return (
     <>

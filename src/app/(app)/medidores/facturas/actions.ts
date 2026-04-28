@@ -1,6 +1,7 @@
 "use server"
 
-import { execute, supabaseAdmin } from "@/lib/db/executor"
+import { supabaseAdmin } from "@/lib/db/executor"
+import { getEmpresaCkreaId } from "@/lib/empresa"
 import { ELECTRICITY_GROUPS } from "@/lib/data/electricity"
 import { revalidatePath } from "next/cache"
 
@@ -24,8 +25,7 @@ export async function saveFacturasEnergia(
   const periodo = formData.get("periodo") as string
   if (!periodo) return { error: "Periodo requerido" }
 
-  const companies = await execute(`SELECT id FROM companies LIMIT 1`)
-  const companyId = String(companies[0].id)
+  const empresaId = await getEmpresaCkreaId()
 
   const rows: FacturaInput[] = ELECTRICITY_GROUPS.map(({ group }) => ({
     electricity_group: group,
@@ -51,12 +51,13 @@ export async function saveFacturasEnergia(
     const tarifa = r.valor_factura / r.kwh_factura
 
     const { error } = await supabaseAdmin
-      .from("electricity_invoices")
+      .schema("v2")
+      .from("facturas_energia")
       .upsert(
         {
-          company_id:        companyId,
+          empresa_id:        empresaId,
           periodo,
-          electricity_group: r.electricity_group,
+          grupo_energia:     r.electricity_group,
           direccion:         meta.direccion,
           proveedor:         meta.proveedor,
           fecha_factura:     r.fecha_factura || null,
@@ -66,7 +67,7 @@ export async function saveFacturasEnergia(
           notas:             r.notas || null,
           updated_at:        new Date().toISOString(),
         },
-        { onConflict: "company_id,periodo,electricity_group" },
+        { onConflict: "empresa_id,periodo,grupo_energia" },
       )
 
     if (error) return { error: `Error guardando ${meta.direccion}: ${error.message}` }
