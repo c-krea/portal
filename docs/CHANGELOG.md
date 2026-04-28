@@ -6,6 +6,36 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [Unreleased] — 2026-04-28 (Phase G complete — Session 38)
+
+### Added
+- **`v2.sync_desde_raw()` cron route** at `/api/cron/sync-v2`, daily 05:30 COT. Idempotent re-runs (gate G.3 verified).
+- **`getEmpresaCkreaId()` helper** (`src/lib/empresa.ts`) — lazy, cached-per-server-boot lookup by NIT 900123456. Replaces every `SELECT id FROM companies LIMIT 1` execute call.
+- **v2 Drizzle schema** in `src/lib/db/schema/v2/` (12 tables + 6 enums, `pgSchema('v2')`). `src/lib/db/v2.ts` exposes `v2()` returning `supabaseAdmin.schema('v2')`.
+
+### Changed (Phase G.4 — 36 portal files refactored, public.* → v2.*)
+- All portal data layers (`src/lib/data/*.ts`) and server actions migrated to `v2.*` (Spanish-named tables) via `.schema("v2").from(...)`. Field renames applied throughout: `tenant_id→inquilino_id`, `unit_id→local_id`, `company_id→empresa_id`, `status→estado`, `name→razon_social`, `unit_number→unidad`, `unit_code→codigo`, `full_name→nombre_completo`, `total_amount→monto_total`, `validation_status→estado_validacion`, `tipo_gasto_id`, `electricity_group→grupo_energia`, `year→anio`, `month→mes`, `contract_id→contrato_id`, `rule_key→clave`, `rule_value→valor`, `description→descripcion`.
+- 4 canonical recaudo filters now live inside `v2.vista_pagos` (FVS cruce + DISTINCT ON dedup + `valor_final < 1B` + `id_zona='Z40'`); portal-side dedup removed.
+- `src/lib/invoice-engine.ts` and `src/lib/reconciliation.ts` reduced to **no-op stubs**. Siesa now emits invoices and runs reconciliation upstream.
+- `src/app/(app)/facturas/actions.ts`: `emitirFactura` / `generarFacturas` return Spanish "Siesa lo hace" messages.
+- `vercel.json`: `/api/cron/sync-v2` schedule `30 */6 * * *` → `30 5 * * *` (Hobby plan caps cron at 1×/day).
+
+### Fixed
+- **`vista_facturas` / `vista_cartera_actual` doc_id mismatch**: `doc_id` (`001-FVS-69739`) and `documento` (`60344275`) are not joinable. Portal stops trying — `saldo=0`, `status="emitida"` on factura list; cartera page handles its own data.
+- **`v2.contratos` missing `grace_period_days`**: portal hardcodes `null` in `PortalProfile` (type already nullable).
+- **`vista_pagos` missing `id`/`status`/`concepto`**: synthetic `ROW_NUMBER()::text AS id`, hardcoded `status="RECAUDADO"`, `concepto=null`.
+- **`v2.proyecciones` missing `pronto_pago_proyectado`**: dropped from upsert + monthly breakdown SELECT (PP now lives only on payments side per [feedback_pp_projection]).
+
+### Verified
+- `npm run build` clean (14.2s compile / 12.6s types). Lint: 9 errors / 14 warnings, **all pre-existing** (refactor introduced 0 new lint errors — verified by stashing diff).
+- Preview deploy ready, German manually confirmed admin tables render.
+- Production deploy 1m, `/login` 200, `/portal` 307, no 500s in runtime logs.
+
+### Migration history
+Branch `refactor/v2-migration` merged to `main` via `--no-ff` (commit `2532efb`). 36 files changed, 1 cron schedule fix, ~3,100 insertions / 1,521 deletions.
+
+---
+
 ## [Unreleased] — 2026-04-28
 
 ### Security

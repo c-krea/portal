@@ -2,6 +2,74 @@
 
 ---
 
+## Session 38 — 2026-04-28: Phase G COMPLETE — v2 migration shipped
+
+### Goal
+Finish G.2–G.7 in one push: data migration → ongoing sync → 36 portal files refactored across 6 subgrupos → build/lint → preview → merge to main → production.
+
+### G.2 — Data migration ✓
+FK-ordered single-transaction load: empresas (hardcoded NIT) → inquilinos (UNION raw+legacy) → locales → contratos → proyecciones → tipos_gasto/gastos → reglas_financieras → lecturas_medidor → facturas_energia → perfiles. Drill A 3-tenant gate passed. Helpers rewritten to read `v2.perfiles`.
+
+### G.3 — Ongoing raw→v2 sync ✓
+- `v2.sync_desde_raw()` SQL function tested idempotent (re-run = 0 changes).
+- Vercel cron route `/api/cron/sync-v2` daily 05:30 COT (had to drop from every-6h after Hobby plan caps cron to 1×/day).
+
+### G.4 — 36 portal files refactored across 6 subgrupos
+1. Auth + perfiles (4)
+2. Inquilinos + locales + mora (6)
+3. Pagos + recaudo (3)
+4. Facturas + proyecciones (8)
+5. Gastos + medidores + portal (12)
+6. Configuración (3)
+
+Field renames everywhere: `tenant_id→inquilino_id`, `unit_id→local_id`, `company_id→empresa_id`, `status→estado`, `name→razon_social`, `unit_number→unidad`, `unit_code→codigo`, `full_name→nombre_completo`, `total_amount→monto_total`, `validation_status→estado_validacion`, `tipo_gasto_id`, `electricity_group→grupo_energia`, `year→anio`, `month→mes`, `contract_id→contrato_id`, `rule_key→clave`, `rule_value→valor`, `description→descripcion`.
+
+Pattern shifts:
+- `execute("SELECT id FROM companies LIMIT 1")` → `getEmpresaCkreaId()` (lazy cache helper, lookup by NIT 900123456).
+- 4 canonical recaudo filters now baked into `v2.vista_pagos` — portal callers stopped re-deduping/filtering.
+- `invoice-engine.ts` and `reconciliation.ts` reduced to **no-op stubs** (Siesa emits invoices upstream now).
+- Supabase upserts moved to `.schema("v2").from(...)` everywhere; `onConflict` keys verified against actual UNIQUE constraints before each write.
+
+### G.5 — Build + lint + types ✓
+`npm run build` clean (14.2s compile, 12.6s types). Lint = 9 errors / 14 warnings, all **pre-existing** (verified by stashing refactor and re-running). Refactor introduced 0 new lint errors.
+
+### G.6 — Preview deploy ✓
+- Auto-deploy from push didn't fire (Vercel project not configured to deploy non-main branches).
+- Forced via `vercel deploy --yes` on `refactor/v2-migration`. First attempt failed: `Hobby accounts are limited to daily cron jobs. This cron expression (30 */6 * * *) would run more than once per day.`
+- Fix: `30 */6 * * *` → `30 5 * * *` (daily 05:30 COT). Re-deployed → Ready.
+- Preview URL gated by Vercel SSO (auth wall, expected for previews). German manually verified all admin tables fill in.
+
+### G.7 — Merge to main + production deploy ✓
+- `git checkout main && git merge --no-ff refactor/v2-migration && git push origin main`.
+- Production deploy 1m, status Ready.
+- `/login` → 200, `/portal` → 307 redirect (expected unauth flow). No 500s in runtime logs.
+
+### Decisions locked (worth remembering)
+1. **Cron frequency capped by plan**: Vercel Hobby = 1×/day per cron. If ever 2 schedules conflict, raise the question of upgrading rather than working around.
+2. **vista_facturas vs vista_cartera_actual unjoinable**: `doc_id` (e.g. `001-FVS-69739`) ≠ `documento` (e.g. `60344275`). Hardcoded `saldo=0`, `status="emitida"`; cartera tracking lives on its own page.
+3. **invoice-engine/reconciliation are dead code in v2 world**. Stubbed signatures preserved so callers don't break, but bodies return zero/no-op. Mark for delete in cleanup pass.
+
+### Errores y fixes
+- `v2.contratos` missing `grace_period_days` → hardcoded `null` in `PortalProfile` (type already nullable).
+- `vista_pagos` missing `id`/`status`/`concepto` → synthetic `ROW_NUMBER() OVER (...)::text AS id`, hardcode `status="RECAUDADO"`, `concepto=null`.
+- `v2.proyecciones` missing `pronto_pago_proyectado` → dropped from upsert + monthly breakdown SELECT.
+- `v2.gastos` missing `is_allocated` → hardcoded `false`.
+
+### Linear
+- WOR-? G refactor closed via merge commit.
+
+### Pending — Phase F + H (NEXT SESSIONS)
+- **Phase F**: archive 25 old `public.*` tables now that nothing reads them. Blocked-on-G is now unblocked.
+- **Phase H**: copilot tool surface (separate session, not data-migration related).
+
+### Session-end pointers
+- ADRs: none new (decisions captured in CHANGELOG/journal narrative)
+- Lessons: feedback_vercel_cron_hobby.md (new — capture cron 1×/day cap)
+- State: project_state.md needs update (Phase G done, F+H pending)
+- Linear: G refactor closed via merge
+
+---
+
 ## Session 37 — 2026-04-28: Phase G.0 + G.1 — v2 migration kickoff
 
 ### Goal
