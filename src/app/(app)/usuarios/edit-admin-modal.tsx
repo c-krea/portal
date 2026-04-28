@@ -6,9 +6,9 @@ import { updateAdminUser } from "./actions"
 import type { UsuarioRow } from "@/lib/data/usuarios"
 
 const ROLES = [
-  { value: "admin",   label: "Admin" },
-  { value: "finance", label: "Finanzas" },
-  { value: "viewer",  label: "Consulta" },
+  { value: "admin",    label: "Admin" },
+  { value: "finanzas", label: "Finanzas" },
+  { value: "visor",    label: "Consulta" },
 ]
 
 export function EditAdminModal({ user }: { user: UsuarioRow }) {

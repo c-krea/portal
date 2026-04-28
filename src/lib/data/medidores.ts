@@ -39,39 +39,39 @@ export type MedidorAdminRow = {
 }
 
 export async function getMedidoresAdmin(
-  companyId: string,
+  empresaId: string,
   periodo: string,
 ): Promise<MedidorAdminRow[]> {
   const rows = await execute(`
     SELECT
       u.id                                               AS unit_id,
-      u.unit_number,
+      u.unidad                                           AS unit_number,
       COALESCE(t.nombre_corto, t.razon_social)           AS tenant_name,
       mr.id                                              AS reading_id,
       mr.kwh::numeric                                    AS kwh,
       mr.total_energia::numeric                          AS total_energia,
-      mr.validation_status,
+      mr.estado_validacion                               AS validation_status,
       mr.foto_url,
       avg3.promedio_3m
-    FROM units u
-    LEFT JOIN contracts c
-           ON c.unit_id = u.id
-          AND c.company_id = '${companyId}'::uuid
-          AND c.status IN ('activo', 'critico')
-    LEFT JOIN tenants t ON c.tenant_id = t.id
-    LEFT JOIN meter_readings mr
-           ON mr.unit_id = u.id
-          AND mr.periodo = '${periodo}'
+    FROM v2.locales u
+    LEFT JOIN v2.contratos c
+           ON c.local_id = u.id
+          AND c.empresa_id = '${empresaId}'::uuid
+          AND c.estado IN ('activo', 'critico')
+    LEFT JOIN v2.inquilinos t ON c.inquilino_id = t.id
+    LEFT JOIN v2.lecturas_medidor mr
+           ON mr.local_id = u.id
+          AND mr.periodo  = '${periodo}'
     LEFT JOIN LATERAL (
       SELECT ROUND(AVG(mr2.kwh), 0) AS promedio_3m
       FROM (
-        SELECT kwh FROM meter_readings
-        WHERE unit_id = u.id AND periodo < '${periodo}'
+        SELECT kwh FROM v2.lecturas_medidor
+        WHERE local_id = u.id AND periodo < '${periodo}'
         ORDER BY periodo DESC LIMIT 3
       ) mr2
     ) avg3 ON true
-    WHERE u.company_id = '${companyId}'::uuid
-    ORDER BY u.unit_number
+    WHERE u.empresa_id = '${empresaId}'::uuid
+    ORDER BY u.unidad
   `)
 
   return (rows as Array<Record<string, unknown>>).map((r) => {
@@ -98,31 +98,31 @@ export async function getMedidoresAdmin(
   })
 }
 
-export async function getUnitsWithMeters(companyId: string): Promise<UnitWithMeter[]> {
+export async function getUnitsWithMeters(empresaId: string): Promise<UnitWithMeter[]> {
   const rows = await execute(`
     SELECT
       u.id                                               AS unit_id,
-      u.unit_number,
-      u.unit_code,
+      u.unidad                                           AS unit_number,
+      u.codigo                                           AS unit_code,
       COALESCE(t.nombre_corto, t.razon_social)           AS tenant_name,
       mr_last.periodo                                    AS last_periodo,
       mr_last.kwh::numeric                               AS last_kwh,
       mr_last.total_energia::numeric                     AS last_total
-    FROM units u
-    LEFT JOIN contracts c
-           ON c.unit_id = u.id
-          AND c.company_id = '${companyId}'::uuid
-          AND c.status IN ('activo', 'critico')
-    LEFT JOIN tenants t ON c.tenant_id = t.id
+    FROM v2.locales u
+    LEFT JOIN v2.contratos c
+           ON c.local_id = u.id
+          AND c.empresa_id = '${empresaId}'::uuid
+          AND c.estado IN ('activo', 'critico')
+    LEFT JOIN v2.inquilinos t ON c.inquilino_id = t.id
     LEFT JOIN LATERAL (
       SELECT periodo, kwh, total_energia
-      FROM meter_readings
-      WHERE unit_id = u.id
+      FROM v2.lecturas_medidor
+      WHERE local_id = u.id
       ORDER BY periodo DESC
       LIMIT 1
     ) mr_last ON true
-    WHERE u.company_id = '${companyId}'::uuid
-    ORDER BY u.unit_number
+    WHERE u.empresa_id = '${empresaId}'::uuid
+    ORDER BY u.unidad
   `)
 
   return (rows as Array<Record<string, unknown>>).map((r) => ({
@@ -138,26 +138,26 @@ export async function getUnitsWithMeters(companyId: string): Promise<UnitWithMet
 }
 
 export async function getMeterReadings(
-  companyId: string,
+  empresaId: string,
   periodo?: string,
 ): Promise<MeterReadingRow[]> {
   const rows = await execute(`
     SELECT
       mr.id,
-      mr.unit_id,
-      u.unit_number,
+      mr.local_id                       AS unit_id,
+      u.unidad                          AS unit_number,
       mr.periodo,
-      mr.lectura_anterior::numeric AS lectura_anterior,
-      mr.lectura_actual::numeric   AS lectura_actual,
-      mr.kwh::numeric              AS kwh,
-      mr.tarifa_kwh::numeric       AS tarifa_kwh,
-      mr.total_energia::numeric    AS total_energia,
+      mr.lectura_anterior::numeric      AS lectura_anterior,
+      mr.lectura_actual::numeric        AS lectura_actual,
+      mr.kwh::numeric                   AS kwh,
+      mr.tarifa_kwh::numeric            AS tarifa_kwh,
+      mr.total_energia::numeric         AS total_energia,
       mr.notas
-    FROM meter_readings mr
-    JOIN units u ON mr.unit_id = u.id
-    WHERE mr.company_id = '${companyId}'::uuid
+    FROM v2.lecturas_medidor mr
+    JOIN v2.locales u ON mr.local_id = u.id
+    WHERE mr.empresa_id = '${empresaId}'::uuid
       ${periodo ? `AND mr.periodo = '${periodo}'` : ``}
-    ORDER BY mr.periodo DESC, u.unit_number
+    ORDER BY mr.periodo DESC, u.unidad
   `)
 
   return (rows as Array<Record<string, unknown>>).map((r) => ({
@@ -175,7 +175,7 @@ export async function getMeterReadings(
 }
 
 export async function upsertMeterReading(reading: {
-  companyId: string
+  empresaId: string
   unitId: string
   periodo: string
   lecturaAnterior: string
@@ -186,11 +186,12 @@ export async function upsertMeterReading(reading: {
   notas: string | null
 }): Promise<void> {
   const { error } = await supabaseAdmin
-    .from("meter_readings")
+    .schema("v2")
+    .from("lecturas_medidor")
     .upsert(
       {
-        company_id:       reading.companyId,
-        unit_id:          reading.unitId,
+        empresa_id:       reading.empresaId,
+        local_id:         reading.unitId,
         periodo:          reading.periodo,
         lectura_anterior: reading.lecturaAnterior,
         lectura_actual:   reading.lecturaActual,
@@ -199,7 +200,7 @@ export async function upsertMeterReading(reading: {
         total_energia:    reading.totalEnergia,
         notas:            reading.notas,
       },
-      { onConflict: "unit_id,periodo" },
+      { onConflict: "local_id,periodo" },
     )
   if (error) throw new Error(error.message)
 }

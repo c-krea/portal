@@ -3,12 +3,11 @@ export const dynamic = "force-dynamic"
 import { PageHeader } from "@/components/layout/page-header"
 import { RuleForm } from "@/components/configuracion/rule-form"
 import { getFinancialRules, RULE_LABELS } from "@/lib/data/configuracion"
-import { execute } from "@/lib/db/executor"
+import { getEmpresaCkreaId } from "@/lib/empresa"
 
 export default async function ConfiguracionPage() {
-  const companies = await execute(`SELECT id FROM companies LIMIT 1`)
-  const companyId = String(companies[0].id)
-  const rules = await getFinancialRules(companyId)
+  const empresaId = await getEmpresaCkreaId()
+  const rules = await getFinancialRules(empresaId)
 
   return (
     <>

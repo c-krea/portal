@@ -28,7 +28,6 @@ export async function submitLectura(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: "No autorizado" }
 
-  // Look up unitId + companyId server-side — never trust client
   const profile = await getPortalProfile(user.id)
   if (!profile) return { error: "Perfil no encontrado" }
 
@@ -43,11 +42,10 @@ export async function submitLectura(
 
   const { periodo, lecturaActual, notas } = parsed.data
 
-  // Get previous reading
   const prevRows = await execute(`
     SELECT lectura_actual::numeric AS lectura_actual, tarifa_kwh::numeric AS tarifa_kwh
-    FROM meter_readings
-    WHERE unit_id = '${unitId}'
+    FROM v2.lecturas_medidor
+    WHERE local_id = '${unitId}'::uuid
     ORDER BY periodo DESC
     LIMIT 1
   `)
@@ -64,19 +62,19 @@ export async function submitLectura(
   const totalEnergia = Math.round(kwh * tarifaKwh)
 
   // Hybrid validation: same-month seasonal avg (primary) + 3m avg (fallback)
-  const mes = periodo.split("-")[1] // "01".."12"
+  const mes = periodo.split("-")[1]
   const [seasonRows, trend3mRows] = await Promise.all([
     execute(`
       SELECT AVG(kwh::numeric) AS promedio, COUNT(*) AS cnt
-      FROM meter_readings
-      WHERE unit_id = '${unitId}'
+      FROM v2.lecturas_medidor
+      WHERE local_id = '${unitId}'::uuid
         AND SUBSTRING(periodo, 6, 2) = '${mes}'
         AND periodo < '${periodo}'
     `),
     execute(`
       SELECT AVG(kwh::numeric) AS promedio
-      FROM meter_readings
-      WHERE unit_id = '${unitId}' AND periodo < '${periodo}'
+      FROM v2.lecturas_medidor
+      WHERE local_id = '${unitId}'::uuid AND periodo < '${periodo}'
     `),
   ])
 
@@ -102,7 +100,6 @@ export async function submitLectura(
     validationStatus = pct <= 0.20 ? "aprobado" : pct <= 0.40 ? "revision" : "critico"
   }
 
-  // Foto upload → Google Drive (base64 from client)
   let fotoUrl: string | null = null
   let fotoDriveId: string | null = null
   const fotoBase64 = formData.get("fotoBase64") as string | null
@@ -127,24 +124,25 @@ export async function submitLectura(
   }
 
   const { error } = await supabaseAdmin
-    .from("meter_readings")
+    .schema("v2")
+    .from("lecturas_medidor")
     .upsert(
       {
-        company_id:        companyId,
-        unit_id:           unitId,
+        empresa_id:         companyId,
+        local_id:           unitId,
         periodo,
-        lectura_anterior:  String(lecturaAnterior),
-        lectura_actual:    String(lecturaActual),
-        kwh:               String(kwh),
-        tarifa_kwh:        String(tarifaKwh),
-        total_energia:     String(totalEnergia),
-        notas:             notas ?? null,
-        foto_url:          fotoUrl,
-        foto_drive_id:     fotoDriveId,
-        submitted_by:      user.id,
-        validation_status: validationStatus,
+        lectura_anterior:   String(lecturaAnterior),
+        lectura_actual:     String(lecturaActual),
+        kwh:                String(kwh),
+        tarifa_kwh:         String(tarifaKwh),
+        total_energia:      String(totalEnergia),
+        notas:              notas ?? null,
+        foto_url:           fotoUrl,
+        foto_drive_id:      fotoDriveId,
+        submitted_by:       user.id,
+        estado_validacion:  validationStatus,
       },
-      { onConflict: "unit_id,periodo" },
+      { onConflict: "local_id,periodo" },
     )
   if (error) return { error: "Error al guardar la lectura. Intente de nuevo." }
 

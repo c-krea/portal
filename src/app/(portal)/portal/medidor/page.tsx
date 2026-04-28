@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { getPortalProfile, getPortalMedidorStatus, getPortalMedidorHistory } from "@/lib/data/portal"
 import { execute } from "@/lib/db/executor"
+import { getEmpresaCkreaId } from "@/lib/empresa"
 import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
 import { MedidorForm } from "./form"
 import { HistorialChart } from "./chart"
@@ -37,20 +38,19 @@ export default async function MedidorPage() {
   const today = new Date().getDate()
   const withinDeadline = today <= 10
 
-  const companies = await execute(`SELECT id FROM companies LIMIT 1`)
-  const companyId = String(companies[0].id)
+  const empresaId = await getEmpresaCkreaId()
 
   const [medidor, history, prevRows, tarifaKwh] = await Promise.all([
     getPortalMedidorStatus(profile.unitId, periodo),
     getPortalMedidorHistory(profile.unitId, 6),
     execute(`
       SELECT lectura_actual::numeric AS lectura_actual
-      FROM meter_readings
-      WHERE unit_id = '${profile.unitId}' AND periodo < '${periodo}'
+      FROM v2.lecturas_medidor
+      WHERE local_id = '${profile.unitId}'::uuid AND periodo < '${periodo}'
       ORDER BY periodo DESC
       LIMIT 1
     `),
-    getElectricityTarifaForUnit(companyId, profile.unitId, periodo),
+    getElectricityTarifaForUnit(empresaId, profile.unitId, periodo),
   ])
   const lecturaAnteriorRef = prevRows[0] ? Number(prevRows[0].lectura_actual) : 0
 

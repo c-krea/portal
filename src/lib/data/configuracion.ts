@@ -18,24 +18,25 @@ export const RULE_LABELS: Record<string, { label: string; unit: string; hint: st
 
 export async function getGracePeriod(): Promise<number> {
   const rows = await execute(`
-    SELECT rule_value::numeric FROM financial_rules
-    WHERE rule_key = 'grace_period_days'
+    SELECT valor::numeric AS valor FROM v2.reglas_financieras
+    WHERE clave = 'grace_period_days'
     LIMIT 1
   `)
-  return Number((rows as Array<Record<string, unknown>>)[0]?.rule_value ?? 0)
+  return Number((rows as Array<Record<string, unknown>>)[0]?.valor ?? 0)
 }
 
-export async function getFinancialRules(companyId: string): Promise<FinancialRule[]> {
+export async function getFinancialRules(empresaId: string): Promise<FinancialRule[]> {
   const { data, error } = await supabaseAdmin
-    .from("financial_rules")
-    .select("id, rule_key, rule_value, description")
-    .eq("company_id", companyId)
-    .order("rule_key")
+    .schema("v2")
+    .from("reglas_financieras")
+    .select("id, clave, valor, descripcion")
+    .eq("empresa_id", empresaId)
+    .order("clave")
   if (error) throw new Error(error.message)
   return (data ?? []).map((r) => ({
     id: r.id as string,
-    ruleKey: r.rule_key as string,
-    ruleValue: Number(r.rule_value),
-    description: r.description as string | null,
+    ruleKey: r.clave as string,
+    ruleValue: Number(r.valor),
+    description: r.descripcion as string | null,
   }))
 }

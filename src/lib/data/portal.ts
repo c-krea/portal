@@ -14,13 +14,11 @@ export type PortalProfile = {
   fechaFin: string | null
   canonBase: number
   contractStatus: string
-  // Contact
   nit: string | null
   email: string | null
   telefono: string | null
   contactoNombre: string | null
   tipoCliente: string | null
-  // Contract details
   descuentoPct: number | null
   prontoPagoPct: number | null
   gracePeriodDays: number | null
@@ -51,33 +49,32 @@ export type PortalMedidorStatus = {
 export async function getPortalProfile(userId: string): Promise<PortalProfile | null> {
   const rows = await execute(`
     SELECT
-      p.full_name,
-      p.tenant_id,
-      p.company_id,
+      p.nombre_completo                                  AS full_name,
+      p.inquilino_id                                     AS tenant_id,
+      p.empresa_id                                       AS company_id,
       t.razon_social,
       t.nombre_corto,
       t.nit,
-      t.email,
+      COALESCE(t.email_contacto, t.portal_email)         AS email,
       t.telefono,
       t.contacto_nombre,
       t.tipo_cliente,
-      u.unit_number,
-      u.unit_code,
+      u.unidad                                           AS unit_number,
+      u.codigo                                           AS unit_code,
       u.entrada,
-      u.id AS unit_id,
+      u.id                                               AS unit_id,
       c.fecha_inicio,
       c.fecha_fin,
-      c.canon_base::numeric      AS canon_base,
-      c.status                   AS contract_status,
-      c.descuento_pct::numeric   AS descuento_pct,
-      c.pronto_pago_pct::numeric AS pronto_pago_pct,
-      c.grace_period_days,
-      c.incremento_ipc::numeric  AS incremento_ipc,
+      c.canon_base::numeric                              AS canon_base,
+      c.estado                                           AS contract_status,
+      c.descuento_pct::numeric                           AS descuento_pct,
+      c.pronto_pago_pct::numeric                         AS pronto_pago_pct,
+      c.incremento_ipc::numeric                          AS incremento_ipc,
       c.descripcion_descuentos
-    FROM profiles p
-    JOIN tenants t ON t.id = p.tenant_id
-    JOIN contracts c ON c.tenant_id = t.id AND c.status = 'activo'
-    JOIN units u ON u.id = c.unit_id
+    FROM v2.perfiles p
+    JOIN v2.inquilinos t ON t.id = p.inquilino_id
+    JOIN v2.contratos  c ON c.inquilino_id = t.id AND c.estado = 'activo'
+    JOIN v2.locales    u ON u.id = c.local_id
     WHERE p.id = '${userId}'
     LIMIT 1
   `)
@@ -104,7 +101,7 @@ export async function getPortalProfile(userId: string): Promise<PortalProfile | 
     tipoCliente: r.tipo_cliente ? String(r.tipo_cliente) : null,
     descuentoPct: r.descuento_pct != null ? Number(r.descuento_pct) : null,
     prontoPagoPct: r.pronto_pago_pct != null ? Number(r.pronto_pago_pct) : null,
-    gracePeriodDays: r.grace_period_days != null ? Number(r.grace_period_days) : null,
+    gracePeriodDays: null,
     incrementoIpc: r.incremento_ipc != null ? Number(r.incremento_ipc) : null,
     descripcionDescuentos: r.descripcion_descuentos ? String(r.descripcion_descuentos) : null,
   }
@@ -117,8 +114,8 @@ function mapPago(r: Record<string, unknown>): PortalPago {
     fechaVencimiento: r.fecha_vencimiento ? String(r.fecha_vencimiento) : null,
     valorFinal: Number(r.valor_final),
     valorAplicado: Number(r.valor_aplicado),
-    concepto: r.concepto ? String(r.concepto) : null,
-    status: String(r.status),
+    concepto: null,
+    status: "RECAUDADO",
     diasDiff: r.dias_diff != null ? Number(r.dias_diff) : null,
   }
 }
@@ -126,16 +123,14 @@ function mapPago(r: Record<string, unknown>): PortalPago {
 export async function getPortalPagos(tenantId: string, limit = 5): Promise<PortalPago[]> {
   const rows = await execute(`
     SELECT
-      id,
+      ROW_NUMBER() OVER (ORDER BY fecha_recaudo DESC, docto, cruce)::text AS id,
       fecha_recaudo,
       fecha_vencimiento,
       valor_final::numeric    AS valor_final,
       valor_aplicado::numeric AS valor_aplicado,
-      concepto,
-      status,
       (fecha_recaudo - fecha_vencimiento) AS dias_diff
-    FROM payments
-    WHERE tenant_id = '${tenantId}'
+    FROM v2.vista_pagos
+    WHERE inquilino_id = '${tenantId}'::uuid
     ORDER BY fecha_recaudo DESC
     LIMIT ${limit}
   `)
@@ -155,17 +150,15 @@ export async function getPortalPagosPage(
   const offset = (page - 1) * pageSize
   const rows = await execute(`
     SELECT
-      id,
+      ROW_NUMBER() OVER (ORDER BY fecha_recaudo DESC, docto, cruce)::text AS id,
       fecha_recaudo,
       fecha_vencimiento,
       valor_final::numeric    AS valor_final,
       valor_aplicado::numeric AS valor_aplicado,
-      concepto,
-      status,
       (fecha_recaudo - fecha_vencimiento) AS dias_diff,
       COUNT(*) OVER()         AS total_count
-    FROM payments
-    WHERE tenant_id = '${tenantId}'
+    FROM v2.vista_pagos
+    WHERE inquilino_id = '${tenantId}'::uuid
     ORDER BY fecha_recaudo DESC
     LIMIT ${pageSize} OFFSET ${offset}
   `)
@@ -193,8 +186,8 @@ export async function getPortalPagosKpis(tenantId: string): Promise<PortalPagosK
         FILTER (WHERE fecha_recaudo > fecha_vencimiento), 1)               AS avg_dias_tarde,
       ROUND(AVG(fecha_vencimiento - fecha_recaudo)
         FILTER (WHERE fecha_recaudo < fecha_vencimiento), 1)               AS avg_dias_anticipacion
-    FROM payments
-    WHERE tenant_id = '${tenantId}'
+    FROM v2.vista_pagos
+    WHERE inquilino_id = '${tenantId}'::uuid
   `)
   const r = rows[0] ?? {}
   return {
@@ -221,11 +214,11 @@ export async function getPortalMedidorHistory(
   const rows = await execute(`
     SELECT
       periodo,
-      kwh::numeric           AS kwh,
+      kwh::numeric            AS kwh,
       lectura_actual::numeric AS lectura_actual,
-      validation_status
-    FROM meter_readings
-    WHERE unit_id = '${unitId}'
+      estado_validacion       AS validation_status
+    FROM v2.lecturas_medidor
+    WHERE local_id = '${unitId}'::uuid
     ORDER BY periodo DESC
     LIMIT ${limit}
   `)
@@ -243,8 +236,8 @@ export async function getPortalMedidorStatus(
 ): Promise<PortalMedidorStatus> {
   const rows = await execute(`
     SELECT lectura_actual::numeric AS lectura_actual, periodo, foto_url, foto_drive_id, total_energia::numeric AS total_energia
-    FROM meter_readings
-    WHERE unit_id = '${unitId}' AND periodo = '${periodo}'
+    FROM v2.lecturas_medidor
+    WHERE local_id = '${unitId}'::uuid AND periodo = '${periodo}'
     LIMIT 1
   `)
   const r = rows[0]

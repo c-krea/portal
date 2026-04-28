@@ -1,6 +1,7 @@
 "use server"
 
-import { execute, supabaseAdmin } from "@/lib/db/executor"
+import { supabaseAdmin } from "@/lib/db/executor"
+import { getEmpresaCkreaId } from "@/lib/empresa"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { getContractsForProjection } from "@/lib/data/proyecciones"
@@ -34,10 +35,8 @@ export async function generarProyecciones(
   const multiplier = 1 + ipcRate / 100
 
   try {
-    const companies = await execute(`SELECT id FROM companies LIMIT 1`)
-    const companyId = String((companies as Array<Record<string, unknown>>)[0].id)
-
-    const contracts = await getContractsForProjection(companyId, year)
+    const empresaId = await getEmpresaCkreaId()
+    const contracts = await getContractsForProjection(empresaId, year)
 
     if (contracts.length === 0) {
       return { success: true, created: 0, skipped: 0, errors: [] }
@@ -48,25 +47,24 @@ export async function generarProyecciones(
 
     for (const c of contracts) {
       try {
-        const newCanon    = Math.round(c.lastCanon * multiplier)
+        const newCanon     = Math.round(c.lastCanon * multiplier)
         const descuentoPct = c.lastDescuentoPct > 0 ? c.lastDescuentoPct : c.descuentoPct
         const newDescuento = Math.round(newCanon * (descuentoPct / 100))
-        const newPP        = 0  // PP never projected — applied only when client actually pays within 10 days
 
         const rows = Array.from({ length: 12 }, (_, i) => ({
-          company_id:            companyId,
-          contract_id:           c.contractId,
-          unit_id:               c.unitId,
-          year,
-          month:                 i + 1,
-          canon_proyectado:      String(newCanon),
-          descuento_proyectado:  String(newDescuento),
-          pronto_pago_proyectado: String(newPP),
+          empresa_id:           empresaId,
+          contrato_id:          c.contractId,
+          local_id:             c.unitId,
+          anio:                 year,
+          mes:                  i + 1,
+          canon_proyectado:     String(newCanon),
+          descuento_proyectado: String(newDescuento),
         }))
 
         const { error } = await supabaseAdmin
-          .from("projections")
-          .upsert(rows, { ignoreDuplicates: true })
+          .schema("v2")
+          .from("proyecciones")
+          .upsert(rows, { ignoreDuplicates: true, onConflict: "local_id,anio,mes" })
         if (error) throw new Error(error.message)
 
         created += 12

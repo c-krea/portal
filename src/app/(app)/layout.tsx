@@ -17,13 +17,14 @@ export default async function AppLayout({
 
   if (!user) redirect("/login")
 
-  // Load profile for display name
+  // Load perfil for display name
   const { data: profileData } = await supabaseAdmin
-    .from("profiles")
-    .select("full_name, role")
+    .schema("v2")
+    .from("perfiles")
+    .select("nombre_completo, rol")
     .eq("id", user.id)
     .single()
-  const displayName = profileData?.full_name ?? user.email ?? "Usuario"
+  const displayName = profileData?.nombre_completo ?? user.email ?? "Usuario"
 
   return (
     <>

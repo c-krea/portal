@@ -1,6 +1,6 @@
 # C-Krea PayControl — Project Context
 
-**Last updated:** 2026-04-16
+**Last updated:** 2026-04-26
 
 ## What is this
 C-Krea manages ~85 commercial rental units in Central Kreativa, a mall-like property in Bogotá, Colombia. This portal replaces manual Excel-based billing and payment tracking.
@@ -30,10 +30,24 @@ C-Krea manages ~85 commercial rental units in Central Kreativa, a mall-like prop
 - **Management** (secondary): Executive dashboard, read-only
 - **Tenants** (Phase 2): Self-service payment view
 
-## Current status (2026-04-16)
-- Phase: Initial setup
-- What's done: Project bootstrapped (Next.js 16, Tailwind, shadcn/ui, Drizzle, Supabase)
-- What's next: Apply DB schema to Supabase, set up Drizzle schema files, connect Sentry/Vercel/Linear
+## Current status (2026-04-28, mid-Phase G)
+- Phase: **G — Portal refactor mid-flight**. G.0 mapping doc + G.1 infrastructure DONE. G.2 (data migration) next.
+- Phases A→E done. v2 schema applied to prod (12 tables + 4 vistas + 5 RPCs in `v2` schema). siesa_raw populated.
+- Branch: `refactor/v2-migration` — uncommitted G.1 changes in working tree.
+- G.1 just done: helpers v2.user_empresa_id/rol/inquilino_id, RLS+45 policies, PostgREST exposes v2, Drizzle v2 schema, `src/lib/db/v2.ts` + `src/lib/empresa.ts`. TS build clean.
+- C-Krea UUID `00000000-0000-0000-0000-000000000001`, NIT `900123456` — preservar en G.2 para que public.profiles.company_id siga matcheando.
+- **Next entry point**: G.2 data migration FK-ordered (empresas → inquilinos → locales → contratos → ...). See `~/.claude/projects/.../memory/g_migration_state.md`.
+- Pending phases inside G: G.2 → G.3 sync → G.4 refactor 35 files → G.5 build → G.6 preview → G.7 merge. Then F (archive public) → H (copilot tools).
+
+## Last major decisions
+- **v2 schema design** (Session 34, 2026-04-26): collapse 25 tables to 12 + views + RPCs. `siesa_clasificacion` never used; PP only at payment time; PP+phase stack; NIT=identity.
+- **Date scope Opción B** (Session 34): vista_pagos exposes full history; date cutoff lives in RPCs/consumers, not in vista. 2024 retained for PP signal.
+- **NIT join keys fix** (Session 35): `cartera.documento` and `documentos.doc`, NEVER `cliente`. See feedback_nit_columns.md.
+
+## Biggest current gotchas
+- **Supabase free tier blocks direct port 5432.** All local DB tools must use pooler URL: `postgres.bosylehvmtwtqkrlievy:PASSWORD@aws-1-us-east-1.pooler.supabase.com:5432/postgres`. Vercel prod DATABASE_URL still needs the same update.
+- **`documentos` tipo='Descuentos' rows** (PP del 10% as separate accounting entry, RK-/CN- prefix) break naive `vista_facturas` queries. Filter `tipo='Facturas'` or expose `is_factura` flag. Task #11.
+- **Pandas float→str `.0` artifact** lurks in any numeric-looking column read from xlsx. Loader now declares `strip_dot_zero=[col,...]` per sheet — extend if new NIT/code cols appear contaminated.
 
 ## Key decisions made
 - **Drizzle ORM over Prisma**: chosen for ledger pattern — immutable financial records, double-entry style

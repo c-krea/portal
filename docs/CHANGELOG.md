@@ -6,6 +6,56 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [Unreleased] — 2026-04-28
+
+### Security
+- **RLS enabled on all `siesa_raw` tables** (`cartera`, `recaudo`, `documentos`, `ocupacion`, `sync_batches`). Migration `siesa_raw_rls_phase1`. Single policy `siesa_sync_all` per table grants `FOR ALL TO siesa_sync USING (true) WITH CHECK (true)`. `postgres` owner bypasses; portal app keys (`anon`/`authenticated`/`service_role`) remain grant-blocked. Defense-in-depth on top of existing GRANTs.
+- **`siesa_sync` role hardened.** Migration `siesa_sync_role_tighten`: `ALTER ROLE siesa_sync NOCREATEROLE NOCREATEDB NOBYPASSRLS`. Removes admin flags that were inherited at role creation and were silently bypassing RLS. Role is now minimal-privilege: login + DML (SELECT/INSERT/UPDATE) on 5 `siesa_raw` tables, nothing else.
+
+---
+
+## [Unreleased] — 2026-04-26
+
+### Added (designed, not yet applied)
+- **v2 simplified schema** in `docs/foundation/01_schema_erd/v2/`:
+  - `01_tablas.sql` — 12 tables, all Spanish (empresas, perfiles, inquilinos, locales, contratos, proyecciones, lecturas_medidor, facturas_energia, tipos_gasto, gastos, reglas_financieras, agente_chat) + 6 enums + indexes + `update_updated_at` trigger.
+  - `02_vistas.sql` — 4 views (`vista_pagos`, `vista_cartera_actual`, `vista_facturas`, `vista_mora_buckets`). 4 canonical recaudo filters baked in (FVS cruce + DISTINCT ON dedup + `valor_final < 1B` + `id_zona='Z40'`). `siesa_clasificacion` never used.
+  - `03_rpcs.sql` — 5 RPCs (`obtener_recaudo`, `obtener_cartera_actual`, `obtener_buckets_mora`, `obtener_recaudo_vs_proyectado`, `obtener_resumen_inquilino`). SECURITY INVOKER, GRANT authenticated + service_role.
+- **DB backups** in `backups/`:
+  - `schema_snapshot_20260426.sql` — manually-assembled DDL (39 KB, 827 lines).
+  - `ckrea_pre_v2_20260426_213512.dump` — pg_dump custom-format full snapshot (535 KB, RLS + data + FKs).
+- **`scripts/load_siesa_raw.py`** — pandas + psycopg2 ETL loader from `SIESA connexion.xlsx` → `siesa_raw.*`. Idempotent UPSERT via row_hash MD5. Single sync_batch per sheet.
+
+### Changed
+- **`siesa_raw.recaudo`**: PK migrated from `(docto, cruce, fecha_recaudo, valor_aplicado)` to surrogate `id uuid`. Natural key now `recaudo_natural_key UNIQUE NULLS NOT DISTINCT (...)`. Reason: real ERP row `001-RE-657` had null `cruce`, blocking the old NOT NULL composite PK.
+- **`siesa_raw.ocupacion`**: PK migrated from `(documento, local)` to surrogate `id uuid`. Natural key `ocupacion_natural_key UNIQUE NULLS NOT DISTINCT (documento, local)`. Reason: vacant locale row `E1L111` had null `documento`.
+
+### Imported
+- `siesa_raw.cartera` 125 rows, `siesa_raw.recaudo` 3221 rows, `siesa_raw.ocupacion` 84 rows, `siesa_raw.documentos` 419 rows (3849 total) from `SIESA connexion.xlsx`.
+
+### Fixed (Session 35, 2026-04-26)
+- **Loader `.0` strip**: pandas float→str artifact stripped from `ocupacion.documento` (78/78 rows) and `documentos.tipo_cliente` (317/317 rows). Per-sheet `strip_dot_zero=[col,...]` config in `scripts/load_siesa_raw.py`.
+- **Cleanup**: deleted 78 stale `.0`-suffix `siesa_raw.ocupacion` rows after re-running loader idempotently.
+- **`vista_cartera_actual` JOIN bug**: was joining `inquilinos.nit = cartera.cliente` — `cliente` is razón social, not NIT. Fixed to `cartera.documento`. `cliente` now exposed as `razon_social_raw`.
+- **`vista_facturas` JOIN bug**: same bug on `documentos.cliente`. Fixed to `documentos.doc`. `documento` aliased as `doc_id` (factura ID, not NIT). `prefijo_doc` now uses `SPLIT_PART(documento, '-', 2)` to correctly extract FVS/RK/NVS prefix.
+
+---
+
+## [Unreleased] — 2026-04-25
+
+### Added
+- **`siesa_raw` landing schema (Phase 1 of ERP→Supabase ingestion)**: new schema isolated from `public`, not exposed via PostgREST. Migration `siesa_raw_schema_phase1` applied to production Supabase.
+  - 5 tables: `sync_batches` (audit), `cartera` (PK `row_id`), `recaudo` (composite PK `docto,cruce,fecha_recaudo,valor_aplicado`), `documentos` (PK `documento`), `ocupacion` (composite PK `documento,local`)
+  - Every raw table carries `siesa_synced_at`, `sync_batch_id` (FK to `sync_batches`), `row_hash` (MD5 for change detection)
+  - New role `siesa_sync` granted `SELECT/INSERT/UPDATE` on the schema; `anon`/`authenticated` revoked. No RLS — grant-only access.
+  - Idempotent UPSERT pattern (`ON CONFLICT … DO UPDATE WHERE row_hash IS DISTINCT FROM`) — IT can safely re-run jobs.
+- **`docs/integrations/SIESA-Raw-Import-Guide-IT.html`** — self-contained Spanish guide for IT: connection params, full DDL of 5 tables, Raymond filters (zone Z40 + canal R08), batch protocol, operational notes (~260 lines).
+
+### Decided (no code change)
+- **Option B chosen for ERP→Portal sync**: IT writes to isolated `siesa_raw` schema; portal ETL refactors `public.*` from raw in Phase 2 (vs Option A direct-write to portal tables). Reasons: isolation from PostgREST, idempotency via row_hash, batch auditability, and Phase 2 becomes a pure refactor with no external coupling.
+
+---
+
 ## [Unreleased] — 2026-04-24
 
 ### Added

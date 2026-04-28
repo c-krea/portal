@@ -22,32 +22,18 @@ export type MoraSummary = {
 export async function getMoraSummary(): Promise<MoraSummary> {
   const grace = await getGracePeriod()
 
-  const [carteraRes, invoiceRes, accrualRes] = await Promise.all([
-    execute(`
-      SELECT COALESCE(SUM(valor_vencido), 0)::numeric AS total
-      FROM cartera
-      WHERE valor_vencido > 0 AND dias_mora > ${grace}
-        AND tenant_id NOT IN (SELECT id FROM tenants WHERE juridica = true)
-    `),
-    execute(`
-      SELECT
-        COALESCE(SUM(subtotal_interes), 0)::numeric AS total_interes,
-        COUNT(*)::int                               AS count_vencidas
-      FROM invoices
-      WHERE status = 'vencida' AND saldo::numeric > 0
-    `),
-    execute(`
-      SELECT MAX(accrual_date)::text AS last_date FROM interest_accruals
-    `),
-  ])
+  const carteraRes = await execute(`
+    SELECT COALESCE(SUM(vr_vencido), 0)::numeric AS total
+    FROM v2.vista_cartera_actual c
+    WHERE vr_vencido > 0 AND dias_mora > ${grace}
+      AND juridica = false
+  `)
 
   return {
     totalCarteraVencida: Number((carteraRes as Array<Record<string, unknown>>)[0]?.total ?? 0),
-    totalInteresPortal:  Number((invoiceRes as Array<Record<string, unknown>>)[0]?.total_interes ?? 0),
-    invoicesVencidas:    Number((invoiceRes as Array<Record<string, unknown>>)[0]?.count_vencidas ?? 0),
-    lastAccrualDate:     (accrualRes as Array<Record<string, unknown>>)[0]?.last_date
-      ? String((accrualRes as Array<Record<string, unknown>>)[0].last_date)
-      : null,
+    totalInteresPortal:  0,
+    invoicesVencidas:    0,
+    lastAccrualDate:     null,
   }
 }
 
@@ -58,25 +44,24 @@ export async function getMoraRows(): Promise<MoraRow[]> {
     SELECT
       t.id                                         AS tenant_id,
       COALESCE(t.nombre_corto, t.razon_social)     AS cliente,
-      u.unit_number,
+      u.unidad                                     AS unit_number,
       MAX(c.dias_mora)                             AS dias_mora,
-      COUNT(c.id)::int                             AS meses_pendientes,
-      SUM(c.valor_vencido)::numeric                AS saldo_vencido,
-      SUM(c.interes_acumulado)::numeric            AS interes_acumulado,
+      COUNT(c.row_id)::int                         AS meses_pendientes,
+      SUM(c.vr_vencido)::numeric                   AS saldo_vencido,
       SUM(c.saldo)::numeric                        AS saldo_total
-    FROM cartera c
-    JOIN tenants t ON c.tenant_id = t.id
+    FROM v2.vista_cartera_actual c
+    JOIN v2.inquilinos t ON c.inquilino_id = t.id
     LEFT JOIN LATERAL (
-      SELECT u2.unit_number
-      FROM contracts con
-      JOIN units u2 ON con.unit_id = u2.id
-      WHERE con.tenant_id = t.id
-        AND con.status IN ('activo', 'critico')
+      SELECT u2.unidad
+      FROM v2.contratos con
+      JOIN v2.locales u2 ON con.local_id = u2.id
+      WHERE con.inquilino_id = t.id
+        AND con.estado IN ('activo', 'critico')
       ORDER BY con.fecha_inicio DESC
       LIMIT 1
     ) u ON true
-    WHERE c.valor_vencido > 0 AND c.dias_mora > ${grace} AND t.juridica = false
-    GROUP BY t.id, t.razon_social, t.nombre_corto, u.unit_number
+    WHERE c.vr_vencido > 0 AND c.dias_mora > ${grace} AND t.juridica = false
+    GROUP BY t.id, t.razon_social, t.nombre_corto, u.unidad
     ORDER BY MAX(c.dias_mora) DESC NULLS LAST
   `)
 
@@ -87,7 +72,7 @@ export async function getMoraRows(): Promise<MoraRow[]> {
     diasMora: Number(r.dias_mora ?? 0),
     mesesPendientes: Number(r.meses_pendientes ?? 0),
     saldoVencido: Number(r.saldo_vencido ?? 0),
-    interesAcumulado: Number(r.interes_acumulado ?? 0),
+    interesAcumulado: 0,
     saldoTotal: Number(r.saldo_total ?? 0),
   }))
 }
@@ -97,24 +82,23 @@ export async function getJuridicaRows(): Promise<MoraRow[]> {
     SELECT
       t.id                                         AS tenant_id,
       COALESCE(t.nombre_corto, t.razon_social)     AS cliente,
-      u.unit_number,
+      u.unidad                                     AS unit_number,
       MAX(c.dias_mora)                             AS dias_mora,
-      COUNT(c.id)::int                             AS meses_pendientes,
-      SUM(c.valor_vencido)::numeric                AS saldo_vencido,
-      SUM(c.interes_acumulado)::numeric            AS interes_acumulado,
+      COUNT(c.row_id)::int                         AS meses_pendientes,
+      SUM(c.vr_vencido)::numeric                   AS saldo_vencido,
       SUM(c.saldo)::numeric                        AS saldo_total
-    FROM cartera c
-    JOIN tenants t ON c.tenant_id = t.id AND t.juridica = true
+    FROM v2.vista_cartera_actual c
+    JOIN v2.inquilinos t ON c.inquilino_id = t.id AND t.juridica = true
     LEFT JOIN LATERAL (
-      SELECT u2.unit_number
-      FROM contracts con
-      JOIN units u2 ON con.unit_id = u2.id
-      WHERE con.tenant_id = t.id
+      SELECT u2.unidad
+      FROM v2.contratos con
+      JOIN v2.locales u2 ON con.local_id = u2.id
+      WHERE con.inquilino_id = t.id
       ORDER BY con.fecha_inicio DESC
       LIMIT 1
     ) u ON true
-    WHERE c.valor_vencido > 0
-    GROUP BY t.id, t.razon_social, t.nombre_corto, u.unit_number
+    WHERE c.vr_vencido > 0
+    GROUP BY t.id, t.razon_social, t.nombre_corto, u.unidad
     ORDER BY MAX(c.dias_mora) DESC NULLS LAST
   `)
 
@@ -125,7 +109,7 @@ export async function getJuridicaRows(): Promise<MoraRow[]> {
     diasMora: Number(r.dias_mora ?? 0),
     mesesPendientes: Number(r.meses_pendientes ?? 0),
     saldoVencido: Number(r.saldo_vencido ?? 0),
-    interesAcumulado: Number(r.interes_acumulado ?? 0),
+    interesAcumulado: 0,
     saldoTotal: Number(r.saldo_total ?? 0),
   }))
 }

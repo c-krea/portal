@@ -1,4 +1,4 @@
-import { execute, supabaseAdmin } from "@/lib/db/executor"
+import { execute } from "@/lib/db/executor"
 
 export type ProyeccionSummary = {
   year: number
@@ -26,10 +26,10 @@ export type ProyeccionDetalle = {
   canonMensual: number
   descuentoPct: number
   prontoPagoPct: number
-  ppHistoricoPct: number    // historical PP usage rate for this tenant
-  ppHistoricoPagos: number  // number of payments used to compute the rate
-  netoAnualIVA: number      // conservative
-  netoEsperadoIVA: number   // expected (with per-tenant PP applied)
+  ppHistoricoPct: number
+  ppHistoricoPagos: number
+  netoAnualIVA: number
+  netoEsperadoIVA: number
   status: string
 }
 
@@ -40,9 +40,9 @@ export type ProyeccionMes = {
   prontoPago: number
   baseNeta: number
   iva: number
-  proyectado: number     // conservative: baseNeta × 1.19
-  ppEsperado: number     // expected PP discount this month
-  proyectadoEsperado: number  // expected collection this month
+  proyectado: number
+  ppEsperado: number
+  proyectadoEsperado: number
 }
 
 export type ContractForProjection = {
@@ -52,23 +52,25 @@ export type ContractForProjection = {
   clienteName: string
   descuentoPct: number
   prontoPagoPct: number
-  lastCanon: number       // last Dec projection (or latest available)
+  lastCanon: number
   lastDescuentoPct: number
   lastYear: number
   lastMonth: number
 }
 
-export async function getProyeccionSummaries(companyId: string): Promise<ProyeccionSummary[]> {
+const MONTH_LABELS = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"]
+
+export async function getProyeccionSummaries(empresaId: string): Promise<ProyeccionSummary[]> {
   const rows = await execute(`
     SELECT
-      p.year,
-      COUNT(DISTINCT p.contract_id)::int      AS contract_count,
-      COUNT(DISTINCT p.unit_id)::int          AS unit_count,
+      p.anio                                            AS year,
+      COUNT(DISTINCT p.contrato_id)::int                AS contract_count,
+      COUNT(DISTINCT p.local_id)::int                   AS unit_count,
       ROUND(SUM(p.canon_proyectado - p.descuento_proyectado)::numeric * 1.19 / 12) AS total_canon_avg
-    FROM projections p
-    WHERE p.company_id = '${companyId}'::uuid
-    GROUP BY p.year
-    ORDER BY p.year DESC
+    FROM v2.proyecciones p
+    WHERE p.empresa_id = '${empresaId}'::uuid
+    GROUP BY p.anio
+    ORDER BY p.anio DESC
   `)
 
   return (rows as Array<Record<string, unknown>>).map((r) => ({
@@ -79,31 +81,29 @@ export async function getProyeccionSummaries(companyId: string): Promise<Proyecc
   }))
 }
 
-const MONTH_LABELS = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"]
-
-export async function getProyeccionBreakdown(companyId: string, year: number): Promise<ProyeccionBreakdown> {
+export async function getProyeccionBreakdown(empresaId: string, year: number): Promise<ProyeccionBreakdown> {
   const rows = await execute(`
     SELECT
       ROUND(COALESCE(SUM(p.canon_proyectado), 0))::numeric                                     AS canon_bruto,
       ROUND(COALESCE(SUM(p.descuento_proyectado), 0))::numeric                                 AS total_descuentos,
-      ROUND(COALESCE(SUM(p.pronto_pago_proyectado), 0))::numeric                               AS total_pp,
+      0::numeric                                                                                AS total_pp,
       ROUND(COALESCE(SUM(p.canon_proyectado - p.descuento_proyectado), 0) * 0.19)::numeric     AS total_iva,
       ROUND(COALESCE(SUM(p.canon_proyectado - p.descuento_proyectado), 0) * 1.19)::numeric     AS neto_con_iva,
       ROUND(COALESCE(SUM(
         (p.canon_proyectado - p.descuento_proyectado)
         * (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0)
         * 1.19
-      ), 0))::numeric                                                                            AS pp_esperado,
+      ), 0))::numeric                                                                           AS pp_esperado,
       ROUND(COALESCE(SUM(
         (p.canon_proyectado - p.descuento_proyectado)
         * (1 - (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
         * 1.19
-      ), 0))::numeric                                                                            AS neto_esperado
-    FROM projections p
-    JOIN contracts c ON p.contract_id = c.id
-    JOIN tenants t   ON c.tenant_id   = t.id
-    WHERE p.year = ${year}
-      AND p.company_id = '${companyId}'::uuid
+      ), 0))::numeric                                                                           AS neto_esperado
+    FROM v2.proyecciones p
+    JOIN v2.contratos  c ON p.contrato_id  = c.id
+    JOIN v2.inquilinos t ON c.inquilino_id = t.id
+    WHERE p.anio = ${year}
+      AND p.empresa_id = '${empresaId}'::uuid
   `)
   const r = (rows as Array<Record<string, unknown>>)[0] ?? {}
   return {
@@ -117,11 +117,11 @@ export async function getProyeccionBreakdown(companyId: string, year: number): P
   }
 }
 
-export async function getProyeccionDetalle(companyId: string, year: number): Promise<ProyeccionDetalle[]> {
+export async function getProyeccionDetalle(empresaId: string, year: number): Promise<ProyeccionDetalle[]> {
   const rows = await execute(`
     SELECT
       c.id                                              AS contract_id,
-      u.unit_number,
+      u.unidad                                          AS unit_number,
       COALESCE(t.nombre_corto, t.razon_social)          AS cliente,
       c.fecha_inicio,
       CASE
@@ -144,15 +144,15 @@ export async function getProyeccionDetalle(companyId: string, year: number): Pro
         * (1 - (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
         * 1.19
       ))::numeric                                       AS neto_esperado_iva,
-      c.status
-    FROM projections p
-    JOIN contracts c ON p.contract_id = c.id
-    JOIN units u     ON c.unit_id     = u.id
-    JOIN tenants t   ON c.tenant_id   = t.id
-    WHERE p.year = ${year}
-      AND p.company_id = '${companyId}'::uuid
-    GROUP BY c.id, u.unit_number, t.nombre_corto, t.razon_social, c.fecha_inicio, c.descuento_pct, c.pronto_pago_pct, c.status, t.pp_historico_pct, t.pp_historico_pagos
-    ORDER BY u.unit_number
+      c.estado                                          AS status
+    FROM v2.proyecciones p
+    JOIN v2.contratos  c ON p.contrato_id  = c.id
+    JOIN v2.locales    u ON c.local_id     = u.id
+    JOIN v2.inquilinos t ON c.inquilino_id = t.id
+    WHERE p.anio = ${year}
+      AND p.empresa_id = '${empresaId}'::uuid
+    GROUP BY c.id, u.unidad, t.nombre_corto, t.razon_social, c.fecha_inicio, c.descuento_pct, c.pronto_pago_pct, c.estado, t.pp_historico_pct, t.pp_historico_pagos
+    ORDER BY u.unidad
   `)
 
   return (rows as Array<Record<string, unknown>>).map((r) => ({
@@ -172,33 +172,33 @@ export async function getProyeccionDetalle(companyId: string, year: number): Pro
   }))
 }
 
-export async function getProyeccionMensual(companyId: string, year: number): Promise<ProyeccionMes[]> {
+export async function getProyeccionMensual(empresaId: string, year: number): Promise<ProyeccionMes[]> {
   const rows = await execute(`
     SELECT
-      p.month,
-      ROUND(COALESCE(SUM(p.canon_proyectado), 0))::numeric                                          AS canon_bruto,
-      ROUND(COALESCE(SUM(p.descuento_proyectado), 0))::numeric                                      AS descuentos,
-      ROUND(COALESCE(SUM(p.pronto_pago_proyectado), 0))::numeric                                    AS pronto_pago,
-      ROUND(COALESCE(SUM(p.canon_proyectado - p.descuento_proyectado), 0))::numeric                 AS base_neta,
-      ROUND(COALESCE(SUM(p.canon_proyectado - p.descuento_proyectado), 0) * 0.19)::numeric          AS iva,
-      ROUND(COALESCE(SUM(p.canon_proyectado - p.descuento_proyectado), 0) * 1.19)::numeric          AS proyectado,
+      p.mes                                                                                     AS month,
+      ROUND(COALESCE(SUM(p.canon_proyectado), 0))::numeric                                     AS canon_bruto,
+      ROUND(COALESCE(SUM(p.descuento_proyectado), 0))::numeric                                 AS descuentos,
+      0::numeric                                                                                AS pronto_pago,
+      ROUND(COALESCE(SUM(p.canon_proyectado - p.descuento_proyectado), 0))::numeric            AS base_neta,
+      ROUND(COALESCE(SUM(p.canon_proyectado - p.descuento_proyectado), 0) * 0.19)::numeric     AS iva,
+      ROUND(COALESCE(SUM(p.canon_proyectado - p.descuento_proyectado), 0) * 1.19)::numeric     AS proyectado,
       ROUND(COALESCE(SUM(
         (p.canon_proyectado - p.descuento_proyectado)
         * (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0)
         * 1.19
-      ), 0))::numeric                                                                                AS pp_esperado,
+      ), 0))::numeric                                                                           AS pp_esperado,
       ROUND(COALESCE(SUM(
         (p.canon_proyectado - p.descuento_proyectado)
         * (1 - (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
         * 1.19
-      ), 0))::numeric                                                                                AS proyectado_esperado
-    FROM projections p
-    JOIN contracts c ON p.contract_id = c.id
-    JOIN tenants t   ON c.tenant_id   = t.id
-    WHERE p.year = ${year}
-      AND p.company_id = '${companyId}'::uuid
-    GROUP BY p.month
-    ORDER BY p.month
+      ), 0))::numeric                                                                           AS proyectado_esperado
+    FROM v2.proyecciones p
+    JOIN v2.contratos  c ON p.contrato_id  = c.id
+    JOIN v2.inquilinos t ON c.inquilino_id = t.id
+    WHERE p.anio = ${year}
+      AND p.empresa_id = '${empresaId}'::uuid
+    GROUP BY p.mes
+    ORDER BY p.mes
   `)
 
   return MONTH_LABELS.map((mes, i) => {
@@ -218,27 +218,27 @@ export async function getProyeccionMensual(companyId: string, year: number): Pro
 }
 
 export async function getContractsForProjection(
-  companyId: string,
+  empresaId: string,
   targetYear: number,
 ): Promise<ContractForProjection[]> {
-  // Get active contracts + their LAST available projection (prefer Dec of prev year)
+  // Active contracts + their LAST available projection (prefer Dec of prev year).
   const rows = await execute(`
     WITH last_proj AS (
-      SELECT DISTINCT ON (p.contract_id)
-        p.contract_id,
-        p.unit_id,
+      SELECT DISTINCT ON (p.contrato_id)
+        p.contrato_id,
+        p.local_id,
         p.canon_proyectado::numeric        AS last_canon,
         p.descuento_proyectado::numeric    AS last_descuento,
-        p.year                             AS last_year,
-        p.month                            AS last_month
-      FROM projections p
-      WHERE p.company_id = '${companyId}'::uuid
-      ORDER BY p.contract_id, p.year DESC, p.month DESC
+        p.anio                             AS last_year,
+        p.mes                              AS last_month
+      FROM v2.proyecciones p
+      WHERE p.empresa_id = '${empresaId}'::uuid
+      ORDER BY p.contrato_id, p.anio DESC, p.mes DESC
     )
     SELECT
       c.id                                            AS contract_id,
-      c.unit_id,
-      u.unit_number,
+      c.local_id                                      AS unit_id,
+      u.unidad                                        AS unit_number,
       COALESCE(t.nombre_corto, t.razon_social)        AS cliente_name,
       COALESCE(c.descuento_pct, 0)::numeric           AS descuento_pct,
       COALESCE(c.pronto_pago_pct, 0)::numeric         AS pronto_pago_pct,
@@ -251,31 +251,31 @@ export async function getContractsForProjection(
       )::numeric                                      AS last_descuento_pct,
       COALESCE(lp.last_year, ${targetYear - 1})       AS last_year,
       COALESCE(lp.last_month, 12)                     AS last_month
-    FROM contracts c
-    JOIN tenants t  ON c.tenant_id = t.id
-    JOIN units u    ON c.unit_id   = u.id
-    LEFT JOIN last_proj lp ON lp.contract_id = c.id
-    WHERE c.company_id = '${companyId}'::uuid
-      AND c.status IN ('activo', 'critico')
+    FROM v2.contratos  c
+    JOIN v2.inquilinos t ON c.inquilino_id = t.id
+    JOIN v2.locales    u ON c.local_id     = u.id
+    LEFT JOIN last_proj lp ON lp.contrato_id = c.id
+    WHERE c.empresa_id = '${empresaId}'::uuid
+      AND c.estado IN ('activo', 'critico')
       AND NOT EXISTS (
-        SELECT 1 FROM projections p2
-        WHERE p2.contract_id = c.id
-          AND p2.year = ${targetYear}
+        SELECT 1 FROM v2.proyecciones p2
+        WHERE p2.contrato_id = c.id
+          AND p2.anio        = ${targetYear}
         LIMIT 1
       )
-    ORDER BY u.unit_number
+    ORDER BY u.unidad
   `)
 
   return (rows as Array<Record<string, unknown>>).map((r) => ({
-    contractId:      String(r.contract_id),
-    unitId:          String(r.unit_id),
-    unitNumber:      String(r.unit_number),
-    clienteName:     String(r.cliente_name),
-    descuentoPct:    Number(r.descuento_pct),
-    prontoPagoPct:   Number(r.pronto_pago_pct),
-    lastCanon:       Number(r.last_canon),
+    contractId:       String(r.contract_id),
+    unitId:           String(r.unit_id),
+    unitNumber:       String(r.unit_number),
+    clienteName:      String(r.cliente_name),
+    descuentoPct:     Number(r.descuento_pct),
+    prontoPagoPct:    Number(r.pronto_pago_pct),
+    lastCanon:        Number(r.last_canon),
     lastDescuentoPct: Number(r.last_descuento_pct),
-    lastYear:        Number(r.last_year),
-    lastMonth:       Number(r.last_month),
+    lastYear:         Number(r.last_year),
+    lastMonth:        Number(r.last_month),
   }))
 }

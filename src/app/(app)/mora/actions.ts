@@ -1,6 +1,6 @@
 "use server"
 
-import { execute } from "@/lib/db/executor"
+import { getEmpresaCkreaId } from "@/lib/empresa"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { runInterestAccrual, type InterestAccrualSummary } from "@/lib/interest-engine"
@@ -28,10 +28,9 @@ export async function calcularIntereses(
   }
 
   try {
-    const companies = await execute(`SELECT id FROM companies LIMIT 1`)
-    const companyId = String(companies[0].id)
+    const empresaId = await getEmpresaCkreaId()
 
-    const summary = await runInterestAccrual(companyId, parsed.data.accrualDate)
+    const summary = await runInterestAccrual(empresaId, parsed.data.accrualDate)
 
     revalidatePath("/mora")
     revalidatePath("/facturas")

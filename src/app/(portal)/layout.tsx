@@ -31,12 +31,13 @@ export default async function PortalLayout({
   if (!user) redirect("/login")
 
   const { data: profile } = await supabaseAdmin
-    .from("profiles")
-    .select("full_name, tenant_id, role")
+    .schema("v2")
+    .from("perfiles")
+    .select("nombre_completo, inquilino_id, rol")
     .eq("id", user.id)
     .single()
 
-  if (profile?.role !== "tenant") redirect("/")
+  if (profile?.rol !== "inquilino") redirect("/")
 
   return (
     <div className="w-full min-h-screen bg-slate-50">
@@ -49,7 +50,7 @@ export default async function PortalLayout({
             </span>
           </div>
           <div className="flex items-center gap-4">
-            <span className="hidden sm:inline text-sm text-slate-500">{profile?.full_name}</span>
+            <span className="hidden sm:inline text-sm text-slate-500">{profile?.nombre_completo}</span>
             <SignOutButton />
           </div>
         </div>
