@@ -142,7 +142,7 @@ export async function getPagos(limit = 200, month?: string): Promise<PagoRow[]> 
   if (month) {
     const [y, m] = month.split("-").map(Number)
     const prev = prevMonthStr(y, m)
-    electricityCte = `WITH ${electricityTenantsSubquery(`DATE '${month}-01'`, prev)},`
+    electricityCte = `WITH ${electricityTenantsSubquery(`DATE '${month}-01'`, prev)}`
     electricityExclusion = EXCLUDE_ELECTRICITY
   }
 
