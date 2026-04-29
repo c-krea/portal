@@ -61,7 +61,7 @@ SHEETS = {
             "FechaRecaudo": "fecha_recaudo", "Docto": "docto", "Cruce": "cruce",
             "FechaPp": "fecha_pp", "FechaVcto": "fecha_vcto", "FechaFact": "fecha_fact",
             "ValorAplicado": "valor_aplicado", "ProntoPago": "pronto_pago",
-            "ValorFinal": "valor_final",
+            "ValorFinal": "valor_final", "RowIdMov": "row_id_mov",
         },
     },
     "ocupacion": {

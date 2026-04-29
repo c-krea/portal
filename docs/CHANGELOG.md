@@ -42,6 +42,40 @@ Branch `refactor/v2-migration` merged to `main` via `--no-ff` (commit `2532efb`)
 - **RLS enabled on all `siesa_raw` tables** (`cartera`, `recaudo`, `documentos`, `ocupacion`, `sync_batches`). Migration `siesa_raw_rls_phase1`. Single policy `siesa_sync_all` per table grants `FOR ALL TO siesa_sync USING (true) WITH CHECK (true)`. `postgres` owner bypasses; portal app keys (`anon`/`authenticated`/`service_role`) remain grant-blocked. Defense-in-depth on top of existing GRANTs.
 - **`siesa_sync` role hardened.** Migration `siesa_sync_role_tighten`: `ALTER ROLE siesa_sync NOCREATEROLE NOCREATEDB NOBYPASSRLS`. Removes admin flags that were inherited at role creation and were silently bypassing RLS. Role is now minimal-privilege: login + DML (SELECT/INSERT/UPDATE) on 5 `siesa_raw` tables, nothing else.
 
+### Schema
+- **`siesa_raw.recaudo.row_id_mov` added** (BIGINT, nullable). Migration `siesa_raw_recaudo_add_row_id_mov`. Tracks Siesa's per-movement unique ID delivered as `RowIdMov` (column S) in updated `SIESA connexion.xlsx`. Existing 3,221 rows stay NULL until next sync. Loader (`scripts/load_siesa_raw.py`) updated with `"RowIdMov": "row_id_mov"` rename mapping. Future candidate for natural key once non-null backfill is verified.
+
+---
+
+## [Unreleased] — 2026-04-28 (Phase I — Session 40)
+
+### Fixed — v2 aligned to siesa_raw truth (Excel residue purged)
+Migration `phase_i_align_v2_to_siesa_truth_v3`. Post-Phase G audit found `v2.locales = 91` vs `siesa_raw.ocupacion = 84`. Root cause: Phase G migration filled v2 from BOTH `public.*` (Excel-origin) and `siesa_raw.*`. `sync_desde_raw()` is INSERT-only with `ON CONFLICT DO NOTHING`, so Excel residue persisted even after Phase F dropped `public.*`.
+
+**Cleanup:**
+- **7 `v2.locales` dropped**: `E8L801–805,807` (zone-8 Excel codes, ERP uses `Z8L*`) + `E1L126` (no ERP equivalent).
+- **15 `v2.contratos` dropped** — three patterns:
+  - 6 zone-8 same-tenant dupes (E8L paired with Z8L).
+  - 7 contratos for units ERP marks `Critico` (vacante) — ex-tenants with open cartera.
+  - 2 tenant-change cases (E1L120 BECERRA→GUZMAN, E1L121 NEOGRAFICK→SIERRA — kept ERP-matching contrato, dropped portal addition).
+- **84 `v2.proyecciones` repointed** from orphan contratos to ERP-matching contratos (also updated `local_id` — proyecciones has two FK columns). **83 dropped** for vacante/unknown units.
+- **78 `v2.lecturas_medidor` repointed** E8L → Z8L counterparts (preserve historical readings for same-tenant zone-8 units). **2 dropped** for E1L126 (no Z replacement).
+- **5 Z8L estados** flipped `disponible` → `arrendado` to reflect ERP. (INSERT-only sync had never refreshed them.)
+- **All 90 inquilinos preserved.** Ex-tenants stay for cartera/historical pagos linkage even when their contrato was dropped.
+
+**Final state (audit confirmed 0 orphans across 12 v2 tables):**
+| Table | v2 | Source | Orphans |
+|---|---|---|---|
+| locales | **84** | siesa_raw.ocupacion | 0 |
+| contratos | **76** | siesa_raw.ocupacion (NIT+codigo) | 0 |
+| inquilinos | 90 | siesa_raw.* (any table by NIT) | 0 |
+| proyecciones | 816 | derived | 0 |
+| lecturas_medidor | 1178 | portal-side | 0 |
+
+### Follow-ups (open)
+- **WOR-75**: UI section "Ya salieron" on Locales page for ex-tenants with open cartera — 9 inquilinos now contract-less but with cartera > 0.
+- **Phase J** (queued): upgrade `v2.sync_desde_raw()` from INSERT-only to UPSERT (refresh estado/canon) and optional delete-on-missing. Prevents the same staleness problem from recurring as ERP data evolves.
+
 ---
 
 ## [Unreleased] — 2026-04-26

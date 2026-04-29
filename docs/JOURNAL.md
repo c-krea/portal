@@ -2,6 +2,108 @@
 
 ---
 
+## Session 40 — 2026-04-28: Phase I — align v2 to Siesa truth
+
+### Goal
+Reconcile a "91 locales" count showing in the portal vs the expected ~85, and confirm v2 mirrors Siesa exactly — so any leftover discrepancy is an ERP-side fix, not a portal bug.
+
+### What we found
+- v2.locales had **91 rows** vs siesa_raw.ocupacion's **84**. Audit revealed **7 orphans** (codes only in v2, not in ERP): `E8L801–805,807` and `E1L126`. ⚠️ Gotcha
+- Cross-check expanded the scope: **15 v2.contratos** failed the (NIT + codigo) match against `siesa_raw.ocupacion` — three patterns:
+  - **Pattern A** (6): zone-8 dupes — same tenant on E8L *and* Z8L codes (Excel + ERP both copied in).
+  - **Pattern B** (7): tenant active in v2 but ERP says unit `Critico` (vacante) — ex-tenants with open cartera.
+  - **Pattern C** (2): tenant changed in v2, ERP still has old tenant (E1L120 BECERRA→GUZMAN, E1L121 NEOGRAFICK→SIERRA).
+- Inquilinos audit = **0 orphans**. All 90 trace to recaudo/cartera/documentos by NIT (even ELKIN/DINAMO who weren't in `ocupacion`).
+
+### 🎯 Decision — root cause
+Phase G's data migration filled `v2.*` from BOTH `public.*` (Excel-origin) AND `siesa_raw.*` (ERP). When Phase F dropped `public.*`, the rows already copied into v2 stayed. Plus `v2.sync_desde_raw()` is INSERT-ONLY with `ON CONFLICT (codigo) DO NOTHING` — never refreshes, never deletes — so Excel residue persisted indefinitely.
+
+### What shipped (migration `phase_i_align_v2_to_siesa_truth_v3`)
+- **Moved** 78 `lecturas_medidor` from E8L → Z8L counterparts (preserve historical readings for the 5 same-tenant zone-8 units).
+- **Moved** 84 `proyecciones` from orphan contratos → ERP-matching contratos (also `local_id`). Same logic — Excel had projections on E8L; Z8L had none.
+- **Dropped** 83 `proyecciones` for vacante/unknown units (no ERP tenant to repoint to).
+- **Dropped** 15 orphan `contratos`. **Dropped** 7 orphan `locales`. **Dropped** 2 lecturas (E1L126 — no Z replacement).
+- **Updated** 5 Z8L estados `disponible` → `arrendado` (fix for stale state since INSERT-ONLY sync never refreshed them).
+- Inquilinos preserved (90 rows). Ex-tenants kept for cartera tracking.
+
+### Final state (every v2 table audited)
+| Table | v2 | Source | Orphans |
+|---|---|---|---|
+| locales | **84** | siesa_raw.ocupacion | 0 ✅ |
+| contratos | **76** | siesa_raw.ocupacion (NIT+codigo) | 0 ✅ |
+| inquilinos | 90 | siesa_raw.* (any table by NIT) | 0 ✅ |
+| proyecciones | 816 | derived | 0 ✅ |
+| lecturas_medidor | 1178 | portal-side | 0 ✅ |
+
+Locales now matches `siesa_raw.ocupacion` row-for-row. Any future discrepancy is a Siesa-side data fix.
+
+### 💡 Learning — audit pattern for v2 staleness
+For any v2 table that should mirror ERP:
+```sql
+SELECT v2.<table>.<key>
+FROM v2.<table> v
+LEFT JOIN siesa_raw.<source> s ON s.<key> = v.<key>
+WHERE s.<key> IS NULL;  -- rows in v2 not in ERP
+```
+The pattern caught the zone-8 dupes plus E1L126 in one query. Saved as `feedback_v2_excel_residue.md`.
+
+### ⚠️ Gotcha — proyecciones has TWO FK columns
+`v2.proyecciones` has both `contrato_id` AND `local_id` pointing at v2 base tables. First migration attempt updated only `contrato_id` and got a 23503 FK error from the orphan locale delete. Always update *both* when repointing — checked schema before retry.
+
+### ⚙️ Workflow
+- Used `apply_migration` (not `execute_sql`) so the data fix is logged in supabase migration history. DDL-style audit trail for a DML cleanup.
+- Validation block at the end of the migration ran the same orphan-detection queries — every counter came back 0 inside the same transaction.
+
+### Linear
+- **WOR-75 created** (open): "Locales — show 'Ya salió' section for ex-tenants with open cartera". 9 ex-tenants now have inquilino + open cartera but no active contrato — needs a UI flag so the team can chase cobro without confusing them with current occupants.
+
+### Pending follow-ups
+- **Phase J** (task #47): upgrade `sync_desde_raw()` from INSERT-only to UPSERT (refresh estado, canon, etc.) and optionally delete-on-missing. Without this, ERP-side updates won't reach v2 — same staleness problem will recur.
+- siesa_raw external sync service (IT-side) still buggy — sync_batches stuck `in_progress`, no error_message captured. Out of portal scope.
+
+### Session-end pointers
+- ADRs: none
+- Lessons: feedback_v2_excel_residue.md (new)
+- State: project_state.md unchanged (still Phase G shipped + Phase I cleanup)
+- Linear: WOR-75 opened (stays open by design — UI work)
+
+---
+
+## Session 39 — 2026-04-28: Account audit + new ERP column `row_id_mov`
+
+### Goal
+Answer "who has access to Supabase besides admin and bots?" + tighten anything found + add new column IT delivered in updated xlsx.
+
+### Account audit findings
+- **DB roles with login**: `postgres` (you), `siesa_sync` (IT bot, hardened earlier), `authenticator` (Supabase internal). Nothing else worth noting.
+- **Auth users (portal humans)**: 7 total. 4 admins (you + `lburgos`, `operaciones`, `tecnologia` @reymon.com.co), 2 viewers, 1 test tenant. All scoped to C-Krea via `company_id`.
+- **`service_role`**: bypasses RLS by Supabase design. Backend-only key. Reminded German not to leak it.
+- **Studio/SQL access**: NOT controlled via SQL — managed at supabase.com → Project Settings → Members. Asked German to verify only he is a member there. **No action taken in DB** (correct call — wrong layer).
+
+### New column: `siesa_raw.recaudo.row_id_mov`
+**Driver:** IT updated `SIESA connexion.xlsx`. Cartera supposedly got new `RowId` and `RowIdTercero` (already existed in our schema since day 1, mapped in loader). Recaudo got `RowIdMov` (column S, int64) — genuinely new.
+
+**Migration `siesa_raw_recaudo_add_row_id_mov`:**
+```sql
+ALTER TABLE siesa_raw.recaudo ADD COLUMN row_id_mov BIGINT;
+```
+Nullable, no default, no backfill. Existing 3,221 rows stay NULL until IT runs next sync (or we re-run the loader).
+
+**Loader update (`scripts/load_siesa_raw.py`):** added `"RowIdMov": "row_id_mov"` to `SHEETS["recaudo"]["rename"]`. Without this, loader would silently drop the column even after IT delivers it (loader restricts to known cols via `df[cols]`).
+
+### Worth flagging for later (not done)
+`row_id_mov` is Siesa's per-movement unique ID. Once backfilled, makes a much cleaner natural key for `recaudo` than the current `(docto, cruce, fecha_recaudo, valor_aplicado)` (nullable parts forced surrogate UUID PK). Future cleanup once we know `row_id_mov` is never null:
+```sql
+ALTER TABLE siesa_raw.recaudo ADD CONSTRAINT recaudo_row_id_mov_unique UNIQUE (row_id_mov);
+```
+
+### Decisions
+- Don't backfill row_id_mov today — wait for IT's next sync.
+- Don't touch cartera — `row_id` and `row_id_tercero` already there.
+- Don't add `UNIQUE` constraint yet — can't guarantee non-null until backfill confirmed.
+
+---
+
 ## Session 38 — 2026-04-28: Phase G COMPLETE — v2 migration shipped
 
 ### Goal
