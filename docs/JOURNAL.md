@@ -2000,3 +2000,32 @@ Build a **Projection Generator** UI inside the portal (Phase 4):
 - `docs/powerbi-meeting.html` — added projection gap section + open question 8
 - `docs/powerbi-meeting-prep.md` — Key Finding 7 (electricity matching confirmed)
 - No code changes to portal — analysis session only
+
+---
+
+## 2026-04-29 — Users page review (6 fixes)
+
+Page-by-page audit reached `/usuarios`. Six findings, all fixed in one pass.
+
+### Bugs fixed
+
+1. **`ROLE_LABELS` keys mismatched DB enum.** `tab-switcher.tsx` keyed labels by `finance`/`viewer` but DB enum is `finanzas`/`visor` (confirmed via `edit-admin-modal.tsx`). Result: every finanzas/visor user fell to the default grey badge with a raw enum string instead of the proper colored chip + Spanish label. Fix: rename keys to match enum.
+2. **`edit-tenant-modal.handleConfirm` redundant inquilino writes.** For a 3-unit tenant, `updateTenantUser` was called 3 times — each call re-wrote the same identity fields (nombre, NIT, email, telefono, contacto). Auth email sync was also run N times. Split into two actions: `updateTenantInquilino` (1 write for shared fields + auth sync) + `updateTenantContract` (per unit: contract + local). Modal now does 1 + N.
+3. **`createTenantAccount` swallowed perfil patch error.** Auth user got created, then perfil UPDATE ran without checking `error`. If the patch failed (RLS, schema drift), the function returned `success: true` but the user existed in auth without `inquilino_id`/`rol` link → broken portal access. Fix: capture `perfilError` and surface it.
+4. **`listUsers({ perPage: 1000 })` hardcoded cap.** Both `getUsuarios` and `getPortalTenants` would silently truncate at 1000 auth users. Replaced with `listAllAuthUsers()` helper that paginates until <1000 returned.
+5. **`getPortalTenants` writes during read.** The function backfilled `portal_email` from auth.users on every render — a side-effect during a SELECT. Slow if many drift, surprising for a "data layer" function, and unnecessary because the response already used `authEmail ?? portal_email` for display. Dropped the writes entirely.
+6. **No UUID/email validation in actions.** `inquilinoId`/`userId`/`contractId`/`localId` were trusted raw. Email check was `.includes("@")` (accepts `@`, `@@`, `a@`). Added `assertUuid` to all action params, new `isValidEmail`/`assertEmail` helpers in `lib/security/validators.ts` (regex `^[^\s@]+@[^\s@]+\.[^\s@]+$`), and a role whitelist on `updateAdminUser`.
+
+### Lessons
+
+- **Side-effects during reads are a smell.** Even when the write "looks safe" (idempotent backfill), it makes the function unpredictable, slow, and harder to reason about. Either the read is canonical and writes are redundant (drop them), or auth.users is canonical and the DB column should be removed. Don't paper over the divergence on every page load.
+- **Multi-entity update actions need clear ownership.** The "do everything for this tenant" action looked convenient but the per-unit loop revealed the design was wrong. One action per entity = N+1 calls but no redundant writes and clearer error messages.
+- **Always check role/enum keys against the DB.** ROLE_LABELS bug was visible for months — labels rendered fine for the only seeded role (admin), so finanzas/visor users would have shown the default style and never been caught until someone added one.
+
+### Files changed
+
+- `src/lib/security/validators.ts` — `isValidEmail`/`assertEmail` + `EMAIL_RE`
+- `src/lib/data/usuarios.ts` — `listAllAuthUsers` paginator, dropped `getPortalTenants` backfill side-effect
+- `src/app/(app)/usuarios/actions.ts` — split `updateTenantUser` → `updateTenantInquilino` + `updateTenantContract`; UUID/email validation; role whitelist; `createTenantAccount` perfil error capture
+- `src/app/(app)/usuarios/edit-tenant-modal.tsx` — `handleConfirm` calls inquilino once + contract per unit
+- `src/app/(app)/usuarios/tab-switcher.tsx` — `ROLE_LABELS` keys match DB enum; removed unused `EmailEditor` import

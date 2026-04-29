@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react"
 import { Building2, ShieldCheck, CheckCircle2, CircleDashed, Mail, UserCheck, UserPlus, Loader2 } from "lucide-react"
-import { EmailEditor } from "./email-editor"
 import { EditAdminModal } from "./edit-admin-modal"
 import { EditTenantModal } from "./edit-tenant-modal"
 import { createTenantAccount } from "./actions"
@@ -45,9 +44,9 @@ function lastSignInLabel(iso: string | null): string {
 }
 
 const ROLE_LABELS: Record<string, { label: string; cls: string }> = {
-  admin:   { label: "Admin",    cls: "bg-violet-100 text-violet-800" },
-  finance: { label: "Finanzas", cls: "bg-blue-100 text-blue-800" },
-  viewer:  { label: "Consulta", cls: "bg-slate-100 text-slate-700" },
+  admin:    { label: "Admin",    cls: "bg-violet-100 text-violet-800" },
+  finanzas: { label: "Finanzas", cls: "bg-blue-100 text-blue-800" },
+  visor:    { label: "Consulta", cls: "bg-slate-100 text-slate-700" },
 }
 
 export function TabSwitcher({

@@ -6,7 +6,7 @@ import {
   Hash, Briefcase, Mail, Phone, MapPin, Store,
   CalendarDays, TrendingUp, Percent, ArrowRight, KeyRound,
 } from "lucide-react"
-import { updateTenantUser } from "./actions"
+import { updateTenantInquilino, updateTenantContract } from "./actions"
 import type { PortalTenantRow, UnitContract } from "@/lib/data/usuarios"
 
 function SectionTitle({ title }: { title: string }) {
@@ -140,23 +140,27 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
 
   async function handleConfirm() {
     startTransition(async () => {
-      // Save identity + each contract sequentially
+      // 1. Inquilino-wide identity (one write for shared fields)
+      const idRes = await updateTenantInquilino(tenant.tenantId, {
+        nombre, razonSocial, nit, telefono, contactoNombre,
+        portalEmail, businessEmail: bizEmail,
+      })
+      if (idRes.error) { setError(idRes.error); setConfirming(false); return }
+
+      // 2. Per-unit contract + local
       for (const uc of tenant.unitContracts) {
         const cs = contractStates[uc.contractId]
-        const result = await updateTenantUser(tenant.tenantId, [uc.unitId], {
-          nombre, razonSocial, nit, telefono, contactoNombre,
-          portalEmail, businessEmail: bizEmail,
-          unitNumber: uc.unitNumber,
-          entrada: uc.entrada ?? "",
-          contractId:           uc.contractId,
-          canonBase:            parseFloat(cs.canonBase) || undefined,
-          descuentoPct:         cs.descuentoPct ? parseFloat(cs.descuentoPct) : null,
-          prontoPagoPct:        cs.prontoPagoPct ? parseFloat(cs.prontoPagoPct) : null,
-          fechaInicio:          cs.fechaInicio || undefined,
-          fechaFin:             cs.fechaFin || null,
+        const cRes = await updateTenantContract(uc.contractId, uc.unitId, {
+          unitNumber:            uc.unitNumber,
+          entrada:               uc.entrada ?? "",
+          canonBase:             parseFloat(cs.canonBase) || undefined,
+          descuentoPct:          cs.descuentoPct ? parseFloat(cs.descuentoPct) : null,
+          prontoPagoPct:         cs.prontoPagoPct ? parseFloat(cs.prontoPagoPct) : null,
+          fechaInicio:           cs.fechaInicio || undefined,
+          fechaFin:              cs.fechaFin || null,
           descripcionDescuentos: cs.descripcion || null,
         })
-        if (result.error) { setError(result.error); setConfirming(false); return }
+        if (cRes.error) { setError(cRes.error); setConfirming(false); return }
       }
       setOpen(false)
     })

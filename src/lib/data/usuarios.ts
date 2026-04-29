@@ -1,4 +1,17 @@
 import { execute, supabaseAdmin } from "@/lib/db/executor"
+import type { User } from "@supabase/supabase-js"
+
+async function listAllAuthUsers(): Promise<User[]> {
+  const all: User[] = []
+  for (let page = 1; ; page++) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 })
+    if (error) throw new Error(error.message)
+    const users = data?.users ?? []
+    all.push(...users)
+    if (users.length < 1000) break
+  }
+  return all
+}
 
 export type UsuarioRow = {
   id: string
@@ -87,31 +100,12 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
   const authEmailMap  = new Map<string, string>()
 
   if (authUserIds.length > 0) {
-    const { data } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })
-    for (const u of data?.users ?? []) {
+    const users = await listAllAuthUsers()
+    for (const u of users) {
       lastSignInMap.set(u.id, u.last_sign_in_at ?? null)
       if (u.email) authEmailMap.set(u.id, u.email)
     }
   }
-
-  // Backfill portal_email from auth.users for any inquilino whose DB value is stale/missing
-  const backfills: Promise<unknown>[] = []
-  for (const r of rows) {
-    if (!r.auth_user_id) continue
-    const authEmail = authEmailMap.get(String(r.auth_user_id))
-    if (authEmail && authEmail !== r.portal_email) {
-      backfills.push(
-        Promise.resolve(
-          supabaseAdmin
-            .schema("v2")
-            .from("inquilinos")
-            .update({ portal_email: authEmail })
-            .eq("id", String(r.id))
-        )
-      )
-    }
-  }
-  if (backfills.length > 0) await Promise.all(backfills)
 
   return rows.map(r => {
     const authUserId  = r.auth_user_id ? String(r.auth_user_id) : null
@@ -166,9 +160,9 @@ export async function getUsuarios(): Promise<UsuarioRow[]> {
     ORDER BY p.created_at DESC
   `)
 
-  const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })
+  const users = await listAllAuthUsers()
   const lastSignInMap = new Map<string, string | null>()
-  for (const u of authData?.users ?? []) {
+  for (const u of users) {
     lastSignInMap.set(u.id, u.last_sign_in_at ?? null)
   }
 

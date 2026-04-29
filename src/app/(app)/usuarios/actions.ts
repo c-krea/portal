@@ -1,11 +1,13 @@
 "use server"
 
 import { supabaseAdmin } from "@/lib/db/executor"
+import { assertUuid, isValidEmail } from "@/lib/security/validators"
 import { revalidatePath } from "next/cache"
 
 export async function updatePortalEmail(inquilinoId: string, email: string) {
+  assertUuid(inquilinoId)
   const trimmed = email.trim().toLowerCase()
-  if (!trimmed || !trimmed.includes("@")) {
+  if (!isValidEmail(trimmed)) {
     return { error: "Email inválido" }
   }
 
@@ -38,9 +40,8 @@ export async function updatePortalEmail(inquilinoId: string, email: string) {
   return { success: true }
 }
 
-export async function updateTenantUser(
+export async function updateTenantInquilino(
   inquilinoId: string,
-  localIds: string[],
   data: {
     nombre: string
     razonSocial: string
@@ -49,24 +50,15 @@ export async function updateTenantUser(
     contactoNombre: string
     portalEmail: string
     businessEmail: string
-    unitNumber: string
-    entrada: string
-    contractId?: string
-    canonBase?: number
-    descuentoPct?: number | null
-    prontoPagoPct?: number | null
-    fechaInicio?: string
-    fechaFin?: string | null
-    descripcionDescuentos?: string | null
-  }
+  },
 ) {
-  if (!data.nombre.trim()) return { error: "El nombre es obligatorio" }
+  assertUuid(inquilinoId)
+  if (!data.razonSocial.trim()) return { error: "La razón social es obligatoria" }
   const portalEmail = data.portalEmail.trim().toLowerCase()
-  if (portalEmail && !portalEmail.includes("@")) return { error: "Email portal inválido" }
+  if (portalEmail && !isValidEmail(portalEmail)) return { error: "Email portal inválido" }
   const bizEmail = data.businessEmail.trim().toLowerCase()
-  if (bizEmail && !bizEmail.includes("@")) return { error: "Email de contacto inválido" }
+  if (bizEmail && !isValidEmail(bizEmail)) return { error: "Email de contacto inválido" }
 
-  // Update inquilino
   const { error: inquilinoError } = await supabaseAdmin
     .schema("v2")
     .from("inquilinos")
@@ -82,7 +74,6 @@ export async function updateTenantUser(
     .eq("id", inquilinoId)
   if (inquilinoError) return { error: inquilinoError.message }
 
-  // Sync portal email to auth if perfil exists
   if (portalEmail) {
     const { data: profile } = await supabaseAdmin
       .schema("v2")
@@ -100,23 +91,40 @@ export async function updateTenantUser(
     }
   }
 
-  // Update local fields — only if single local to avoid ambiguity
-  if (localIds.length === 1) {
-    const localUpdate: Record<string, string> = {}
-    if (data.unitNumber.trim()) localUpdate.unidad = data.unitNumber.trim()
-    if (data.entrada.trim()) localUpdate.entrada = data.entrada.trim()
-    if (Object.keys(localUpdate).length > 0) {
-      const { error: localError } = await supabaseAdmin
-        .schema("v2")
-        .from("locales")
-        .update(localUpdate)
-        .eq("id", localIds[0])
-      if (localError) return { error: `Inquilino actualizado, pero error en local: ${localError.message}` }
-    }
+  revalidatePath("/usuarios")
+  return { success: true }
+}
+
+export async function updateTenantContract(
+  contractId: string,
+  localId: string,
+  data: {
+    unitNumber: string
+    entrada: string
+    canonBase?: number
+    descuentoPct?: number | null
+    prontoPagoPct?: number | null
+    fechaInicio?: string
+    fechaFin?: string | null
+    descripcionDescuentos?: string | null
+  },
+) {
+  assertUuid(contractId)
+  assertUuid(localId)
+
+  const localUpdate: Record<string, string> = {}
+  if (data.unitNumber.trim()) localUpdate.unidad = data.unitNumber.trim()
+  if (data.entrada.trim()) localUpdate.entrada = data.entrada.trim()
+  if (Object.keys(localUpdate).length > 0) {
+    const { error: localError } = await supabaseAdmin
+      .schema("v2")
+      .from("locales")
+      .update(localUpdate)
+      .eq("id", localId)
+    if (localError) return { error: `Error en local: ${localError.message}` }
   }
 
-  // Update contract fields if provided
-  if (data.contractId && data.canonBase != null) {
+  if (data.canonBase != null) {
     const { error: contractError } = await supabaseAdmin
       .schema("v2")
       .from("contratos")
@@ -129,8 +137,8 @@ export async function updateTenantUser(
         descripcion_descuentos: data.descripcionDescuentos ?? null,
         updated_at:             new Date().toISOString(),
       })
-      .eq("id", data.contractId)
-    if (contractError) return { error: `Info guardada, pero error en contrato: ${contractError.message}` }
+      .eq("id", contractId)
+    if (contractError) return { error: `Error en contrato: ${contractError.message}` }
   }
 
   revalidatePath("/usuarios")
@@ -138,6 +146,8 @@ export async function updateTenantUser(
 }
 
 export async function createTenantAccount(inquilinoId: string) {
+  assertUuid(inquilinoId)
+
   const { data: inquilino, error: fetchError } = await supabaseAdmin
     .schema("v2")
     .from("inquilinos")
@@ -159,7 +169,7 @@ export async function createTenantAccount(inquilinoId: string) {
   if (authError) return { error: authError.message }
 
   // Trigger creates perfil — patch it with inquilino_id + rol
-  await supabaseAdmin
+  const { error: perfilError } = await supabaseAdmin
     .schema("v2")
     .from("perfiles")
     .update({
@@ -169,6 +179,9 @@ export async function createTenantAccount(inquilinoId: string) {
       empresa_id: inquilino.empresa_id,
     })
     .eq("id", data.user.id)
+  if (perfilError) {
+    return { error: `Cuenta creada, pero error al asignar perfil: ${perfilError.message}` }
+  }
 
   revalidatePath("/usuarios")
   return { success: true }
@@ -176,11 +189,15 @@ export async function createTenantAccount(inquilinoId: string) {
 
 export async function updateAdminUser(
   userId: string,
-  data: { fullName: string; email: string; role: string }
+  data: { fullName: string; email: string; role: string },
 ) {
+  assertUuid(userId)
   const email = data.email.trim().toLowerCase()
-  if (!email.includes("@")) return { error: "Email inválido" }
+  if (!isValidEmail(email)) return { error: "Email inválido" }
   if (!data.fullName.trim()) return { error: "El nombre es obligatorio" }
+  if (!["admin", "finanzas", "visor"].includes(data.role)) {
+    return { error: "Rol inválido" }
+  }
 
   const { error: profileError } = await supabaseAdmin
     .schema("v2")
