@@ -2,6 +2,23 @@
 
 ---
 
+## Session 44 — 2026-04-29: Drop dead cols from siesa_raw.ocupacion
+
+### What shipped
+- `ALTER TABLE siesa_raw.ocupacion DROP COLUMN critico, veintiuno, once, uno, estado` — 5 cols gone (migration `drop_ocupacion_unused_cols`). IT is dropping these from ERP source too, so xlsx imports will stop sending them.
+- `scripts/load_siesa_raw.py` — removed 5 entries from rename map so loader doesn't choke if cols still appear.
+- `docs/foundation/01_schema_erd/v2/01_tablas.sql:130, 162` — comments updated to reflect actual source cols.
+
+### Audit before drop
+- Grepped code for refs: `proyecciones.ts` joins `siesa_raw.ocupacion` but only reads `o.descuento` + `o.pronto_pago` → safe.
+- v2 `contratos.estado` + `'critico'` enum value → different table, untouched.
+- DB views/RPCs reading these cols → none.
+
+### Why
+Dead columns. v1 schema mapped them to `flag_uno/once/veintiuno/critico` on contracts but v1 schema was dropped Phase K. ERP also dropping them. Cleanup before next xlsx load.
+
+---
+
 ## Session 43 — 2026-04-29: Dashboard math + UX overhaul
 
 ### Goal

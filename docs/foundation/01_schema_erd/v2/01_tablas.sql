@@ -127,7 +127,7 @@ COMMENT ON COLUMN inquilinos.pp_historico_pct IS 'Cache: % histórico de pagos c
 
 -- =============================================================================
 -- 4. LOCALES — Espacios físicos arrendables (85 unidades)
--- Sincroniza desde: siesa_raw.ocupacion (LOC, LOCAL, ENTRADA, ESTADO)
+-- Sincroniza desde: siesa_raw.ocupacion (LOC, LOCAL, ENTRADA)
 -- =============================================================================
 
 CREATE TABLE locales (
@@ -158,8 +158,7 @@ COMMENT ON COLUMN locales.grupo_energia IS '1 de 6 grupos de facturación de ene
 
 -- =============================================================================
 -- 5. CONTRATOS — Inquilino × Local con términos financieros
--- Sincroniza desde: siesa_raw.ocupacion (INGRESO, LISTA, PRECIO, DESCUENTO,
---                   PRONTO_PAGO, ESTADO, UNO, ONCE, VEINTIUNO, CRITICO)
+-- Sincroniza desde: siesa_raw.ocupacion (INGRESO, LISTA, PRECIO, DESCUENTO, PRONTO_PAGO)
 -- =============================================================================
 
 CREATE TABLE contratos (

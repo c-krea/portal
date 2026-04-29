@@ -74,9 +74,7 @@ SHEETS = {
             "DOCUMENTO": "documento", "RAZON_SOCIAL": "razon_social",
             "LOCAL": "local", "INGRESO": "ingreso", "LISTA": "lista",
             "PRECIO": "precio", "DESCUENTO": "descuento",
-            "PRONTO_PAGO": "pronto_pago", "ESTADO": "estado",
-            "UNO": "uno", "ONCE": "once", "VEINTIUNO": "veintiuno",
-            "CRITICO": "critico",
+            "PRONTO_PAGO": "pronto_pago",
         },
     },
     "documentos": {
