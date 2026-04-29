@@ -1,4 +1,7 @@
 import { execute } from "@/lib/db/executor"
+import { assertPeriodo, isValidPeriodo } from "@/lib/security/validators"
+
+export { isValidPeriodo }
 
 export type GastoRow = {
   id: string
@@ -9,6 +12,7 @@ export type GastoRow = {
   totalAmount: number
   description: string | null
   isAllocated: boolean
+  isMissing: boolean
 }
 
 export type GastoSummary = {
@@ -32,7 +36,72 @@ export type GastoChartRow = {
   total: number
 }
 
+export type GastoPeriodo = { value: string; label: string }
+
+const MES_3 = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
+
+function periodoLabel(p: string): string {
+  const [y, m] = p.split("-")
+  const mIdx = Number(m) - 1
+  if (mIdx < 0 || mIdx > 11) return p
+  return `${MES_3[mIdx]} ${y}`
+}
+
+export async function getGastoPeriodos(): Promise<GastoPeriodo[]> {
+  const rows = await execute(`
+    SELECT DISTINCT periodo FROM v2.gastos ORDER BY periodo DESC
+  `)
+  return rows.map((r) => ({
+    value: String(r.periodo),
+    label: periodoLabel(String(r.periodo)),
+  }))
+}
+
 export async function getGastoRows(periodo?: string): Promise<GastoRow[]> {
+  if (periodo) {
+    assertPeriodo(periodo)
+    const rows = await execute(`
+      SELECT
+        g.id::text                                  AS id,
+        g.periodo,
+        gt.nombre                                   AS gasto_type_name,
+        gt.categoria                                AS category,
+        gt.metodo_asignacion                        AS allocation_method,
+        COALESCE(g.monto_total, 0)::numeric         AS total_amount,
+        g.descripcion                               AS description,
+        false                                       AS is_missing
+      FROM v2.gastos g
+      JOIN v2.tipos_gasto gt ON gt.id = g.tipo_gasto_id
+      WHERE g.periodo = '${periodo}'
+      UNION ALL
+      SELECT
+        'missing-' || gt.id::text                   AS id,
+        '${periodo}'                                AS periodo,
+        gt.nombre                                   AS gasto_type_name,
+        gt.categoria                                AS category,
+        gt.metodo_asignacion                        AS allocation_method,
+        0::numeric                                  AS total_amount,
+        NULL                                        AS description,
+        true                                        AS is_missing
+      FROM v2.tipos_gasto gt
+      WHERE gt.id NOT IN (
+        SELECT tipo_gasto_id FROM v2.gastos WHERE periodo = '${periodo}'
+      )
+      ORDER BY is_missing ASC, category, gasto_type_name
+    `)
+    return rows.map((r) => ({
+      id: String(r.id),
+      periodo: String(r.periodo),
+      gastoTypeName: String(r.gasto_type_name),
+      category: String(r.category),
+      allocationMethod: String(r.allocation_method),
+      totalAmount: Number(r.total_amount ?? 0),
+      description: r.description ? String(r.description) : null,
+      isAllocated: false,
+      isMissing: Boolean(r.is_missing),
+    }))
+  }
+
   const rows = await execute(`
     SELECT
       g.id, g.periodo,
@@ -43,7 +112,6 @@ export async function getGastoRows(periodo?: string): Promise<GastoRow[]> {
       g.descripcion                               AS description
     FROM v2.gastos g
     JOIN v2.tipos_gasto gt ON gt.id = g.tipo_gasto_id
-    ${periodo ? `WHERE g.periodo = '${periodo}'` : ""}
     ORDER BY g.periodo DESC, gt.categoria, gt.nombre
   `)
   return rows.map((r) => ({
@@ -55,6 +123,7 @@ export async function getGastoRows(periodo?: string): Promise<GastoRow[]> {
     totalAmount: Number(r.total_amount ?? 0),
     description: r.description ? String(r.description) : null,
     isAllocated: false,
+    isMissing: false,
   }))
 }
 
@@ -90,6 +159,7 @@ const MES_LABEL: Record<string, string> = {
 }
 
 export async function getGastosForPeriodo(periodo: string): Promise<GastoChartRow> {
+  assertPeriodo(periodo)
   const rows = await execute(`
     SELECT
       g.periodo,

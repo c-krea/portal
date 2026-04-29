@@ -1,4 +1,6 @@
 import { execute } from "@/lib/db/executor"
+import { getGracePeriod } from "@/lib/data/configuracion"
+import { assertPeriodo } from "@/lib/security/validators"
 
 export type PagoRow = {
   id: string
@@ -9,7 +11,7 @@ export type PagoRow = {
   valorFinal: number
   siesaDocto: string | null
   siesaCruce: string | null
-  status: string
+  diasMoraAlPago: number
 }
 
 export type TenantOption = {
@@ -75,6 +77,7 @@ const EXCLUDE_ELECTRICITY = `
     )`
 
 export async function getPagosKPIs(month?: string): Promise<PagosKPIs> {
+  if (month) assertPeriodo(month)
   const now = new Date()
   const resolvedMonth = month ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
   const [yearStr, monthStr] = resolvedMonth.split("-")
@@ -98,12 +101,14 @@ export async function getPagosKPIs(month?: string): Promise<PagosKPIs> {
     proyectado_mes AS (
       SELECT ROUND(COALESCE(SUM(
         (pr.canon_proyectado - pr.descuento_proyectado)
-        * (1 - (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
-        * 1.19
+        * (1 - (COALESCE(o.pronto_pago, c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
+        * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
       ), 0)) AS total
       FROM v2.proyecciones pr
       JOIN v2.contratos c ON pr.contrato_id = c.id
+      JOIN v2.locales u ON c.local_id = u.id
       JOIN v2.inquilinos t ON c.inquilino_id = t.id
+      LEFT JOIN siesa_raw.ocupacion o ON o.loc = u.unidad
       WHERE pr.anio = ${year} AND pr.mes = ${monthNum}
     ),
     ultimo AS (
@@ -132,7 +137,8 @@ export async function getPagosKPIs(month?: string): Promise<PagosKPIs> {
   }
 }
 
-export async function getPagos(limit = 200, month?: string): Promise<PagoRow[]> {
+export async function getPagos(month?: string): Promise<PagoRow[]> {
+  if (month) assertPeriodo(month)
   const monthFilter = month
     ? `AND date_trunc('month', p.fecha_recaudo) = DATE '${month}-01'`
     : ""
@@ -161,14 +167,14 @@ export async function getPagos(limit = 200, month?: string): Promise<PagoRow[]> 
       p.fecha_recaudo,
       p.valor_final::numeric AS valor_final,
       p.docto AS siesa_docto,
-      p.cruce AS siesa_cruce
+      p.cruce AS siesa_cruce,
+      COALESCE(p.dias_mora_al_pago, 0) AS dias_mora_al_pago
     FROM v2.vista_pagos p
     LEFT JOIN v2.inquilinos t ON t.id = p.inquilino_id
     WHERE 1=1
       ${electricityExclusion}
     ${monthFilter}
     ORDER BY p.fecha_recaudo DESC
-    LIMIT ${limit}
   `)
   return rows.map((r) => ({
     id:            String(r.id),
@@ -179,7 +185,7 @@ export async function getPagos(limit = 200, month?: string): Promise<PagoRow[]> 
     valorFinal:    Number(r.valor_final ?? 0),
     siesaDocto:    r.siesa_docto ? String(r.siesa_docto) : null,
     siesaCruce:    r.siesa_cruce ? String(r.siesa_cruce) : null,
-    status:        "RECAUDADO",
+    diasMoraAlPago: Number(r.dias_mora_al_pago ?? 0),
   }))
 }
 
@@ -198,37 +204,40 @@ export type PagosBuckets = {
 }
 
 export async function getPagosBuckets(month: string): Promise<PagosBuckets> {
+  assertPeriodo(month)
   const [y, m] = month.split("-").map(Number)
   const prev = prevMonthStr(y, m)
   const monthExpr = `DATE '${month}-01'`
+  const grace = await getGracePeriod()
 
   const rows = await execute(`
     WITH ${electricityTenantsSubquery(monthExpr, prev)},
     deduped AS (
-      SELECT p.inquilino_id, p.fecha_recaudo, p.valor_final
+      SELECT p.inquilino_id, p.fecha_recaudo, p.valor_final, p.dias_mora_al_pago
       FROM v2.vista_pagos p
       WHERE date_trunc('month', p.fecha_recaudo) = ${monthExpr}
         ${EXCLUDE_ELECTRICITY}
     ),
-    mora_tenants AS (
-      SELECT DISTINCT inquilino_id
-      FROM v2.vista_cartera_actual
-      WHERE fecha_factura < ${monthExpr}
-        AND saldo > 0
+    classified AS (
+      SELECT
+        d.inquilino_id,
+        d.fecha_recaudo,
+        d.valor_final,
+        CASE
+          WHEN COALESCE(d.dias_mora_al_pago, 0) > ${grace} THEN 'mora'
+          WHEN EXTRACT(DAY FROM d.fecha_recaudo) BETWEEN 1 AND 10 THEN 'temprano'
+          ELSE 'tardio'
+        END AS bucket
+      FROM deduped d
     ),
     by_tenant AS (
       SELECT
-        d.inquilino_id,
-        CASE
-          WHEN mt.inquilino_id IS NOT NULL                            THEN 'mora'
-          WHEN MIN(EXTRACT(DAY FROM d.fecha_recaudo)) BETWEEN 1 AND 10 THEN 'temprano'
-          ELSE 'tardio'
-        END                                   AS bucket,
-        SUM(d.valor_final)::numeric           AS total,
-        MIN(d.fecha_recaudo)::text            AS primera_fecha
-      FROM deduped d
-      LEFT JOIN mora_tenants mt ON mt.inquilino_id = d.inquilino_id
-      GROUP BY d.inquilino_id, mt.inquilino_id
+        inquilino_id,
+        bucket,
+        SUM(valor_final)::numeric  AS total,
+        MIN(fecha_recaudo)::text   AS primera_fecha
+      FROM classified
+      GROUP BY inquilino_id, bucket
     )
     SELECT
       bt.inquilino_id AS tenant_id,

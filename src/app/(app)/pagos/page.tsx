@@ -2,19 +2,14 @@ export const dynamic = "force-dynamic"
 
 import { PageHeader } from "@/components/layout/page-header"
 import { getPagos, getPagosKPIs, getPagosBuckets } from "@/lib/data/pagos"
+import { getGracePeriod } from "@/lib/data/configuracion"
 import { MonthFilter } from "@/components/pagos/month-filter"
-import { formatCOP } from "@/lib/formatters"
+import { PagosTable } from "@/components/pagos/pagos-table"
+import { formatCOP, formatDateShort } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { TrendingUp, CreditCard, Clock, AlertCircle } from "lucide-react"
-
-const STATUS_CFG: Record<string, { cls: string; label: string }> = {
-  recaudado:     { cls: "bg-emerald-50 text-emerald-700", label: "Recaudado" },
-  parcial:       { cls: "bg-amber-50 text-amber-700",     label: "Parcial" },
-  vencido:       { cls: "bg-rose-50 text-rose-700",       label: "Vencido" },
-  no_proyectado: { cls: "bg-slate-100 text-slate-500",    label: "No Proyectado" },
-  anulado:       { cls: "bg-slate-100 text-slate-400",    label: "Anulado" },
-}
+import { isValidPeriodo } from "@/lib/security/validators"
 
 export default async function PagosPage({
   searchParams,
@@ -24,18 +19,20 @@ export default async function PagosPage({
   const { month: rawMonth } = await searchParams
   const now = new Date()
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-  const month = /^\d{4}-\d{2}$/.test(rawMonth ?? "") ? rawMonth! : defaultMonth
+  const month = isValidPeriodo(rawMonth) ? rawMonth : defaultMonth
 
-  const [kpis, pagos, buckets] = await Promise.all([
+  const [kpis, pagos, buckets, gracePeriod] = await Promise.all([
     getPagosKPIs(month),
-    getPagos(200, month),
+    getPagos(month),
     getPagosBuckets(month),
+    getGracePeriod(),
   ])
 
   const pendiente = Math.max(0, kpis.proyectadoMes - kpis.totalEsteMes)
   const colectadoPct = kpis.proyectadoMes > 0
     ? Math.min(100, (kpis.totalEsteMes / kpis.proyectadoMes) * 100)
     : 0
+
 
   return (
     <>
@@ -120,7 +117,7 @@ export default async function PagosPage({
           {kpis.ultimoPagoFecha ? (
             <>
               <p className="mt-2 text-2xl font-bold text-slate-900">
-                {kpis.ultimoPagoFecha}
+                {formatDateShort(kpis.ultimoPagoFecha)}
               </p>
               <p className="mt-1 truncate text-xs text-slate-500">{kpis.ultimoPagoCliente}</p>
               <p className="text-xs font-medium text-emerald-600">{formatCOP(kpis.ultimoPagoMonto ?? 0)}</p>
@@ -155,11 +152,11 @@ export default async function PagosPage({
             ) : buckets.temprano.map((r) => (
               <li key={r.tenantId} className="flex items-center justify-between px-5 py-3">
                 <div className="min-w-0">
-                  <Link href={`/locales/${r.tenantId}`} className="truncate text-sm font-medium text-slate-800 hover:text-blue-600">
+                  <Link href={`/locales/${r.tenantId}`} className="block truncate text-sm font-medium text-slate-800 hover:text-blue-600">
                     {r.clienteName}
                   </Link>
                   {r.unitNumber && (
-                    <p className="text-xs text-slate-400">Local {r.unitNumber} · {r.primeraFecha}</p>
+                    <p className="truncate text-xs text-slate-400">Local {r.unitNumber} · {r.primeraFecha}</p>
                   )}
                 </div>
                 <span className="ml-3 shrink-0 text-sm font-semibold text-emerald-700">
@@ -192,11 +189,11 @@ export default async function PagosPage({
             ) : buckets.tardio.map((r) => (
               <li key={r.tenantId} className="flex items-center justify-between px-5 py-3">
                 <div className="min-w-0">
-                  <Link href={`/locales/${r.tenantId}`} className="truncate text-sm font-medium text-slate-800 hover:text-blue-600">
+                  <Link href={`/locales/${r.tenantId}`} className="block truncate text-sm font-medium text-slate-800 hover:text-blue-600">
                     {r.clienteName}
                   </Link>
                   {r.unitNumber && (
-                    <p className="text-xs text-slate-400">Local {r.unitNumber} · {r.primeraFecha}</p>
+                    <p className="truncate text-xs text-slate-400">Local {r.unitNumber} · {r.primeraFecha}</p>
                   )}
                 </div>
                 <span className="ml-3 shrink-0 text-sm font-semibold text-amber-700">
@@ -229,11 +226,11 @@ export default async function PagosPage({
             ) : buckets.mora.map((r) => (
               <li key={r.tenantId} className="flex items-center justify-between px-5 py-3">
                 <div className="min-w-0">
-                  <Link href={`/locales/${r.tenantId}`} className="truncate text-sm font-medium text-slate-800 hover:text-blue-600">
+                  <Link href={`/locales/${r.tenantId}`} className="block truncate text-sm font-medium text-slate-800 hover:text-blue-600">
                     {r.clienteName}
                   </Link>
                   {r.unitNumber && (
-                    <p className="text-xs text-slate-400">Local {r.unitNumber} · {r.primeraFecha}</p>
+                    <p className="truncate text-xs text-slate-400">Local {r.unitNumber} · {r.primeraFecha}</p>
                   )}
                 </div>
                 <span className="ml-3 shrink-0 text-sm font-semibold text-rose-700">
@@ -245,84 +242,7 @@ export default async function PagosPage({
         </div>
       </div>
 
-      {/* Payments Table */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <div>
-            <h2 className="font-semibold text-slate-800">Historial de Pagos</h2>
-            <p className="text-xs text-slate-400">{pagos.length} movimientos · {month} · Fuente: CSF ERP</p>
-          </div>
-        </div>
-
-        {pagos.length === 0 ? (
-          <div className="px-5 py-12 text-center">
-            <p className="text-sm text-slate-400">No hay pagos registrados aún</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                    Fecha
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                    Cliente
-                  </th>
-                  <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                    Documento
-                  </th>
-                  <th className="hidden lg:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                    Cruce
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">
-                    Monto
-                  </th>
-                  <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                    Estado
-                  </th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {pagos.map((p) => {
-                  const cfg = STATUS_CFG[p.status] ?? { cls: "bg-slate-100 text-slate-500", label: p.status }
-                  return (
-                    <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50">
-                      <td className="px-4 py-3 text-slate-600">{p.fechaRecaudo}</td>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-slate-900">{p.clienteName}</p>
-                        {p.unitNumber && (
-                          <p className="text-xs text-slate-400">Local {p.unitNumber}</p>
-                        )}
-                      </td>
-                      <td className="hidden md:table-cell px-4 py-3 text-xs font-mono text-slate-500">
-                        {p.siesaDocto ?? "—"}
-                      </td>
-                      <td className="hidden lg:table-cell px-4 py-3 text-xs font-mono text-slate-400">
-                        {p.siesaCruce ?? "—"}
-                      </td>
-                      <td className={cn("px-4 py-3 text-right font-semibold", p.valorFinal < 0 ? "text-rose-600" : "text-slate-900")}>
-                        {formatCOP(p.valorFinal)}
-                      </td>
-                      <td className="hidden sm:table-cell px-4 py-3">
-                        <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", cfg.cls)}>
-                          {cfg.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Link href={`/locales/${p.tenantId}`} className="text-xs text-blue-600 hover:underline">
-                          Ver
-                        </Link>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <PagosTable data={pagos} gracePeriod={gracePeriod} />
     </>
   )
 }

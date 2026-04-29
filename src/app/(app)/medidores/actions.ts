@@ -2,12 +2,13 @@
 
 import { supabaseAdmin } from "@/lib/db/executor"
 import { getEmpresaCkreaId } from "@/lib/empresa"
+import { isValidPeriodo } from "@/lib/security/validators"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
 const schema = z.object({
   unitId:          z.string().uuid("Unidad requerida"),
-  periodo:         z.string().regex(/^\d{4}-\d{2}$/, "Período inválido (YYYY-MM)"),
+  periodo:         z.string().refine(isValidPeriodo, "Período inválido (YYYY-MM)"),
   lecturaAnterior: z.coerce.number().min(0),
   lecturaActual:   z.coerce.number().min(0),
   tarifaKwh:       z.coerce.number().positive("Tarifa debe ser mayor a 0"),

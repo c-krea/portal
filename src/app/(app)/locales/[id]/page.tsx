@@ -11,8 +11,9 @@ import {
 } from "@/lib/data/tenant-detail"
 import { PageHeader } from "@/components/layout/page-header"
 import { CarteraTable } from "@/components/clientes/cartera-table"
-import { formatCOP, formatPercent } from "@/lib/formatters"
+import { formatCOP, formatPercent, formatDateShort } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
+import { isValidUuid, isValidUnit } from "@/lib/security/validators"
 
 const CONTRACT_STATUS_CONFIG = {
   activo: { cls: "bg-emerald-50 text-emerald-700", label: "Activo" },
@@ -20,20 +21,6 @@ const CONTRACT_STATUS_CONFIG = {
   vencido: { cls: "bg-amber-50 text-amber-700", label: "Vencido" },
   terminado: { cls: "bg-slate-100 text-slate-500", label: "Terminado" },
 } as const
-
-const PAYMENT_STATUS_CONFIG: Record<string, { cls: string; label: string }> = {
-  recaudado: { cls: "bg-emerald-50 text-emerald-700", label: "Recaudado" },
-  parcial: { cls: "bg-amber-50 text-amber-700", label: "Parcial" },
-  vencido: { cls: "bg-rose-50 text-rose-700", label: "Vencido" },
-  no_proyectado: { cls: "bg-slate-100 text-slate-500", label: "No Proyectado" },
-  anulado: { cls: "bg-slate-100 text-slate-400", label: "Anulado" },
-}
-
-const CLASIFICACION_CONFIG: Record<string, { cls: string; label: string }> = {
-  RECAUDADO: { cls: "bg-emerald-50 text-emerald-700", label: "Recaudado" },
-  "NO PROYECTADO": { cls: "bg-slate-100 text-slate-500", label: "No proyectado" },
-  VENCIDO: { cls: "bg-rose-50 text-rose-700", label: "Vencido" },
-}
 
 function KpiCard({
   label,
@@ -69,8 +56,11 @@ export default async function ClienteDetailPage({
   const { id } = await params
   const { unit } = await searchParams
 
+  if (!isValidUuid(id)) notFound()
+  const safeUnit = isValidUnit(unit) ? unit : undefined
+
   const [detail, contracts, cartera, pagos] = await Promise.all([
-    getTenantDetail(id, unit),
+    getTenantDetail(id, safeUnit),
     getTenantContracts(id),
     getTenantCartera(id),
     getTenantPayments(id),
@@ -175,8 +165,15 @@ export default async function ClienteDetailPage({
                         <span>Fin: {con.fechaFin ?? "Indefinido"}</span>
                       </div>
                       <div className="mt-2 border-t border-slate-100 pt-2">
-                        <span className="font-semibold text-slate-800">{formatCOP(con.canonBase)}</span>
+                        <span className="font-semibold text-slate-800">
+                          {formatCOP(con.canonReal > 0 ? con.canonReal : con.canonBase)}
+                        </span>
                         <span className="ml-1 text-xs text-slate-400">/ mes</span>
+                        {con.canonReal > 0 && con.canonBase > 0 && con.canonReal !== con.canonBase && (
+                          <span className="ml-2 text-xs text-slate-400">
+                            (base {formatCOP(con.canonBase)})
+                          </span>
+                        )}
                         {(con.descuentoPct > 0 || con.prontoPagoPct > 0) && (
                           <span className="ml-3 text-xs text-slate-400">
                             {con.descuentoPct > 0 && `Dto: ${formatPercent(con.descuentoPct)}`}
@@ -231,19 +228,11 @@ export default async function ClienteDetailPage({
 
         {/* Payment history */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-100 px-5 py-4 flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold text-slate-800">Historial de Pagos</h2>
-              {pagos.length > 0 && (
-                <p className="text-xs text-slate-400">{pagos.length} pagos registrados</p>
-              )}
-            </div>
-            <Link
-              href={`/pagos`}
-              className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-            >
-              + Registrar Pago
-            </Link>
+          <div className="border-b border-slate-100 px-5 py-4">
+            <h2 className="font-semibold text-slate-800">Historial de Pagos</h2>
+            {pagos.length > 0 && (
+              <p className="text-xs text-slate-400">{pagos.length} pagos registrados</p>
+            )}
           </div>
           {pagos.length > 0 ? (
             <div className="overflow-x-auto">
@@ -256,17 +245,19 @@ export default async function ClienteDetailPage({
                     <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Aplicado</th>
                     <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">PP</th>
                     <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Neto</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Estado</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pagos.map((p) => {
-                    const clsf = p.siesaClasificacion
-                      ? (CLASIFICACION_CONFIG[p.siesaClasificacion] ?? { cls: "bg-slate-100 text-slate-500", label: p.siesaClasificacion })
-                      : null
+                    const isAnticipo = p.valorFinal < 0
                     return (
-                      <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50">
-                        <td className="px-4 py-3 text-slate-600 tabular-nums">{p.fechaRecaudo}</td>
+                      <tr key={p.id} className={cn("border-b border-slate-50 hover:bg-slate-50", isAnticipo && "bg-rose-50/40")}>
+                        <td className="px-4 py-3 text-slate-600 tabular-nums">
+                          {formatDateShort(p.fechaRecaudo)}
+                          {isAnticipo && (
+                            <span className="ml-2 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700">Anticipo</span>
+                          )}
+                        </td>
                         <td className="hidden md:table-cell px-4 py-3 font-mono text-slate-500">
                           {p.siesaDocto ?? "—"}
                         </td>
@@ -281,15 +272,8 @@ export default async function ClienteDetailPage({
                             <span className="text-slate-300">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold text-slate-900 tabular-nums">
+                        <td className={cn("px-4 py-3 text-right font-semibold tabular-nums", isAnticipo ? "text-rose-600" : "text-slate-900")}>
                           {formatCOP(p.valorFinal)}
-                        </td>
-                        <td className="px-4 py-3">
-                          {clsf && (
-                            <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", clsf.cls)}>
-                              {clsf.label}
-                            </span>
-                          )}
                         </td>
                       </tr>
                     )
@@ -310,7 +294,6 @@ export default async function ClienteDetailPage({
                     <td className="px-4 py-3 text-right text-xs font-semibold text-slate-900 tabular-nums">
                       {formatCOP(pagos.reduce((s, p) => s + p.valorFinal, 0))}
                     </td>
-                    <td />
                   </tr>
                 </tfoot>
               </table>
@@ -318,12 +301,6 @@ export default async function ClienteDetailPage({
           ) : (
             <div className="px-5 py-10 text-center">
               <p className="text-sm text-slate-400">Sin pagos registrados</p>
-              <Link
-                href="/pagos"
-                className="mt-3 inline-block text-sm text-blue-600 hover:underline"
-              >
-                Ir a registrar un pago →
-              </Link>
             </div>
           )}
         </div>

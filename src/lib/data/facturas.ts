@@ -1,4 +1,7 @@
 import { execute } from "@/lib/db/executor"
+import { assertPeriodo } from "@/lib/security/validators"
+
+const DOC_ID_RE = /^[A-Za-z0-9 _-]{1,40}$/
 
 export type FacturaRow = {
   id: string
@@ -36,6 +39,7 @@ const PERIODO_TO_STR = `LPAD(periodo::text, 6, '0')`
 const PERIODO_FORMATTED = `SUBSTRING(${PERIODO_TO_STR}, 1, 4) || '-' || SUBSTRING(${PERIODO_TO_STR}, 5, 2)`
 
 export async function getFacturas(periodo?: string): Promise<FacturaRow[]> {
+  if (periodo) assertPeriodo(periodo)
   const periodoInt = periodo ? Number(periodo.replace("-", "")) : null
   const rows = await execute(`
     SELECT
@@ -82,6 +86,7 @@ export async function getFacturas(periodo?: string): Promise<FacturaRow[]> {
 }
 
 export async function getFacturaSummary(periodo?: string): Promise<FacturaSummary> {
+  if (periodo) assertPeriodo(periodo)
   const periodoInt = periodo ? Number(periodo.replace("-", "")) : null
   const totals = await execute(`
     SELECT
@@ -136,6 +141,7 @@ export type FacturaDetalle = FacturaRow & {
 }
 
 export async function getFacturaById(id: string): Promise<FacturaDetalle | null> {
+  if (!DOC_ID_RE.test(id)) return null
   const rows = await execute(`
     SELECT
       v.doc_id,

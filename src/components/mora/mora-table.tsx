@@ -5,15 +5,14 @@ import Link from "next/link"
 import { formatCOP } from "@/lib/formatters"
 import type { MoraRow } from "@/lib/data/mora"
 
-type SortKey = "cliente" | "diasMora" | "mesesPendientes" | "saldoVencido" | "saldoTotal"
+type SortKey = "cliente" | "diasMora" | "mesesPendientes" | "saldoVencido"
 type SortDir = "asc" | "desc"
 
 const COLS: { key: SortKey; label: string; align: "left" | "right"; hide?: string }[] = [
   { key: "cliente",         label: "Arrendatario",     align: "left" },
   { key: "diasMora",        label: "Días mora",        align: "right" },
   { key: "mesesPendientes", label: "Facturas",         align: "right", hide: "hidden sm:table-cell" },
-  { key: "saldoVencido",    label: "Vencido",          align: "right" },
-  { key: "saldoTotal",      label: "Saldo total",      align: "right", hide: "hidden md:table-cell" },
+  { key: "saldoVencido",    label: "Saldo",            align: "right" },
 ]
 
 function diasBadge(dias: number) {
@@ -23,7 +22,7 @@ function diasBadge(dias: number) {
 }
 
 export function MoraTable({ data }: { data: MoraRow[] }) {
-  const [sortKey, setSortKey] = useState<SortKey>("diasMora")
+  const [sortKey, setSortKey] = useState<SortKey>("saldoVencido")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
 
   function handleSort(key: SortKey) {
@@ -96,9 +95,6 @@ export function MoraTable({ data }: { data: MoraRow[] }) {
                 </td>
                 <td className="px-4 py-3 text-right font-mono font-semibold text-rose-600">
                   {formatCOP(row.saldoVencido)}
-                </td>
-                <td className="hidden md:table-cell px-4 py-3 text-right font-mono text-slate-700">
-                  {formatCOP(row.saldoTotal)}
                 </td>
               </tr>
             ))

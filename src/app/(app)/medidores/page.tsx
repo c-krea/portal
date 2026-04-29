@@ -1,12 +1,13 @@
 export const dynamic = "force-dynamic"
 
 import { PageHeader } from "@/components/layout/page-header"
-import { getMedidoresAdmin, getUnitsWithMeters } from "@/lib/data/medidores"
+import { getMedidoresAdmin, getUnitsWithMeters, getMeterYears } from "@/lib/data/medidores"
 import { formatCOP } from "@/lib/formatters"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { CheckCircle, Clock, AlertCircle, Zap, FileText } from "lucide-react"
 import { MedidoresAdminTable } from "@/components/medidores/medidores-admin-table"
 import Link from "next/link"
+import { isValidPeriodo, isValidYear } from "@/lib/security/validators"
 
 const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
 
@@ -31,16 +32,17 @@ export default async function MedidoresPage({
 }) {
   const { periodo: periodoParam, year: yearParam } = await searchParams
   const now = new Date()
-  const selectedYear = yearParam ? Number(yearParam) : now.getFullYear()
+  const selectedYear = isValidYear(yearParam) ? Number(yearParam) : now.getFullYear()
   const defaultPeriodo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-  const periodo = periodoParam ?? defaultPeriodo
+  const periodo = isValidPeriodo(periodoParam) ? periodoParam : defaultPeriodo
   const PERIODOS = buildPeriodos(selectedYear)
 
   const empresaId = await getEmpresaCkreaId()
 
-  const [rows, units] = await Promise.all([
+  const [rows, units, years] = await Promise.all([
     getMedidoresAdmin(empresaId, periodo),
     getUnitsWithMeters(empresaId),
+    getMeterYears(),
   ])
 
   const registradas  = rows.filter((r) => r.status === "registrada")
@@ -68,19 +70,23 @@ export default async function MedidoresPage({
       <div className="mb-5 flex flex-wrap items-center gap-3">
         {/* Year switcher */}
         <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          {[2025, 2026].map((y) => (
-            <a
-              key={y}
-              href={`/medidores?year=${y}`}
-              className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${
-                y === selectedYear
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              {y}
-            </a>
-          ))}
+          {years.map((y) => {
+            const lastMonth = y === now.getFullYear() ? now.getMonth() + 1 : 12
+            const yearPeriodo = `${y}-${String(lastMonth).padStart(2, "0")}`
+            return (
+              <a
+                key={y}
+                href={`/medidores?year=${y}&periodo=${yearPeriodo}`}
+                className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${
+                  y === selectedYear
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                {y}
+              </a>
+            )
+          })}
         </div>
 
         {/* Month tabs */}
@@ -127,7 +133,7 @@ export default async function MedidoresPage({
             <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Sin Lectura</p>
           </div>
           <p className="mt-2 text-xl sm:text-2xl font-bold text-slate-500">{sinLectura.length}</p>
-          <p className="mt-0.5 text-xs text-slate-400">{periodoLabel} 2026</p>
+          <p className="mt-0.5 text-xs text-slate-400">{periodoLabel} {periodo.split("-")[0]}</p>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">

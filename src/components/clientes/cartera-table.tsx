@@ -10,7 +10,7 @@ import {
 } from "@tanstack/react-table"
 import { useState } from "react"
 import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
-import { formatCOP } from "@/lib/formatters"
+import { formatCOP, formatDateShort } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
 import type { CarteraItem } from "@/lib/data/tenant-detail"
 
@@ -50,18 +50,20 @@ const columns: ColumnDef<CarteraItem>[] = [
     accessorKey: "fechaFactura",
     header: "Fecha",
     size: 100,
-    cell: ({ getValue }) => (
-      <span className="text-slate-600">{getValue<string | null>() ?? "—"}</span>
-    ),
+    cell: ({ getValue }) => {
+      const v = getValue<string | null>()
+      return <span className="text-slate-600">{v ? formatDateShort(v) : "—"}</span>
+    },
   },
   {
     accessorKey: "fechaVence",
     header: "Vence",
     size: 100,
     meta: { className: "hidden sm:table-cell" },
-    cell: ({ getValue }) => (
-      <span className="text-slate-600">{getValue<string | null>() ?? "—"}</span>
-    ),
+    cell: ({ getValue }) => {
+      const v = getValue<string | null>()
+      return <span className="text-slate-600">{v ? formatDateShort(v) : "—"}</span>
+    },
   },
   {
     accessorKey: "diasMora",

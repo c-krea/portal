@@ -34,17 +34,17 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 
 const TAB_DEFAULT_SORT: Record<Tab, SortingState> = {
-  todos:     [{ id: "saldoVencido", desc: true }],
+  todos:     [{ id: "unitNumbers",  desc: false }],
   al_dia:    [{ id: "canonTotal",   desc: true }],
   en_mora:   [{ id: "saldoVencido", desc: true }],
   criticos:  [{ id: "saldoVencido", desc: true }],
-  inactivos: [{ id: "cliente",      desc: false }],
+  inactivos: [{ id: "unitNumbers",  desc: false }],
 }
 
 function filterByTab(rows: ClienteRow[], tab: Tab, vacantUnits: ClienteRow[]): ClienteRow[] {
   switch (tab) {
     case "al_dia":    return rows.filter((r) => r.status === "al_dia")
-    case "en_mora":   return rows.filter((r) => r.status === "en_mora" || r.status === "critico")
+    case "en_mora":   return rows.filter((r) => r.status === "en_mora")
     case "criticos":  return rows.filter((r) => r.status === "critico")
     case "inactivos": return vacantUnits
     default:          return rows
@@ -78,8 +78,14 @@ const columns: ColumnDef<ClienteRow>[] = [
   {
     accessorKey: "unitNumbers",
     header: "Locales",
-    enableSorting: false,
     meta: { className: "hidden sm:table-cell" },
+    sortingFn: (a, b) => {
+      const av = a.original.unitNumbers[0] ?? ""
+      const bv = b.original.unitNumbers[0] ?? ""
+      const an = Number(av), bn = Number(bv)
+      if (!isNaN(an) && !isNaN(bn)) return an - bn
+      return av.localeCompare(bv)
+    },
     cell: ({ getValue }) => {
       const units = getValue<string[]>()
       if (!units.length) return <span className="text-slate-400">—</span>
@@ -178,7 +184,7 @@ export function ClientesTable({ data, vacantUnits }: { data: ClienteRow[]; vacan
     () => ({
       todos:     data.length,
       al_dia:    data.filter((r) => r.status === "al_dia").length,
-      en_mora:   data.filter((r) => r.status === "en_mora" || r.status === "critico").length,
+      en_mora:   data.filter((r) => r.status === "en_mora").length,
       criticos:  data.filter((r) => r.status === "critico").length,
       inactivos: vacantUnits.length,
     }),
@@ -280,11 +286,11 @@ export function ClientesTable({ data, vacantUnits }: { data: ClienteRow[]; vacan
             ) : (
               table.getRowModel().rows.map((row) => (
                 <tr
-                  key={row.original.tenantId}
+                  key={row.original.tenantId ?? `vacant-${row.original.unitNumbers[0]}`}
                   className={`border-b border-slate-50 hover:bg-slate-50 ${row.original.isVacant ? "" : "cursor-pointer"}`}
                   onClick={() => {
                     if (!row.original.isVacant && row.original.tenantId)
-                      window.location.href = `/locales/${row.original.tenantId}`
+                      router.push(`/locales/${row.original.tenantId}`)
                   }}
                 >
                   {row.getVisibleCells().map((cell) => (

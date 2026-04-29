@@ -22,17 +22,23 @@ export type MoraSummary = {
 export async function getMoraSummary(): Promise<MoraSummary> {
   const grace = await getGracePeriod()
 
-  const carteraRes = await execute(`
-    SELECT COALESCE(SUM(vr_vencido), 0)::numeric AS total
+  const res = await execute(`
+    WITH r AS (
+      SELECT valor::numeric AS rate FROM v2.reglas_financieras WHERE clave = 'interes_mora_diario' LIMIT 1
+    )
+    SELECT
+      COALESCE(SUM(c.vr_vencido), 0)::numeric AS total_vencido,
+      COALESCE(SUM(c.saldo * GREATEST(0, c.dias_mora - ${grace}) * (SELECT rate FROM r)), 0)::numeric AS total_interes,
+      COUNT(*)::int AS facturas
     FROM v2.vista_cartera_actual c
-    WHERE vr_vencido > 0 AND dias_mora > ${grace}
-      AND juridica = false
+    WHERE c.vr_vencido > 0 AND c.dias_mora > ${grace} AND c.juridica = false
   `)
+  const row = (res as Array<Record<string, unknown>>)[0]
 
   return {
-    totalCarteraVencida: Number((carteraRes as Array<Record<string, unknown>>)[0]?.total ?? 0),
-    totalInteresPortal:  0,
-    invoicesVencidas:    0,
+    totalCarteraVencida: Number(row?.total_vencido ?? 0),
+    totalInteresPortal:  Number(row?.total_interes ?? 0),
+    invoicesVencidas:    Number(row?.facturas ?? 0),
     lastAccrualDate:     null,
   }
 }

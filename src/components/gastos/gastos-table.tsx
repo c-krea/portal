@@ -87,17 +87,28 @@ const columns: ColumnDef<GastoRow>[] = [
     accessorKey: "totalAmount",
     header: "Monto",
     size: 140,
-    cell: ({ getValue }) => (
-      <span className="font-medium text-slate-900">{formatCOP(getValue<number>())}</span>
-    ),
+    cell: ({ row, getValue }) => {
+      const v = getValue<number>()
+      if (row.original.isMissing) {
+        return <span className="text-slate-300">{formatCOP(0)}</span>
+      }
+      return <span className="font-medium text-slate-900">{formatCOP(v)}</span>
+    },
   },
   {
     accessorKey: "description",
     header: "Descripción",
     meta: { className: "hidden lg:table-cell" },
-    cell: ({ getValue }) => (
-      <span className="text-xs text-slate-500">{getValue<string | null>() ?? "—"}</span>
-    ),
+    cell: ({ row, getValue }) => {
+      if (row.original.isMissing) {
+        return (
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+            Faltante
+          </span>
+        )
+      }
+      return <span className="text-xs text-slate-500">{getValue<string | null>() ?? "—"}</span>
+    },
   },
 ]
 
@@ -167,7 +178,10 @@ export function GastosTable({ data, embedded = false }: { data: GastoRow[]; embe
               table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="border-b border-slate-50 hover:bg-slate-50"
+                  className={cn(
+                    "border-b border-slate-50 hover:bg-slate-50",
+                    row.original.isMissing && "bg-amber-50/40 text-slate-400",
+                  )}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className={cn("px-4 py-3", cell.column.columnDef.meta?.className)}>

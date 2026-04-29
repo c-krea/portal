@@ -6,6 +6,7 @@ import { getFacturas, getFacturaSummary, getAvailablePeriodos } from "@/lib/data
 import { formatCOP } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { isValidPeriodo } from "@/lib/security/validators"
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
   borrador:  { label: "Borrador",  cls: "bg-slate-100 text-slate-600" },
@@ -21,7 +22,8 @@ export default async function FacturasPage({
 }: {
   searchParams: Promise<{ periodo?: string }>
 }) {
-  const { periodo } = await searchParams
+  const { periodo: rawPeriodo } = await searchParams
+  const periodo = isValidPeriodo(rawPeriodo) ? rawPeriodo : undefined
   const [facturas, summary, periodos] = await Promise.all([
     getFacturas(periodo),
     getFacturaSummary(periodo),

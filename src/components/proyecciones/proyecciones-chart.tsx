@@ -19,7 +19,7 @@ type Row = {
   prontoPago: number
   baseNeta: number
   iva: number
-  proyectado: number
+  proyectadoPiso: number
   ppEsperado: number
   proyectadoEsperado: number
 }
@@ -50,13 +50,13 @@ function CustomTooltip({
           <span>− Dcto. fase</span>
           <span className="font-mono font-medium">{formatCOP(d.descuentos)}</span>
         </div>
-        <div className="flex justify-between text-amber-600">
-          <span>− PP esperado</span>
-          <span className="font-mono font-medium">{formatCOP(d.ppEsperado)}</span>
+        <div className="flex justify-between border-t border-slate-100 pt-1 text-slate-500">
+          <span>Piso c/IVA</span>
+          <span className="font-mono font-medium">{formatCOP(d.proyectadoPiso)}</span>
         </div>
-        <div className="flex justify-between border-t border-slate-100 pt-1 text-slate-400">
-          <span>Máx. c/IVA</span>
-          <span className="font-mono">{formatCOP(d.proyectado)}</span>
+        <div className="flex justify-between text-emerald-600">
+          <span>+ PP no usado</span>
+          <span className="font-mono font-medium">+ {formatCOP(d.proyectadoEsperado - d.proyectadoPiso)}</span>
         </div>
         <div className="flex justify-between border-t border-slate-200 pt-1">
           <span className="font-semibold" style={{ color: NAVY }}>Esperado</span>
@@ -68,7 +68,7 @@ function CustomTooltip({
 }
 
 export function ProyeccionesChart({ data }: { data: Row[] }) {
-  const max = Math.max(...data.map((d) => d.proyectado))
+  const max = Math.max(...data.map((d) => d.proyectadoEsperado))
 
   return (
     <div className="mt-4 overflow-x-auto">

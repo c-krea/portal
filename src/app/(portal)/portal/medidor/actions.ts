@@ -4,11 +4,12 @@ import { createClient } from "@/lib/supabase/server"
 import { execute, supabaseAdmin } from "@/lib/db/executor"
 import { getPortalProfile } from "@/lib/data/portal"
 import { uploadMeterPhoto } from "@/lib/google-drive"
+import { isValidPeriodo } from "@/lib/security/validators"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
 const schema = z.object({
-  periodo:      z.string().regex(/^\d{4}-\d{2}$/),
+  periodo:      z.string().refine(isValidPeriodo),
   lecturaActual: z.coerce.number().min(0, "Ingrese la lectura del contador"),
   notas:        z.string().optional(),
 })

@@ -12,20 +12,23 @@ export type ProyeccionBreakdown = {
   totalDescuentos: number
   totalPP: number
   totalIVA: number
-  netoConIVA: number        // conservative: no PP assumed
+  pisoConIVA: number        // floor: full PP applied (everyone pays on time)
   ppEsperado: number        // expected PP discount (per-tenant historical rate)
-  netoEsperado: number      // expected collection = netoConIVA - ppEsperado
+  netoEsperado: number      // expected collection = piso + (PP not used by late payers)
 }
 
 export type ProyeccionDetalle = {
   contractId: string
   unitNumber: string
   cliente: string
+  tipoPersona: 'PJ' | 'PN'
   fechaInicio: string | null
   mesesTranscurridos: number
   canonMensual: number
   descuentoPct: number
   prontoPagoPct: number
+  descuentoPhasePct: number | null
+  descuentoHastaMes: number | null
   ppHistoricoPct: number
   ppHistoricoPagos: number
   netoAnualIVA: number
@@ -40,7 +43,7 @@ export type ProyeccionMes = {
   prontoPago: number
   baseNeta: number
   iva: number
-  proyectado: number
+  proyectadoPiso: number
   ppEsperado: number
   proyectadoEsperado: number
 }
@@ -52,8 +55,9 @@ export type ContractForProjection = {
   clienteName: string
   descuentoPct: number
   prontoPagoPct: number
+  descuentoPhasePct: number | null
+  descuentoHastaMes: number | null
   lastCanon: number
-  lastDescuentoPct: number
   lastYear: number
   lastMonth: number
 }
@@ -82,26 +86,34 @@ export async function getProyeccionSummaries(empresaId: string): Promise<Proyecc
 }
 
 export async function getProyeccionBreakdown(empresaId: string, year: number): Promise<ProyeccionBreakdown> {
+  // PJ tenants: retefuente 3.5% withheld → multiplier 1.155 (= 1.19 - 0.035).
+  // PN tenants: no retefuente → multiplier 1.19.
   const rows = await execute(`
     SELECT
       ROUND(COALESCE(SUM(p.canon_proyectado), 0))::numeric                                     AS canon_bruto,
       ROUND(COALESCE(SUM(p.descuento_proyectado), 0))::numeric                                 AS total_descuentos,
       0::numeric                                                                                AS total_pp,
       ROUND(COALESCE(SUM(p.canon_proyectado - p.descuento_proyectado), 0) * 0.19)::numeric     AS total_iva,
-      ROUND(COALESCE(SUM(p.canon_proyectado - p.descuento_proyectado), 0) * 1.19)::numeric     AS neto_con_iva,
       ROUND(COALESCE(SUM(
         (p.canon_proyectado - p.descuento_proyectado)
-        * (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0)
-        * 1.19
+        * (1 - (COALESCE(o.pronto_pago, c.pronto_pago_pct, 0) / 100.0))
+        * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
+      ), 0))::numeric                                                                           AS piso_con_iva,
+      ROUND(COALESCE(SUM(
+        (p.canon_proyectado - p.descuento_proyectado)
+        * (COALESCE(o.pronto_pago, c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0)
+        * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
       ), 0))::numeric                                                                           AS pp_esperado,
       ROUND(COALESCE(SUM(
         (p.canon_proyectado - p.descuento_proyectado)
-        * (1 - (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
-        * 1.19
+        * (1 - (COALESCE(o.pronto_pago, c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
+        * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
       ), 0))::numeric                                                                           AS neto_esperado
     FROM v2.proyecciones p
     JOIN v2.contratos  c ON p.contrato_id  = c.id
+    JOIN v2.locales    u ON c.local_id     = u.id
     JOIN v2.inquilinos t ON c.inquilino_id = t.id
+    LEFT JOIN siesa_raw.ocupacion o ON o.loc = u.unidad
     WHERE p.anio = ${year}
       AND p.empresa_id = '${empresaId}'::uuid
   `)
@@ -111,18 +123,20 @@ export async function getProyeccionBreakdown(empresaId: string, year: number): P
     totalDescuentos: Number(r.total_descuentos ?? 0),
     totalPP:         Number(r.total_pp         ?? 0),
     totalIVA:        Number(r.total_iva        ?? 0),
-    netoConIVA:      Number(r.neto_con_iva     ?? 0),
+    pisoConIVA:      Number(r.piso_con_iva     ?? 0),
     ppEsperado:      Number(r.pp_esperado      ?? 0),
     netoEsperado:    Number(r.neto_esperado    ?? 0),
   }
 }
 
 export async function getProyeccionDetalle(empresaId: string, year: number): Promise<ProyeccionDetalle[]> {
+  // PJ → retefuente 3.5% withheld → multiplier 1.155. PN → 1.19.
   const rows = await execute(`
     SELECT
       c.id                                              AS contract_id,
       u.unidad                                          AS unit_number,
       COALESCE(t.nombre_corto, t.razon_social)          AS cliente,
+      COALESCE(t.tipo_persona, 'PN')                    AS tipo_persona,
       c.fecha_inicio,
       CASE
         WHEN c.fecha_inicio IS NOT NULL THEN
@@ -134,24 +148,30 @@ export async function getProyeccionDetalle(empresaId: string, year: number): Pro
         ELSE 0
       END                                               AS meses_transcurridos,
       ROUND(SUM(p.canon_proyectado) / 12)::numeric      AS canon_mensual,
-      COALESCE(c.descuento_pct, 0)::numeric             AS descuento_pct,
-      COALESCE(c.pronto_pago_pct, 0)::numeric           AS pronto_pago_pct,
+      COALESCE(o.descuento, c.descuento_pct, 0)::numeric    AS descuento_pct,
+      COALESCE(o.pronto_pago, c.pronto_pago_pct, 0)::numeric AS pronto_pago_pct,
+      c.descuento_phase_pct::numeric                    AS descuento_phase_pct,
+      c.descuento_hasta_mes::int                        AS descuento_hasta_mes,
       COALESCE(t.pp_historico_pct,  0)::numeric         AS pp_historico_pct,
       COALESCE(t.pp_historico_pagos, 0)::int            AS pp_historico_pagos,
-      ROUND(SUM(p.canon_proyectado - p.descuento_proyectado) * 1.19)::numeric AS neto_anual_iva,
       ROUND(SUM(
         (p.canon_proyectado - p.descuento_proyectado)
-        * (1 - (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
-        * 1.19
+        * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
+      ))::numeric                                       AS neto_anual_iva,
+      ROUND(SUM(
+        (p.canon_proyectado - p.descuento_proyectado)
+        * (1 - (COALESCE(o.pronto_pago, c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
+        * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
       ))::numeric                                       AS neto_esperado_iva,
       c.estado                                          AS status
     FROM v2.proyecciones p
     JOIN v2.contratos  c ON p.contrato_id  = c.id
     JOIN v2.locales    u ON c.local_id     = u.id
     JOIN v2.inquilinos t ON c.inquilino_id = t.id
+    LEFT JOIN siesa_raw.ocupacion o ON o.loc = u.unidad
     WHERE p.anio = ${year}
       AND p.empresa_id = '${empresaId}'::uuid
-    GROUP BY c.id, u.unidad, t.nombre_corto, t.razon_social, c.fecha_inicio, c.descuento_pct, c.pronto_pago_pct, c.estado, t.pp_historico_pct, t.pp_historico_pagos
+    GROUP BY c.id, u.unidad, t.nombre_corto, t.razon_social, t.tipo_persona, c.fecha_inicio, o.descuento, c.descuento_pct, o.pronto_pago, c.pronto_pago_pct, c.estado, t.pp_historico_pct, t.pp_historico_pagos, c.descuento_phase_pct, c.descuento_hasta_mes
     ORDER BY u.unidad
   `)
 
@@ -159,11 +179,14 @@ export async function getProyeccionDetalle(empresaId: string, year: number): Pro
     contractId:         String(r.contract_id),
     unitNumber:         String(r.unit_number),
     cliente:            String(r.cliente),
+    tipoPersona:        (String(r.tipo_persona) === 'PJ' ? 'PJ' : 'PN'),
     fechaInicio:        r.fecha_inicio ? String(r.fecha_inicio) : null,
     mesesTranscurridos: Number(r.meses_transcurridos ?? 0),
     canonMensual:       Number(r.canon_mensual ?? 0),
     descuentoPct:       Number(r.descuento_pct ?? 0),
     prontoPagoPct:      Number(r.pronto_pago_pct ?? 0),
+    descuentoPhasePct:  r.descuento_phase_pct == null ? null : Number(r.descuento_phase_pct),
+    descuentoHastaMes:  r.descuento_hasta_mes == null ? null : Number(r.descuento_hasta_mes),
     ppHistoricoPct:     Number(r.pp_historico_pct ?? 0),
     ppHistoricoPagos:   Number(r.pp_historico_pagos ?? 0),
     netoAnualIVA:       Number(r.neto_anual_iva ?? 0),
@@ -173,6 +196,7 @@ export async function getProyeccionDetalle(empresaId: string, year: number): Pro
 }
 
 export async function getProyeccionMensual(empresaId: string, year: number): Promise<ProyeccionMes[]> {
+  // PJ → retefuente 3.5% withheld → multiplier 1.155. PN → 1.19.
   const rows = await execute(`
     SELECT
       p.mes                                                                                     AS month,
@@ -181,20 +205,26 @@ export async function getProyeccionMensual(empresaId: string, year: number): Pro
       0::numeric                                                                                AS pronto_pago,
       ROUND(COALESCE(SUM(p.canon_proyectado - p.descuento_proyectado), 0))::numeric            AS base_neta,
       ROUND(COALESCE(SUM(p.canon_proyectado - p.descuento_proyectado), 0) * 0.19)::numeric     AS iva,
-      ROUND(COALESCE(SUM(p.canon_proyectado - p.descuento_proyectado), 0) * 1.19)::numeric     AS proyectado,
       ROUND(COALESCE(SUM(
         (p.canon_proyectado - p.descuento_proyectado)
-        * (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0)
-        * 1.19
+        * (1 - (COALESCE(o.pronto_pago, c.pronto_pago_pct, 0) / 100.0))
+        * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
+      ), 0))::numeric                                                                           AS proyectado_piso,
+      ROUND(COALESCE(SUM(
+        (p.canon_proyectado - p.descuento_proyectado)
+        * (COALESCE(o.pronto_pago, c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0)
+        * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
       ), 0))::numeric                                                                           AS pp_esperado,
       ROUND(COALESCE(SUM(
         (p.canon_proyectado - p.descuento_proyectado)
-        * (1 - (COALESCE(c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
-        * 1.19
+        * (1 - (COALESCE(o.pronto_pago, c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
+        * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
       ), 0))::numeric                                                                           AS proyectado_esperado
     FROM v2.proyecciones p
     JOIN v2.contratos  c ON p.contrato_id  = c.id
+    JOIN v2.locales    u ON c.local_id     = u.id
     JOIN v2.inquilinos t ON c.inquilino_id = t.id
+    LEFT JOIN siesa_raw.ocupacion o ON o.loc = u.unidad
     WHERE p.anio = ${year}
       AND p.empresa_id = '${empresaId}'::uuid
     GROUP BY p.mes
@@ -210,7 +240,7 @@ export async function getProyeccionMensual(empresaId: string, year: number): Pro
       prontoPago:          Number(row?.pronto_pago          ?? 0),
       baseNeta:            Number(row?.base_neta            ?? 0),
       iva:                 Number(row?.iva                  ?? 0),
-      proyectado:          Number(row?.proyectado           ?? 0),
+      proyectadoPiso:      Number(row?.proyectado_piso      ?? 0),
       ppEsperado:          Number(row?.pp_esperado          ?? 0),
       proyectadoEsperado:  Number(row?.proyectado_esperado  ?? 0),
     }
@@ -240,20 +270,17 @@ export async function getContractsForProjection(
       c.local_id                                      AS unit_id,
       u.unidad                                        AS unit_number,
       COALESCE(t.nombre_corto, t.razon_social)        AS cliente_name,
-      COALESCE(c.descuento_pct, 0)::numeric           AS descuento_pct,
-      COALESCE(c.pronto_pago_pct, 0)::numeric         AS pronto_pago_pct,
+      COALESCE(o.descuento, c.descuento_pct, 0)::numeric  AS descuento_pct,
+      COALESCE(o.pronto_pago, c.pronto_pago_pct, 0)::numeric AS pronto_pago_pct,
+      c.descuento_phase_pct::numeric                  AS descuento_phase_pct,
+      c.descuento_hasta_mes::int                      AS descuento_hasta_mes,
       COALESCE(lp.last_canon, c.canon_base)::numeric  AS last_canon,
-      COALESCE(
-        CASE WHEN lp.last_canon > 0
-             THEN ROUND(lp.last_descuento / lp.last_canon * 100, 2)
-             ELSE 0 END,
-        c.descuento_pct
-      )::numeric                                      AS last_descuento_pct,
       COALESCE(lp.last_year, ${targetYear - 1})       AS last_year,
       COALESCE(lp.last_month, 12)                     AS last_month
     FROM v2.contratos  c
     JOIN v2.inquilinos t ON c.inquilino_id = t.id
     JOIN v2.locales    u ON c.local_id     = u.id
+    LEFT JOIN siesa_raw.ocupacion o ON o.loc = u.unidad
     LEFT JOIN last_proj lp ON lp.contrato_id = c.id
     WHERE c.empresa_id = '${empresaId}'::uuid
       AND c.estado IN ('activo', 'critico')
@@ -267,15 +294,16 @@ export async function getContractsForProjection(
   `)
 
   return (rows as Array<Record<string, unknown>>).map((r) => ({
-    contractId:       String(r.contract_id),
-    unitId:           String(r.unit_id),
-    unitNumber:       String(r.unit_number),
-    clienteName:      String(r.cliente_name),
-    descuentoPct:     Number(r.descuento_pct),
-    prontoPagoPct:    Number(r.pronto_pago_pct),
-    lastCanon:        Number(r.last_canon),
-    lastDescuentoPct: Number(r.last_descuento_pct),
-    lastYear:         Number(r.last_year),
-    lastMonth:        Number(r.last_month),
+    contractId:        String(r.contract_id),
+    unitId:            String(r.unit_id),
+    unitNumber:        String(r.unit_number),
+    clienteName:       String(r.cliente_name),
+    descuentoPct:      Number(r.descuento_pct),
+    prontoPagoPct:     Number(r.pronto_pago_pct),
+    descuentoPhasePct: r.descuento_phase_pct == null ? null : Number(r.descuento_phase_pct),
+    descuentoHastaMes: r.descuento_hasta_mes == null ? null : Number(r.descuento_hasta_mes),
+    lastCanon:         Number(r.last_canon),
+    lastYear:          Number(r.last_year),
+    lastMonth:         Number(r.last_month),
   }))
 }

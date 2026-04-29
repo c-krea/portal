@@ -1,4 +1,5 @@
-import { execute, supabaseAdmin } from "@/lib/db/executor"
+import { execute } from "@/lib/db/executor"
+import { assertPeriodo, assertUuid } from "@/lib/security/validators"
 
 export type UnitWithMeter = {
   unitId: string
@@ -11,19 +12,6 @@ export type UnitWithMeter = {
   lastTotal: number | null
 }
 
-export type MeterReadingRow = {
-  id: string
-  unitId: string
-  unitNumber: string
-  periodo: string
-  lecturaAnterior: number
-  lecturaActual: number
-  kwh: number
-  tarifaKwh: number
-  totalEnergia: number
-  notas: string | null
-}
-
 export type MedidorAdminRow = {
   unitId: string
   unitNumber: string
@@ -34,14 +22,31 @@ export type MedidorAdminRow = {
   totalEnergia: number | null
   status: "registrada" | "sin_lectura"
   readingId: string | null
-  validationStatus: "pendiente" | "aprobado" | "revision" | "sin_lectura" | null
+  validationStatus: "pendiente" | "aprobado" | "revision" | "critico" | "sin_lectura" | null
   fotoUrl: string | null
+}
+
+export async function getMeterYears(): Promise<number[]> {
+  const rows = await execute(`
+    SELECT DISTINCT SUBSTRING(periodo, 1, 4)::int AS y
+    FROM v2.lecturas_medidor
+    UNION
+    SELECT DISTINCT SUBSTRING(periodo, 1, 4)::int AS y
+    FROM v2.facturas_energia
+    ORDER BY y
+  `)
+  const years = (rows as Array<Record<string, unknown>>).map((r) => Number(r.y))
+  const currentYear = new Date().getFullYear()
+  if (!years.includes(currentYear)) years.push(currentYear)
+  return years.sort()
 }
 
 export async function getMedidoresAdmin(
   empresaId: string,
   periodo: string,
 ): Promise<MedidorAdminRow[]> {
+  assertUuid(empresaId)
+  assertPeriodo(periodo)
   const rows = await execute(`
     SELECT
       u.id                                               AS unit_id,
@@ -99,6 +104,7 @@ export async function getMedidoresAdmin(
 }
 
 export async function getUnitsWithMeters(empresaId: string): Promise<UnitWithMeter[]> {
+  assertUuid(empresaId)
   const rows = await execute(`
     SELECT
       u.id                                               AS unit_id,
@@ -135,72 +141,4 @@ export async function getUnitsWithMeters(empresaId: string): Promise<UnitWithMet
     lastKwh:     r.last_kwh != null ? Number(r.last_kwh) : null,
     lastTotal:   r.last_total != null ? Number(r.last_total) : null,
   }))
-}
-
-export async function getMeterReadings(
-  empresaId: string,
-  periodo?: string,
-): Promise<MeterReadingRow[]> {
-  const rows = await execute(`
-    SELECT
-      mr.id,
-      mr.local_id                       AS unit_id,
-      u.unidad                          AS unit_number,
-      mr.periodo,
-      mr.lectura_anterior::numeric      AS lectura_anterior,
-      mr.lectura_actual::numeric        AS lectura_actual,
-      mr.kwh::numeric                   AS kwh,
-      mr.tarifa_kwh::numeric            AS tarifa_kwh,
-      mr.total_energia::numeric         AS total_energia,
-      mr.notas
-    FROM v2.lecturas_medidor mr
-    JOIN v2.locales u ON mr.local_id = u.id
-    WHERE mr.empresa_id = '${empresaId}'::uuid
-      ${periodo ? `AND mr.periodo = '${periodo}'` : ``}
-    ORDER BY mr.periodo DESC, u.unidad
-  `)
-
-  return (rows as Array<Record<string, unknown>>).map((r) => ({
-    id:              String(r.id),
-    unitId:          String(r.unit_id),
-    unitNumber:      String(r.unit_number),
-    periodo:         String(r.periodo),
-    lecturaAnterior: Number(r.lectura_anterior),
-    lecturaActual:   Number(r.lectura_actual),
-    kwh:             Number(r.kwh),
-    tarifaKwh:       Number(r.tarifa_kwh),
-    totalEnergia:    Number(r.total_energia),
-    notas:           r.notas ? String(r.notas) : null,
-  }))
-}
-
-export async function upsertMeterReading(reading: {
-  empresaId: string
-  unitId: string
-  periodo: string
-  lecturaAnterior: string
-  lecturaActual: string
-  kwh: string
-  tarifaKwh: string
-  totalEnergia: string
-  notas: string | null
-}): Promise<void> {
-  const { error } = await supabaseAdmin
-    .schema("v2")
-    .from("lecturas_medidor")
-    .upsert(
-      {
-        empresa_id:       reading.empresaId,
-        local_id:         reading.unitId,
-        periodo:          reading.periodo,
-        lectura_anterior: reading.lecturaAnterior,
-        lectura_actual:   reading.lecturaActual,
-        kwh:              reading.kwh,
-        tarifa_kwh:       reading.tarifaKwh,
-        total_energia:    reading.totalEnergia,
-        notas:            reading.notas,
-      },
-      { onConflict: "local_id,periodo" },
-    )
-  if (error) throw new Error(error.message)
 }

@@ -1,4 +1,5 @@
 import { execute } from "@/lib/db/executor"
+import { assertPeriodo, assertUuid } from "@/lib/security/validators"
 
 export const ELECTRICITY_GROUPS = [
   { group: "CRA2710065", direccion: "Cra 27 10 65 (F2)",       proveedor: "NUE"       },
@@ -27,6 +28,8 @@ export async function getElectricityInvoices(
   empresaId: string,
   periodo: string,
 ): Promise<ElectricityInvoice[]> {
+  assertUuid(empresaId)
+  assertPeriodo(periodo)
   const rows = await execute(`
     SELECT
       id,
@@ -65,6 +68,9 @@ export async function getElectricityTarifaForUnit(
   unitId: string,
   periodo: string,
 ): Promise<number> {
+  assertUuid(empresaId)
+  assertUuid(unitId)
+  assertPeriodo(periodo)
   const rows = await execute(`
     SELECT ei.tarifa_kwh::numeric AS tarifa_kwh
     FROM v2.facturas_energia ei

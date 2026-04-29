@@ -1,4 +1,6 @@
 import { execute } from "@/lib/db/executor"
+import { getGracePeriod } from "@/lib/data/configuracion"
+import { assertUuid, assertUnit } from "@/lib/security/validators"
 
 export type TenantDetail = {
   id: string
@@ -60,6 +62,8 @@ export type ContractPhaseItem = {
 }
 
 export async function getTenantDetail(tenantId: string, unitNumber?: string): Promise<TenantDetail | null> {
+  assertUuid(tenantId)
+  if (unitNumber) assertUnit(unitNumber)
   const unitFilter = unitNumber ? `AND u.unidad = '${unitNumber}'` : ""
   const rows = await execute(`
     SELECT
@@ -122,17 +126,30 @@ export type TenantContract = {
   fechaInicio: string | null
   fechaFin: string | null
   canonBase: number
+  canonReal: number
   descuentoPct: number
   prontoPagoPct: number
   descripcionDescuentos: string | null
 }
 
 export async function getTenantContracts(tenantId: string): Promise<TenantContract[]> {
+  assertUuid(tenantId)
+  const now = new Date()
+  const yr = now.getFullYear()
+  const mo = now.getMonth() + 1
+
   const rows = await execute(`
     SELECT
       c.id AS contract_id, c.estado AS contract_status,
       c.fecha_inicio, c.fecha_fin,
       COALESCE(c.canon_base, 0)::numeric        AS canon_base,
+      COALESCE((
+        SELECT (pr.canon_proyectado - pr.descuento_proyectado)
+             * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
+        FROM v2.proyecciones pr
+        WHERE pr.contrato_id = c.id AND pr.anio = ${yr} AND pr.mes = ${mo}
+        LIMIT 1
+      ), 0)::numeric                            AS canon_real,
       COALESCE(c.descuento_pct, 0)::numeric     AS descuento_pct,
       COALESCE(c.pronto_pago_pct, 0)::numeric   AS pronto_pago_pct,
       c.descripcion_descuentos,
@@ -141,6 +158,7 @@ export async function getTenantContracts(tenantId: string): Promise<TenantContra
       u.area_m2::numeric AS area_m2,
       u.clasificacion
     FROM v2.contratos c
+    JOIN v2.inquilinos t ON t.id = c.inquilino_id
     LEFT JOIN v2.locales u ON c.local_id = u.id
     WHERE c.inquilino_id = '${tenantId}'
       AND c.estado IN ('activo', 'critico', 'vencido', 'terminado')
@@ -156,6 +174,7 @@ export async function getTenantContracts(tenantId: string): Promise<TenantContra
     fechaInicio: r.fecha_inicio ? String(r.fecha_inicio) : null,
     fechaFin: r.fecha_fin ? String(r.fecha_fin) : null,
     canonBase: Number(r.canon_base ?? 0),
+    canonReal: Number(r.canon_real ?? 0),
     descuentoPct: Number(r.descuento_pct ?? 0),
     prontoPagoPct: Number(r.pronto_pago_pct ?? 0),
     descripcionDescuentos: r.descripcion_descuentos ? String(r.descripcion_descuentos) : null,
@@ -163,7 +182,12 @@ export async function getTenantContracts(tenantId: string): Promise<TenantContra
 }
 
 export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]> {
+  assertUuid(tenantId)
+  const grace = await getGracePeriod()
   const rows = await execute(`
+    WITH r AS (
+      SELECT valor::numeric AS rate FROM v2.reglas_financieras WHERE clave = 'interes_mora_diario' LIMIT 1
+    )
     SELECT
       row_id::text                                AS id,
       factura                                     AS siesa_factura,
@@ -171,7 +195,8 @@ export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]>
       fecha_vencimiento                           AS fecha_vence,
       COALESCE(dias_mora, 0)                      AS dias_mora,
       COALESCE(saldo, 0)::numeric                 AS saldo,
-      COALESCE(vr_vencido, 0)::numeric            AS valor_vencido
+      COALESCE(vr_vencido, 0)::numeric            AS valor_vencido,
+      (COALESCE(saldo, 0) * GREATEST(0, COALESCE(dias_mora, 0) - ${grace}) * (SELECT rate FROM r))::numeric AS interes
     FROM v2.vista_cartera_actual
     WHERE inquilino_id = '${tenantId}'
     ORDER BY fecha_vencimiento DESC NULLS LAST
@@ -184,13 +209,47 @@ export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]>
     diasMora: Number(r.dias_mora ?? 0),
     saldo: Number(r.saldo ?? 0),
     valorVencido: Number(r.valor_vencido ?? 0),
-    interesAcumulado: 0,
+    interesAcumulado: Number(r.interes ?? 0),
     observacion: null,
   }))
 }
 
 export async function getTenantPayments(tenantId: string): Promise<PagoHistorialItem[]> {
+  assertUuid(tenantId)
   const rows = await execute(`
+    WITH standalones AS (
+      SELECT p.docto, p.cruce, p.valor_final, p.fecha_recaudo,
+             date_trunc('month', p.fecha_recaudo)::date AS m
+      FROM v2.vista_pagos p
+      WHERE p.inquilino_id = '${tenantId}'
+        AND p.docto LIKE '001-%'
+        AND NOT EXISTS (
+          SELECT 1 FROM v2.vista_pagos p2
+          WHERE p2.inquilino_id = p.inquilino_id
+            AND p2.cruce = p.cruce
+            AND p2.docto = REPLACE(p.docto, '001-', '')
+            AND p2.valor_final = p.valor_final
+        )
+    ),
+    standalone_month_totals AS (
+      SELECT m, SUM(valor_final) AS standalone_total
+      FROM standalones GROUP BY m
+    ),
+    elec_per_month AS (
+      SELECT (TO_DATE(mr.periodo || '-01', 'YYYY-MM-DD') + INTERVAL '1 month')::date AS m,
+             SUM(mr.total_energia) AS elec_total
+      FROM v2.contratos c
+      JOIN v2.locales u ON u.id = c.local_id
+      JOIN v2.lecturas_medidor mr ON mr.local_id = u.id
+      WHERE c.inquilino_id = '${tenantId}'
+        AND c.estado IN ('activo','critico','vencido','terminado')
+      GROUP BY mr.periodo
+    ),
+    months_to_drop AS (
+      SELECT smt.m FROM standalone_month_totals smt
+      JOIN elec_per_month e ON e.m = smt.m
+      WHERE ABS(smt.standalone_total - e.elec_total) <= 50
+    )
     SELECT
       ROW_NUMBER() OVER (ORDER BY fecha_recaudo DESC, docto, cruce)::text AS id,
       fecha_recaudo,
@@ -199,10 +258,20 @@ export async function getTenantPayments(tenantId: string): Promise<PagoHistorial
       COALESCE(valor_final, 0)::numeric           AS valor_final,
       docto                                       AS siesa_docto,
       cruce                                       AS siesa_cruce
-    FROM v2.vista_pagos
-    WHERE inquilino_id = '${tenantId}'
+    FROM v2.vista_pagos p
+    WHERE p.inquilino_id = '${tenantId}'
+      AND NOT (
+        p.docto LIKE '001-%'
+        AND date_trunc('month', p.fecha_recaudo)::date IN (SELECT m FROM months_to_drop)
+        AND NOT EXISTS (
+          SELECT 1 FROM v2.vista_pagos p2
+          WHERE p2.inquilino_id = p.inquilino_id
+            AND p2.cruce = p.cruce
+            AND p2.docto = REPLACE(p.docto, '001-', '')
+            AND p2.valor_final = p.valor_final
+        )
+      )
     ORDER BY fecha_recaudo DESC
-    LIMIT 50
   `)
   return rows.map((r) => ({
     id: String(r.id),

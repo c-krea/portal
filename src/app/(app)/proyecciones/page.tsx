@@ -54,16 +54,16 @@ export default async function ProyeccionesPage() {
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">PP esperado</p>
-          <p className="mt-1 text-sm sm:text-xl font-bold text-amber-600 tabular-nums">− {formatCOP(breakdown.ppEsperado)}</p>
-          <p className="mt-0.5 text-xs text-slate-400">Descuento PP por historial</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Bonus PP no usado</p>
+          <p className="mt-1 text-sm sm:text-xl font-bold text-emerald-600 tabular-nums">+ {formatCOP(breakdown.netoEsperado - breakdown.pisoConIVA)}</p>
+          <p className="mt-0.5 text-xs text-slate-400">Pagos fuera de plazo (no toman PP)</p>
         </div>
 
         <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 sm:p-5 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wider text-blue-600">Recaudo esperado</p>
           <p className="mt-1 text-sm sm:text-xl font-bold text-blue-900 tabular-nums">{formatCOP(breakdown.netoEsperado)}</p>
           <p className="mt-0.5 text-xs text-blue-500">
-            Máx. {formatCOP(breakdown.netoConIVA)}
+            Piso {formatCOP(breakdown.pisoConIVA)}
           </p>
         </div>
       </div>
@@ -74,11 +74,12 @@ export default async function ProyeccionesPage() {
           <span className="font-medium text-slate-700">Cómo se calcula:</span>
           {" "}Canon bruto <span className="font-mono font-medium text-slate-900">{formatCOP(breakdown.canonBruto)}</span>
           {" "}− Dcto. fase <span className="font-mono font-medium text-rose-600">{formatCOP(breakdown.totalDescuentos)}</span>
-          {" "}= Base neta <span className="font-mono font-medium text-slate-900">{formatCOP(breakdown.canonBruto - breakdown.totalDescuentos)}</span>
-          {" "}× 1.19 IVA = <span className="font-mono font-medium text-slate-700">{formatCOP(breakdown.netoConIVA)}</span>
-          {" "}− PP esperado <span className="font-mono font-medium text-amber-600">{formatCOP(breakdown.ppEsperado)}</span>
-          {" "}= <span className="font-mono font-bold text-blue-700">{formatCOP(breakdown.netoEsperado)}</span>
-          <span className="ml-3 text-slate-400">· PP aplicado según historial de pago de cada cliente</span>
+          {" "}− PP máx <span className="font-mono font-medium text-slate-700">10% sobre base</span>
+          {" "}× <span className="font-mono font-medium text-slate-700">1.19 PN / 1.155 PJ</span>
+          {" "}= Piso <span className="font-mono font-medium text-slate-700">{formatCOP(breakdown.pisoConIVA)}</span>
+          {" "}+ PP no usado <span className="font-mono font-medium text-emerald-600">{formatCOP(breakdown.netoEsperado - breakdown.pisoConIVA)}</span>
+          {" "}= Esperado <span className="font-mono font-bold text-blue-700">{formatCOP(breakdown.netoEsperado)}</span>
+          <span className="ml-3 text-slate-400">· Piso = todos pagan a tiempo · Esperado usa historial · PJ retiene 3.5%</span>
         </p>
       </div>
 
@@ -100,7 +101,7 @@ export default async function ProyeccionesPage() {
             Detalle por local — {detalle.length} contratos
           </p>
         </div>
-        <DetalleTable data={detalle} />
+        <DetalleTable data={detalle} year={year} />
       </div>
 
       {/* ── Floating generate button ── */}

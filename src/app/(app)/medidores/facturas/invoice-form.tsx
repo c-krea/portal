@@ -105,7 +105,6 @@ export function InvoiceForm({
                       placeholder="0"
                       min={0}
                       step={1}
-                      required
                       className="w-40 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </td>
@@ -118,7 +117,6 @@ export function InvoiceForm({
                       placeholder="0"
                       min={0}
                       step={0.01}
-                      required
                       className="w-32 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </td>

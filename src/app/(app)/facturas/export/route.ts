@@ -1,5 +1,6 @@
 import { execute } from "@/lib/db/executor"
 import { NextRequest, NextResponse } from "next/server"
+import { isValidPeriodo } from "@/lib/security/validators"
 
 /**
  * GET /facturas/export?periodo=YYYY-MM
@@ -11,7 +12,8 @@ import { NextRequest, NextResponse } from "next/server"
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const periodo = searchParams.get("periodo")
+  const rawPeriodo = searchParams.get("periodo")
+  const periodo = isValidPeriodo(rawPeriodo) ? rawPeriodo : null
   const periodoInt = periodo ? Number(periodo.replace("-", "")) : null
 
   const rows = await execute(`

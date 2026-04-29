@@ -1,8 +1,9 @@
 "use server"
 
-import { supabaseAdmin } from "@/lib/db/executor"
+import { execute, supabaseAdmin } from "@/lib/db/executor"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { ELECTRICITY_GROUPS } from "@/lib/data/electricity"
+import { assertPeriodo, assertUuid } from "@/lib/security/validators"
 import { revalidatePath } from "next/cache"
 
 export interface FacturaInput {
@@ -24,8 +25,10 @@ export async function saveFacturasEnergia(
 ): Promise<SaveFacturasState> {
   const periodo = formData.get("periodo") as string
   if (!periodo) return { error: "Periodo requerido" }
+  assertPeriodo(periodo)
 
   const empresaId = await getEmpresaCkreaId()
+  assertUuid(empresaId)
 
   const rows: FacturaInput[] = ELECTRICITY_GROUPS.map(({ group }) => ({
     electricity_group: group,
@@ -35,18 +38,23 @@ export async function saveFacturasEnergia(
     notas:          String(formData.get(`notas_${group}`) ?? ""),
   }))
 
-  for (const r of rows) {
-    if (r.valor_factura <= 0 || r.kwh_factura <= 0) {
-      const meta = ELECTRICITY_GROUPS.find(g => g.group === r.electricity_group)
-      return { error: `Completa valor y kWh para ${meta?.direccion ?? r.electricity_group}` }
-    }
+  const filled = rows.filter((r) => r.valor_factura > 0 && r.kwh_factura > 0)
+  const partial = rows.filter(
+    (r) => (r.valor_factura > 0) !== (r.kwh_factura > 0),
+  )
+  if (partial.length > 0) {
+    const meta = ELECTRICITY_GROUPS.find(g => g.group === partial[0].electricity_group)
+    return { error: `Completa valor Y kWh (o deja ambos vacíos) para ${meta?.direccion ?? partial[0].electricity_group}` }
+  }
+  if (filled.length === 0) {
+    return { error: "Ingresa al menos una factura para guardar" }
   }
 
   const groupMeta = Object.fromEntries(
     ELECTRICITY_GROUPS.map(g => [g.group, g])
   )
 
-  for (const r of rows) {
+  for (const r of filled) {
     const meta = groupMeta[r.electricity_group]
     const tarifa = r.valor_factura / r.kwh_factura
 
@@ -73,6 +81,25 @@ export async function saveFacturasEnergia(
     if (error) return { error: `Error guardando ${meta.direccion}: ${error.message}` }
   }
 
+  // Propagate new tarifas to existing lecturas for this period.
+  // Recompute total_energia from kwh × tarifa so portal/admin views match the saved bills.
+  const filledGroups = filled.map((r) => `'${r.electricity_group}'`).join(",")
+  await execute(`
+    UPDATE v2.lecturas_medidor lm
+    SET tarifa_kwh    = fe.tarifa_kwh,
+        total_energia = ROUND(lm.kwh * fe.tarifa_kwh)
+    FROM v2.facturas_energia fe,
+         v2.locales u
+    WHERE lm.empresa_id    = '${empresaId}'::uuid
+      AND lm.periodo       = '${periodo}'
+      AND lm.local_id      = u.id
+      AND u.grupo_energia  = fe.grupo_energia
+      AND fe.empresa_id    = '${empresaId}'::uuid
+      AND fe.periodo       = '${periodo}'
+      AND fe.grupo_energia IN (${filledGroups})
+  `)
+
   revalidatePath("/medidores/facturas")
+  revalidatePath("/medidores")
   return { success: true }
 }
