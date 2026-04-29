@@ -47,6 +47,37 @@ Branch `refactor/v2-migration` merged to `main` via `--no-ff` (commit `2532efb`)
 
 ---
 
+## [Unreleased] — 2026-04-28 (Phase J — Session 41)
+
+### Changed — `v2.sync_desde_raw()` now UPSERT (was INSERT-only)
+The cron sync function (`/api/cron/sync-v2`, daily 05:30 COT) replaces every `ON CONFLICT DO NOTHING` with proper UPSERT. ERP changes to `razon_social`, unit code/entrada/estado, contract canon/discount/PP/flags/estado now refresh in `v2.*` instead of staying frozen at first-insert value. Closes the staleness gap that caused Phase I's manual cleanup.
+
+**Per-table behavior:**
+- `inquilinos`: refresh `razon_social` on `(empresa_id, nit)` conflict. Portal-only fields (`nombre_corto`, `juridica`, `pp_historico_*`, contacto, notas) untouched.
+- `locales`: refresh `unidad`/`entrada`/`estado='arrendado'` on `(empresa_id, codigo)` conflict. **No freeze** on `oficina`/`mantenimiento` — ERP is source of truth (building reorg in progress; portal stops second-guessing).
+- `contratos`: refresh ALL ERP fields (`fecha_inicio`, `lista_precios`, `canon_base`, `descuento_pct`, `pronto_pago_pct`, 4 flags, `estado`) on `(inquilino_id, local_id)` match. **No freeze** on `terminado`/`vencido` — sync can rescue a contract wrongly marked terminado in portal. Portal-only fields (`fecha_fin`, `incremento_ipc`, `descripcion_descuentos`) untouched.
+- All UPDATEs filtered with `IS DISTINCT FROM` — no-op rows skipped, idempotency holds.
+- **No DELETE** — ex-tenants stay until "Ya salieron" UI is built (deferred per German + IT decision).
+
+### Fixed — non-deterministic `nit_razon` (caught during Phase J validation)
+First idempotency run produced 2 stray inquilino updates per cycle. Root cause: `siesa_raw.cartera.cliente` and `siesa_raw.recaudo.cliente` carry both clean names (`MORA BARRERA BETURIA`) and dirty variants (`MORA BARRERA BETURIA - CREDITO A 60 DIAS PP 5% 30 DIAS`) on the same `fecha_factura`/`fecha_recaudo`. `DISTINCT ON (nit) ORDER BY nit, dt DESC` picked one non-deterministically each run → 16 NITs flickering. Fix: source priority (`ocupacion` → `recaudo` → `cartera`, since `ocupacion.razon_social` is IT-curated and clean) + final `razon_social ASC` tiebreaker. Six inquilinos settled to clean ocupacion names on first re-run; subsequent runs = 0 changes.
+
+### Verified
+- Pre-state: `inquilinos=90`, `locales=84`, `contratos=76`, ocupacion=84.
+- First run: 0/45/0/2/0/63 (inserted/updated per inquilinos/locales/contratos).
+- Run 2: 0/2/0/0/0/0 (idempotency bug surfaced) → fixed → run 4: 0/6/0/0/0/0 (one-time settle) → run 5+6: all zeros ✅.
+- Audit gate (Phase I LEFT JOIN pattern): 0 orphans in inquilinos/locales/contratos. Counts unchanged 90/84/76.
+
+### Backups
+- `backups/sync_desde_raw_pre_J.sql` — rollback path (paste & run to revert).
+- `backups/sync_desde_raw_phase_J.sql` — final shipped version (matches DB).
+
+### Follow-ups (open)
+- **Speed up cron after one cycle in prod** — Hobby plan caps at 1×/day, confirmed via Vercel docs (`Hobby accounts are limited to daily cron jobs. This cron expression would run more than once per day`). Options: upgrade Pro ($20/mo, every-minute precision) or external cron (cron-job.org / GitHub Actions) hitting `/api/cron/sync-v2` 3×/day. Stay Hobby for now, add manual "Sync now" admin button later.
+- **Multi-row contratos guard** — current UPDATE matches any row with `(inquilino_id, local_id)`. If a future renewal creates a `terminado` C1 + `activo` C2 for the same pair, sync will clobber both. Not possible today (76 contracts, 0 terminado). Add `c.estado IN (activo,critico) OR c.fecha_fin IS NULL` filter when first historical terminado lands.
+
+---
+
 ## [Unreleased] — 2026-04-28 (Phase I — Session 40)
 
 ### Fixed — v2 aligned to siesa_raw truth (Excel residue purged)

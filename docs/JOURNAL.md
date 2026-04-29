@@ -2,6 +2,55 @@
 
 ---
 
+## Session 41 — 2026-04-28: Phase J — sync UPSERT (refresh only)
+
+### Goal
+Replace `v2.sync_desde_raw()` INSERT-only with UPSERT so ERP changes (rent, estado, flags) actually reach the portal. Closes the staleness gap that caused Phase I's manual cleanup.
+
+### Scope decisions (with German)
+- All 3 v2 tables sourced from siesa_raw get UPSERT: `inquilinos`, `locales`, `contratos`. Recaudo/cartera/documentos already exposed via vistas — no copy, no sync needed.
+- **No freeze on locales `oficina`/`mantenimiento`** — building reorg in progress, ERP wins. (Initial draft had a CASE protecting them; German removed it.)
+- **No freeze on contratos `terminado`/`vencido`** — sync can rescue a wrongly-set terminado. Trade-off acknowledged: future multi-row scenarios (historical terminado + new activo same pair) clobber both. Not possible today (0 terminado).
+- **No DELETE** — deferred. Ex-tenants stay until "Ya salieron" UI lands (WOR-75 / IT decision).
+
+### What shipped
+`v2.sync_desde_raw()` rewritten as `CREATE OR REPLACE`:
+- inquilinos: `ON CONFLICT (empresa_id, nit) DO UPDATE` refresh `razon_social` only. Portal-only fields preserved.
+- locales: `ON CONFLICT (empresa_id, codigo) DO UPDATE` refresh `unidad`/`entrada`/`estado='arrendado'`. No estado freeze.
+- contratos: separate UPDATE/INSERT (no UNIQUE constraint to use ON CONFLICT). Match on `(inquilino_id, local_id)` regardless of estado. NOT EXISTS check on insert blocks dupes.
+- Every UPDATE has `IS DISTINCT FROM` filter → idempotent.
+- Return JSON now includes `*_inserted` AND `*_updated` per table.
+
+Final SQL: `backups/sync_desde_raw_phase_J.sql`. Rollback: `backups/sync_desde_raw_pre_J.sql`.
+
+### ⚠️ Gotcha — non-deterministic `nit_razon` flicker
+First idempotency run was NOT zero: 2 inquilinos kept flipping. Investigation revealed `siesa_raw.cartera.cliente` and `recaudo.cliente` carry both clean names AND dirty `"<NAME> - CREDITO A 60 DIAS PP 5%"` variants on the same date for 16 NITs. `DISTINCT ON (nit) ORDER BY nit, dt DESC NULLS LAST` picked one non-deterministically per run.
+
+**Fix:** source priority — `ocupacion` (IT-curated, clean) > `recaudo` > `cartera`, with final `razon_social ASC` tiebreaker. Six inquilinos settled to clean ocupacion names on the next run; subsequent runs = 0.
+
+### 💡 Learning — `DISTINCT ON` needs deterministic ORDER BY
+Any `DISTINCT ON` whose ordering can produce ties is a latent idempotency bug. Always add a fully-deterministic tiebreaker (alphabetic or numeric ID), or upstream data needs to be ranked. Cost of the bug: function silently looks "almost idempotent" but pollutes audit telemetry forever and produces phantom diffs that hide real changes.
+
+### Verified
+- Pre: 90 inquilinos / 84 locales / 76 contratos.
+- Run 1: 0/45/0/2/0/63. (Big refresh — Excel residue + flag drift since Phase G.)
+- Run 2: 0/2/0/0/0/0 → exposed bug.
+- Run 4 (post-fix): 0/6/0/0/0/0.
+- Run 5–6: 0/0/0/0/0/0 ✅.
+- Audit gate: 0 orphans across inquilinos/locales/contratos. Counts unchanged 90/84/76.
+
+### Pending follow-ups
+- **Sync frequency** — Hobby caps cron at 1×/day (verified Vercel docs). Stay Hobby + Phase J UPSERT now; revisit Pro upgrade or external cron (cron-job.org / GitHub Actions) when 24h lag bites. Manual "Sync now" admin button is the cheap workaround.
+- **Multi-row contratos guard** — add when first `terminado` lands.
+
+### Session-end pointers
+- ADRs: none
+- Lessons: feedback_v2_excel_residue.md updated (Phase J closes refresh gap), new feedback_distinct_on_deterministic.md (DISTINCT ON tiebreaker rule)
+- State: project_state.md unchanged
+- Linear: none — Phase J was task #47, not a Linear issue
+
+---
+
 ## Session 40 — 2026-04-28: Phase I — align v2 to Siesa truth
 
 ### Goal
