@@ -6,6 +6,53 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [Unreleased] — 2026-04-28 (Phase K — Session 42)
+
+### Removed — `public` schema collapsed to copilot-only
+Final cleanup pass after Phase G's portal migration. `public` had carried 4 dead helper fns, an event trigger, 1 unused table, 11 zombie enums, and a 2-table footprint that duplicated `v2.profiles`/`v2.lecturas_medidor`. All dropped. `public` now contains only the WhatsApp copilot prototype (frozen for demo) + `exec_sql` RPC + `handle_new_user` auth trigger.
+
+**K.1 — table drop:**
+- `public.electricity_invoices` (0 rows, 0 code refs, dead since creation).
+
+**K.4 — auth trigger rewrite:**
+- `public.handle_new_user()` no longer dual-writes `public.profiles`. Writes only `v2.perfiles`. Role mapping (legacy `admin/finance/viewer/tenant` → `v2.rol_usuario` Spanish) preserved.
+
+**K.5 — duplicate tables:**
+- `DROP TABLE public.profiles CASCADE` (7 rows, all mirrored in `v2.perfiles`). Cascade also dropped: 2 RLS policies (`policy_select_profiles`, `policy_update_profiles`), `set_updated_at` trigger, FK from `public.meter_readings.submitted_by`.
+- `DROP TABLE public.meter_readings CASCADE` (1180 rows; 1178 mirrored in `v2.lecturas_medidor`, 2 orphans tied to a Phase I-deleted local — intentional drop). Cascade also dropped: `meter_readings_company_isolation` RLS policy, `set_updated_at_meter_readings` trigger.
+
+**K.6 — orphan helpers + zombies:**
+- 4 `public.user_*()` SECURITY DEFINER fns (read `public.profiles` which no longer exists): `user_company_id`, `user_role`, `user_tenant_id`.
+- `public.update_updated_at()` (broken — both triggers using it died in K.5).
+- `public.get_collections_dedup(uuid,date,date)` (references `public.payments`, dropped in Phase F; preserved in archive).
+- `public.rls_auto_enable()` event trigger fn + `ensure_rls` event trigger (auto-enable RLS on new `public.*` tables — irrelevant now that we don't create `public.*` tables).
+- 11 zombie enums detached since Phase F: `audit_action`, `contract_status`, `gasto_allocation_method`, `gasto_category`, `invoice_status`, `line_item_type`, `payment_status`, `sync_direction`, `sync_status`, `unit_status`, `user_role`.
+
+### Verified
+- `npm run build` clean post-K.6.
+- v2 vistas counts unchanged: `vista_pagos=2701`, `vista_facturas=419`, `vista_cartera_actual=39`, `vista_mora_buckets=1`.
+- `v2.sync_desde_raw()` re-run = 0/0/0/0/0/0 (idempotent, no regression from Phase J).
+- Final `public` surface: 2 tables (`agent_chat_history`, `agent_budget_state` — copilot, frozen) + 2 functions (`exec_sql`, `handle_new_user`).
+
+### Backups
+All in `backups/phase_K_pre/` (gitignored, local rollback only):
+- `electricity_invoices_pre.sql` — DDL.
+- `handle_new_user_pre.sql` — original dual-write fn.
+- `profiles_pre.sql` — DDL + 7 user INSERTs (depends on `public.user_role` enum recreate).
+- `meter_readings_pre.sql` — DDL + 2-orphan manifest.
+- `public_helpers_pre.sql` — 4 user_* fns + update_updated_at + rls_auto_enable + ensure_rls + zombie enum list.
+
+### Decision — schema rename rejected
+German asked whether to swap `public ↔ v2` (rename `public → copilot`, then `v2 → public`) so the canonical schema is the default. Rejected:
+- 36 portal files would need `.schema('v2')` removed (Phase G investment wasted).
+- `auth.users → public.handle_new_user` and `supabase.rpc('exec_sql')` are bound to `public` by name; renaming requires either keeping `public` alive as a redirect or rewiring both. Rewiring risk > naming-aesthetic benefit.
+- Conclusion: `v2.*` stays canonical via explicit `.schema('v2')`. `public` stays as the legacy/copilot namespace.
+
+### Decision — copilot prototype frozen
+WhatsApp copilot (separate Docker repo at `integracion_supabase/`) is shelved. Tables `agent_chat_history` + `agent_budget_state` stay live so the prototype can be demoed; no further development. Tasks #8 (Phase H), #57 (K.2), #58 (K.3), #62 (K.7) abandoned.
+
+---
+
 ## [Unreleased] — 2026-04-28 (Phase G complete — Session 38)
 
 ### Added

@@ -2,6 +2,52 @@
 
 ---
 
+## Session 42 — 2026-04-28: Phase K — `public` schema cleanup (final)
+
+### Goal
+After Phase G migrated the portal to `v2.*`, `public` still held dead helpers, an event trigger, 11 zombie enums, and 2 tables that duplicated v2 (`profiles`, `meter_readings`). Drop everything that wasn't load-bearing so `public` is reduced to the copilot prototype + the two RPCs that auth/Supabase actually need.
+
+### What shipped (4 sub-phases, all DB-only)
+- **K.1** — `DROP TABLE public.electricity_invoices` (empty, 0 refs).
+- **K.4** — `handle_new_user()` rewritten: removed `INSERT INTO public.profiles` block, kept `v2.perfiles` write + role-text-to-`v2.rol_usuario` mapping. K.4 is the prerequisite for K.5 (FK from public.profiles to auth.users blocks the drop otherwise).
+- **K.5** — `DROP TABLE public.profiles CASCADE` (7 rows, all mirrored to v2) + `DROP TABLE public.meter_readings CASCADE` (1180 rows; 1178 mirrored, 2 orphans tied to a Phase I-deleted local). CASCADE removed 3 RLS policies + 2 update_updated_at triggers + 1 FK.
+- **K.6** — Dropped 4 `user_*` helpers, `update_updated_at`, `get_collections_dedup`, `rls_auto_enable` fn + `ensure_rls` event trigger, 11 zombie enums.
+
+### 🎯 Decision — `public` ↔ `v2` rename rejected
+German floated swapping the schema names so `v2` becomes `public` (the default). I pushed back:
+- 36 portal files explicitly call `.schema('v2')` (Phase G's whole point). Rename would either break them or force another global edit.
+- `auth.users` trigger binds to `public.handle_new_user` by name. `supabase.rpc('exec_sql')` resolves only against `public`. Renaming `public` requires keeping a redirect schema or rewiring both. Rewiring risk > aesthetic gain.
+- Outcome: `v2.*` stays canonical via explicit `.schema('v2')`. `public` becomes the legacy/copilot namespace.
+
+### 🎯 Decision — copilot frozen, not deleted
+WhatsApp copilot lives in a separate Docker repo (`integracion_supabase/`, untracked nested git project). German confirmed it's a one-off demo prototype, not continuing. Decision: tables `agent_chat_history` + `agent_budget_state` stay live so the prototype runs for tomorrow's demo; no further development. Tasks #8 (Phase H), #57 (K.2), #58 (K.3), #62 (K.7) all abandoned.
+
+### 💡 Learning — DROP order matters when FKs and triggers cascade
+K.4 must run before K.5: `public.meter_readings.submitted_by` FKs to `public.profiles`, and `handle_new_user` writes to `public.profiles` on every signup. If K.5 ran first, the live trigger would error on next signup. Sequence: rewrite trigger → drop dependent table → drop primary table → drop helpers that read primary.
+
+### 💡 Learning — `ensure_rls` event trigger was a Phase G blind spot
+The event trigger auto-enabled RLS on every new `public.*` table created. Harmless, but invisible — easy to forget when auditing schema state. Scrubbed in K.6 since we're not creating `public.*` tables anymore. Worth a generic check next time a "what magic is running on schema events?" question comes up: `SELECT * FROM pg_event_trigger`.
+
+### ⚠️ Gotcha — 2 unmirrored `meter_readings` rows
+`public.meter_readings` had 1180 rows, `v2.lecturas_medidor` had 1178. Two orphans (`a8c0c5aa…`, `b44c07e8…`) pointed to deleted local `9286be5e…` — that local was a Phase I Excel-residue casualty (E1L126). Intentional drop, documented in `meter_readings_pre.sql` manifest. Reaffirms Phase I's orphan-cleanup choice.
+
+### Verified
+- `npm run build` clean post-K.6.
+- v2 vistas: `vista_pagos=2701`, `vista_facturas=419`, `vista_cartera_actual=39`, `vista_mora_buckets=1` (unchanged).
+- `v2.sync_desde_raw()` idempotent: 0/0/0/0/0/0.
+- Final `public` surface: 2 copilot tables + `exec_sql` + `handle_new_user`. Nothing else.
+
+### Pending follow-ups
+- None. Phase K closes the v2 migration arc that started with Phase F.
+
+### Session-end pointers
+- ADRs: none
+- Lessons: feedback_v2_excel_residue.md still applies (Phase K removed the last public residue path; Phase J upserts cover refresh)
+- State: project_state.md should be updated — Phase K shipped, copilot frozen
+- Linear: none — Phase K was task #54, not a Linear issue
+
+---
+
 ## Session 41 — 2026-04-28: Phase J — sync UPSERT (refresh only)
 
 ### Goal
