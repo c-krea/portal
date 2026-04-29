@@ -2,6 +2,54 @@
 
 ---
 
+## Session 43 — 2026-04-29: Dashboard math + UX overhaul
+
+### Goal
+Full dashboard review post-Phase K. Fix the biggest design lie (`proyectado` was probability-weighted — the number bouncing around as PP history shifted), tighten the chart, tighten the polish.
+
+### What shipped
+- **Realistic floor formula.** `proyectado` (gross × pp_historico_pct × IVA) → `piso` = `(canon − descuento_proyectado) × (1 − pp_pct/100) × 1.19`. Per-contract PP rate from Siesa source-of-truth (mostly 10%, 14 contracts at 0/20/30%). Companion `techo` = same without the PP factor (theoretical ceiling). Numbers settle: piso=$2.56B, techo=$2.84B.
+- **Cash-only KPI.** Total Recaudado now shows `recaudado` ($849M) — money in bank — not `recaudado + ppOtorgado` ($896M). Comparing vs piso requires cash-only because piso already nets PP out (see Gotcha below).
+- **Empresa filter everywhere.** All v2 queries on dashboard route filter `empresa_id = '${empresaId}'` via `getEmpresaCkreaId()`. Today's data is C-Krea-only because cron is C-Krea-only, but the guard is now explicit.
+- **Aging buckets collapsed.** 61_90 + 90+ → single `critica` (>60 días) bucket. Matches the 4-row visual, no longer carries dead categories.
+- **Chart redesign.** Vertical bar layout: stacked recaudo + PP + pendiente = piso, then `techoExtra` (slate-light) extends to techo as visual cap. Tooltip shows %vsPiso (cash/piso) + %vsTecho ((cash+PP)/techo). Legend names the four bands.
+- **Polish.** Semantic `<section>`/`<h2>` + ARIA, slate-400 → slate-500/600 contrast, `<p>` titles → `<h2>`, table headers gain Piso + Techo columns, skeleton loading.tsx mirrors layout, freshness stamp bottom-right, `Math.round` instead of `clamp(...vh...)` text scaling.
+- **Subtitle minimalism (this session, late).** KPI cards trimmed: "Recaudo Proyectado 2026" subtitle = "Piso realista c/IVA", "Total Recaudado" subtitle = "33% alcanzado" — nothing else. Dropped esperado-percent marker line + PP otorgado side note. German wants the dashboard to read at a glance; extras live in the chart.
+
+### 🎯 Decision — Honor Siesa as source-of-truth for PP rates
+German described PP as "always 10%, with 20/30% coming from phases stacked on top". DB query revealed 14 contracts at 0/20/30%. Choice: codify what data says, not what spec says. Reason: Siesa is system of record; if data deviates from spec, treat data as truth and let the deviation surface in numbers.
+
+### 🎯 Decision — Floor model over probabilistic
+Old model multiplied gross by `pp_historico_pct` (an aggregate per-tenant historical PP rate). Number jumped around every time PP history recomputed. Replaced with deterministic floor: assume everyone takes their per-contract PP rate. Pros: stable number, conservative posture, headroom always positive (techo − piso = upside). Cons: actual recaudado will overshoot when tenants pay late (no PP given). That overshoot is the "good news" surface — emerald wedge above piso line.
+
+### 🎯 Decision — Defer cartera juridica view
+`v2.contratos.juridica` field carries two concepts (legal collection process + persona jurídica taxonomy). Today only 1 tenant flagged. CKR-22 (open) splits the field. Today: keep `juridica = false` filter on mora queries, do not build the separate jurídica view yet — wait for the field split.
+
+### 💡 Learning — Achievement math: don't add PP back to cash
+Trap: piso = canon × (1 − PP) × IVA. SUM(piso) is the cash floor *after* PP is netted out. Cash paid by on-time tenants exactly equals piso (PP appears separately as a discount line). Comparing achievement therefore needs cash alone: `recaudado / piso`. Adding PP back gives `(recaudado + PP) / piso`, which double-counts the discount and inflates achievement % by ~5pp. Original code did this in three places (KPI card, chart tooltip, table % column). All fixed. Saved as `feedback_pp_double_count.md`.
+
+### 💡 Learning — `recaudado` semantics: cash, not invoiced
+`v2.vista_pagos.valor_final` = what tenant paid, period. PP is a discount line (`pronto_pago_aplicado`), not part of the cash. Total Recaudado KPI now reads as "money in bank" not "canon settled" — matches mental model of anyone scanning the dashboard for "how much did we collect".
+
+### ⚠️ Gotcha — `revalidate = 300` on dashboard doesn't fully cache
+Set the page to `revalidate = 300` to cache between visits (cron syncs daily 05:30 COT, 5-min cache is fine). But `(app)/layout.tsx` reads `auth.getUser()` to gate the route, which forces dynamic. Net effect: cache directive is documentation, not behavior. Real caching needs the auth check moved out of the layout (deferred to Pass 4 / service-role cleanup).
+
+### ⚠️ Gotcha — Service-role still reading on dashboard
+Dashboard queries go through `supabaseAdmin` + `exec_sql` RPC, bypassing RLS. Today's `empresa_id` filter is the explicit guard. Pass 4 (deferred) must add RLS policies to every v2 table and switch to user-session client. Until then, the only thing protecting Raymond data from a C-Krea user is "the cron only writes C-Krea data" + "every query has `empresa_id = '00000000-0000-0000-0000-000000000001'`".
+
+### Verified
+- `npm run build` clean.
+- Live numbers checked: piso $2.56B, techo $2.84B, cash $849M, PP $47M, cobrado-total $896M.
+- Chart renders. Tooltip math correct. Table aligns.
+
+### Session-end pointers
+- ADRs: none
+- Lessons: `feedback_pp_double_count.md` (new)
+- State: none — Phase K still current
+- Linear: none updated. CKR-22 (juridica split) still open as blocker for separate jurídica view.
+
+---
+
 ## Session 42 — 2026-04-28: Phase K — `public` schema cleanup (final)
 
 ### Goal

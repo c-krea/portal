@@ -15,17 +15,19 @@ export function RecaudoCard({ data }: { data: ProyectadoVsReal[] }) {
 
       {/* Header */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-slate-900">Proyectado vs. Recaudado 2026</p>
-        <div className="flex gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
+        <h2 className="text-sm font-semibold text-slate-900">Proyectado vs. Recaudado 2026</h2>
+        <div role="tablist" aria-label="Vista de proyección" className="flex gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs">
           {(["grafica", "tabla"] as const).map((t) => (
             <button
               key={t}
+              role="tab"
+              aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={cn(
                 "rounded-md px-3 py-1 font-medium capitalize transition-colors",
                 tab === t
                   ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700",
+                  : "text-slate-600 hover:text-slate-900",
               )}
             >
               {t === "grafica" ? "Gráfica" : "Tabla"}
@@ -43,41 +45,43 @@ export function RecaudoCard({ data }: { data: ProyectadoVsReal[] }) {
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-white">
                 <tr className="border-b border-slate-100">
-                  <th className="py-2 text-left text-xs font-medium uppercase tracking-wider text-slate-400">Mes</th>
-                  <th className="py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-400">Proyectado</th>
-                  <th className="hidden sm:table-cell py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-400">Recaudo neto</th>
-                  <th className="hidden md:table-cell py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-400">PP otorgado</th>
-                  <th className="py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-400">Pendiente</th>
-                  <th className="py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-400">%</th>
+                  <th className="py-2 text-left text-xs font-medium uppercase tracking-wider text-slate-600">Mes</th>
+                  <th className="py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-600">Piso</th>
+                  <th className="hidden lg:table-cell py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-600">Techo</th>
+                  <th className="hidden sm:table-cell py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-600">Recaudo</th>
+                  <th className="hidden md:table-cell py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-600">PP otorg.</th>
+                  <th className="py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-600">Falta</th>
+                  <th className="py-2 text-right text-xs font-medium uppercase tracking-wider text-slate-600">%</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {data.filter((r) => r.proyectado > 0).map((r) => {
-                  const cobrado  = r.recaudado + r.ppOtorgado
-                  const pct      = r.proyectado > 0 ? Math.round((cobrado / r.proyectado) * 100) : 0
-                  const isFuture = cobrado === 0
+                {data.filter((r) => r.piso > 0).map((r) => {
+                  // Cash-only %: piso already nets PP out, don't add it back.
+                  const pct      = r.piso > 0 ? Math.round((r.recaudado / r.piso) * 100) : 0
+                  const isFuture = r.recaudado === 0 && r.ppOtorgado === 0
                   return (
                     <tr key={r.mes} className="hover:bg-slate-50">
                       <td className="py-1.5 font-medium text-slate-700">{r.mes}</td>
-                      <td className="py-1.5 text-right font-mono text-slate-600">{formatCOP(r.proyectado)}</td>
+                      <td className="py-1.5 text-right font-mono text-slate-700">{formatCOP(r.piso)}</td>
+                      <td className="hidden lg:table-cell py-1.5 text-right font-mono text-slate-500">{formatCOP(r.techo)}</td>
                       <td className="hidden sm:table-cell py-1.5 text-right font-mono">
                         {r.recaudado > 0
                           ? <span className="text-emerald-700">{formatCOP(r.recaudado)}</span>
-                          : <span className="text-slate-300">—</span>}
+                          : <span className="text-slate-400">—</span>}
                       </td>
                       <td className="hidden md:table-cell py-1.5 text-right font-mono">
                         {r.ppOtorgado > 0
                           ? <span className="font-medium text-emerald-900">{formatCOP(r.ppOtorgado)}</span>
-                          : <span className="text-slate-300">—</span>}
+                          : <span className="text-slate-400">—</span>}
                       </td>
                       <td className="py-1.5 text-right font-mono">
                         {r.pendiente > 0
-                          ? <span className={isFuture ? "text-slate-400" : "font-medium text-rose-600"}>{formatCOP(r.pendiente)}</span>
-                          : <span className="text-slate-300">—</span>}
+                          ? <span className={isFuture ? "text-slate-500" : "font-medium text-rose-600"}>{formatCOP(r.pendiente)}</span>
+                          : <span className="text-slate-400">—</span>}
                       </td>
                       <td className="py-1.5 text-right">
                         {isFuture ? (
-                          <span className="text-slate-300">—</span>
+                          <span className="text-slate-400">—</span>
                         ) : pct >= 100 ? (
                           <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">✓</span>
                         ) : pct >= 80 ? (

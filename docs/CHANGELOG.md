@@ -6,6 +6,43 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [Unreleased] — 2026-04-29 (Dashboard math + UX — Session 43)
+
+### Changed — Dashboard projection math (probability → realistic floor)
+- `proyectado` formula was probability-weighted (`gross × pp_historico_pct × IVA`) — number drifted every time PP history recomputed. Replaced with deterministic **piso** (`(canon − descuento) × (1 − pp_pct/100) × 1.19`), per-contract PP from Siesa source-of-truth (mostly 10%, 14 contracts at 0/20/30%). Added companion **techo** (no PP factor) for theoretical ceiling. Numbers settle: piso $2.56B, techo $2.84B.
+- Per-month chart switched to stacked `recaudo + PP + pendiente = piso` then `techoExtra` (slate-light) extends to techo as visual cap. Tooltip surfaces %vsPiso + %vsTecho.
+- Aging buckets `61_90` + `90+` collapsed into single `critica` (>60 días).
+
+### Fixed — Total Recaudado KPI double-counted PP
+- Old code: `total = recaudado + ppOtorgado` ($896M), compared vs piso. piso already nets PP out, so comparison double-counted PP and inflated achievement % by ~5pp.
+- New code: cash-only — KPI shows `recaudado` ($849M, money in bank), `metaPercent = recaudado / piso`. Same fix applied to chart tooltip + per-month table % column.
+
+### Added — Empresa filter on every dashboard query
+- All v2 reads now filter `empresa_id = '${empresaId}'` via `getEmpresaCkreaId()`. Today's data is C-Krea-only (cron writes C-Krea only) but the guard is now explicit. Hardens against future Raymond cron addition.
+
+### Polish — Dashboard accessibility + readability
+- `<p>` titles → `<h2>`, semantic `<section>` with `aria-labelledby`, `role="tab"` + `aria-selected` on view toggle.
+- `text-slate-400` → `text-slate-500/600` for WCAG AA contrast.
+- Replaced `clamp(...vh...)` text scaling with `text-xl/2xl` responsive classes.
+- `loading.tsx` rewritten as skeleton mirroring dashboard layout (4 KPI placeholders + bottom row).
+- Freshness stamp added bottom-right (`Datos al {timestamp}`).
+- `force-dynamic` → `revalidate = 300` (caching intent — see JOURNAL Session 43 gotcha).
+- KPI subtitles trimmed to minimum: "Piso realista c/IVA" + "X% alcanzado". Dropped esperado-percent marker + PP side-note.
+
+### Files
+- `src/lib/data/dashboard.ts` — added `getTotalRecaudado` + empresa filter; `portfolioTecho` field.
+- `src/lib/data/reportes.ts` — `ProyectadoVsReal` now carries `piso` + `techo`; aging buckets collapsed; empresa filter on all queries.
+- `src/components/dashboard/rendimiento-chart.tsx` — chart redesigned (piso stack + techo cap), tooltip math fixed.
+- `src/components/dashboard/recaudo-card.tsx` — table adds Piso/Techo columns, ARIA tabs, % calc fixed.
+- `src/app/(app)/page.tsx` — cash-only KPI math, semantic structure, polish.
+- `src/app/(app)/loading.tsx` — skeleton layout.
+
+### Deferred
+- Pass 4 — service-role read removal (today's queries still use `supabaseAdmin` + `exec_sql`; explicit `empresa_id` filter is interim guard).
+- Cartera jurídica separate view — blocked on CKR-22 (`juridica` field carries two concepts: legal-collection vs persona-jurídica).
+
+---
+
 ## [Unreleased] — 2026-04-28 (Phase K — Session 42)
 
 ### Removed — `public` schema collapsed to copilot-only
