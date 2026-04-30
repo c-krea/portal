@@ -94,16 +94,27 @@ export async function getJuridicaRows(): Promise<MoraRow[]> {
       SUM(c.vr_vencido)::numeric                   AS saldo_vencido,
       SUM(c.saldo)::numeric                        AS saldo_total
     FROM v2.vista_cartera_actual c
-    JOIN v2.inquilinos t ON c.inquilino_id = t.id AND t.juridica = true
+    JOIN v2.inquilinos t ON c.inquilino_id = t.id
     LEFT JOIN LATERAL (
       SELECT u2.unidad
       FROM v2.contratos con
       JOIN v2.locales u2 ON con.local_id = u2.id
       WHERE con.inquilino_id = t.id
-      ORDER BY con.fecha_inicio DESC
+      ORDER BY
+        CASE WHEN con.estado IN ('activo','critico') THEN 0 ELSE 1 END,
+        con.fecha_fin DESC NULLS LAST,
+        con.fecha_inicio DESC
       LIMIT 1
     ) u ON true
     WHERE c.vr_vencido > 0
+      AND (
+        t.juridica = true
+        OR NOT EXISTS (
+          SELECT 1 FROM v2.contratos con2
+          WHERE con2.inquilino_id = t.id
+            AND con2.estado IN ('activo', 'critico')
+        )
+      )
     GROUP BY t.id, t.razon_social, t.nombre_corto, u.unidad
     ORDER BY MAX(c.dias_mora) DESC NULLS LAST
   `)

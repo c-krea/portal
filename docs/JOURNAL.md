@@ -2,6 +2,49 @@
 
 ---
 
+## Session 45 — 2026-04-30: Repair sync_desde_raw + auto-critico + unify Cartera Jurídica
+
+### Goal
+Unit 311 (ROSERO GUZMAN, ingreso 2026-04-16) showed empty on portal despite ERP showing it occupied. Root cause: Session 44 dropped 5 cols from `siesa_raw.ocupacion`; `v2.sync_desde_raw()` still referenced them and was failing silently. Same diagnosis explained units 503, 505, 804. Fix the sync, automate critico promotion/demotion, auto-terminate contracts when ERP drops the tenant, and (Part B) merge ex-inquilinos with open balance into the existing Cartera Jurídica section.
+
+### What shipped
+- **`v2.sync_desde_raw()` rewritten** (migration `v2_sync_repair_post_dropped_cols`). Stripped refs to dropped cols (`estado`, `uno`, `once`, `veintiuno`, `critico`). New contracts default to `estado='activo'`. Updates fire only on contracts WHERE `estado IN ('activo','critico')`. Insert existence check matches the same scope so a tenant returning to a unit after `terminado` re-inserts cleanly. **Auto-terminate**: any active/critico contract whose `(inquilino_id, local_id)` pair vanished from `siesa_raw.ocupacion` flips to `terminado` with `fecha_fin = COALESCE(c.fecha_fin, CURRENT_DATE)`. Guarded by `v_ocupacion_count > 0` so an empty raw load can't wipe everything. Returns extended JSONB (adds `contratos_terminated` + `ocupacion_rows`).
+- **`v2.recalcular_criticos(p_threshold_dias int DEFAULT 60)`** (new). Promotes `activo → critico` when tenant's `MAX(dias_mora) > 60` with `vr_vencido > 0`. Demotes `critico → activo` when no longer crosses threshold. SECURITY DEFINER. Returns JSONB `{promoted, demoted}`.
+- **`/api/cron/sync-v2`** now calls both functions in sequence (`sync_desde_raw` then `recalcular_criticos`) and returns both payloads. Cron runs 05:30 COT.
+- **Manual backfill** (this session, can't wait until 05:30): 4 contracts inserted (311, 503, 505, 804), 28 updated, 15 critico demoted to activo (down from ERP-side critico flag to data-driven >60 days). Final state: 75 activo + 5 critico + 4 vacant locales (111, 313, 506A, 806).
+- **Cartera Jurídica unified** (Part B). `getJuridicaRows()` in `src/lib/data/mora.ts` now selects tenants where `juridica = true` OR no active/critico contract exists, both with `vr_vencido > 0`. Single section on `/mora`; no separate "ex-inquilinos" block. LATERAL join prefers active contract for unit display, falls back to most-recent terminated contract by `fecha_fin DESC`. Verified: 2 rows surface — PEDRAZA (jurídica=true, 170d, $7.26M) + PUNTO ACRILICO (no active contract, 841d, $4.82M).
+- **`src/app/(app)/mora/page.tsx`**: removed planned ex-inquilinos JSX block. Subtitle on Cartera Jurídica reads "Inquilinos jurídicos + ex-inquilinos con saldo pendiente · No incluida en totales de mora".
+
+### 🎯 Decision — ERP is source of truth, no portal-side overrides
+German's call. Portal must never carry a manual "this tenant is gone" flag that diverges from Siesa. If admin doesn't close the contract in Siesa, portal will keep showing it active. Auto-terminate fires only when the (tenant, local) pair literally disappears from `siesa_raw.ocupacion`. Means ALARCON 312 (physically empty per German, ERP says occupied) keeps showing as active until ERP admin closes it.
+
+### 🎯 Decision — Critico is data-driven, not ERP-flagged
+ERP's `siesa_raw.ocupacion.critico` was dropped Session 44. Replaced with nightly recalc against `vista_cartera_actual.dias_mora`. Single threshold (60 days) parameterizable. Decoupled from however ERP flags critico — portal computes from cartera reality.
+
+### 🎯 Decision — Merge ex-inquilinos into Cartera Jurídica (revision)
+Original plan was a separate "Ex-inquilinos con cartera abierta" section at the bottom of `/mora`. Revised mid-session: same UX intent (these don't count toward active mora KPIs), same display (table with unit + days + balance). Fewer sections, cleaner page. The OR clause makes the data join trivial.
+
+### 💡 Learning — Sync function failed silently after column drop
+`v2.sync_desde_raw()` referenced `o.uno`, `o.once`, etc. After Session 44's `DROP COLUMN`, every cron run errored with `column o.uno does not exist`. The cron route caught the exception, logged it, returned 500 — but no alert wired up, so portal data simply froze. **Future**: any DDL on `siesa_raw.*` must grep all `v2.*` PL/pgSQL functions for col refs before applying.
+
+### ⚠️ Gotcha — Auto-terminate guard saved a wipe scenario
+Initial draft of `sync_desde_raw` rewrote contracts unconditionally based on raw rows. If raw load is empty (loader script crashes after truncate), every active contract would auto-terminate. Added `v_ocupacion_count > 0` guard before the terminate block. Counted rows BEFORE the per-row loop, used as gate. Same pattern worth applying to any "reconcile from raw" function.
+
+### Verified
+- `npm run build` clean.
+- Manual `SELECT v2.sync_desde_raw()`: `{contracts_inserted: 4, contracts_updated: 28, contracts_terminated: 0, ocupacion_rows: 84}`.
+- `SELECT v2.recalcular_criticos()`: `{promoted: 0, demoted: 15}`.
+- `vista_cartera_actual` for ex-inquilinos query: 2 rows as expected (PEDRAZA + PUNTO ACRILICO).
+- Cron route returns both JSONBs in 200 response when called with bearer.
+
+### Session-end pointers
+- ADRs: none
+- Lessons: none new (sync-failure pattern recorded inline above; if it recurs, promote to `feedback_*.md`)
+- State: `project_state.md` update warranted — sync repair shipped, critico now auto-computed
+- Linear: none (no open C-Krea WOR issues this session)
+
+---
+
 ## Session 44 — 2026-04-29: Drop dead cols from siesa_raw.ocupacion
 
 ### What shipped

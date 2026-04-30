@@ -7,7 +7,11 @@ import { formatCOP } from "@/lib/formatters"
 import { AlertTriangle, Users, Clock, TrendingUp } from "lucide-react"
 
 export default async function MoraPage() {
-  const [rows, summary, juridicaRows] = await Promise.all([getMoraRows(), getMoraSummary(), getJuridicaRows()])
+  const [rows, summary, juridicaRows] = await Promise.all([
+    getMoraRows(),
+    getMoraSummary(),
+    getJuridicaRows(),
+  ])
 
   const avgDias =
     rows.length > 0
@@ -143,7 +147,7 @@ export default async function MoraPage() {
             <span className="inline-block rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-slate-600">
               Cartera Jurídica
             </span>
-            <span className="text-xs text-slate-400">No incluida en totales de mora</span>
+            <span className="text-xs text-slate-400">Inquilinos jurídicos + ex-inquilinos con saldo pendiente · No incluida en totales de mora</span>
           </div>
           <MoraTable data={juridicaRows} />
         </div>

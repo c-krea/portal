@@ -1,12 +1,3 @@
-/**
- * Vercel Cron — Sync siesa_raw → v2
- * Schedule: 30 * /6 * * * (offset 30min vs IT 6h push)
- * Calls v2.sync_desde_raw() which is additive-only:
- *   - new NITs (raw zona Z40) → v2.inquilinos
- *   - new locales (ocupacion) → v2.locales
- *   - new contracts (no active per inquilino+local) → v2.contratos
- */
-
 import { NextResponse } from "next/server"
 import { execute } from "@/lib/db/executor"
 
@@ -20,9 +11,13 @@ export async function GET(request: Request) {
   }
 
   try {
-    const rows = await execute(`SELECT v2.sync_desde_raw() AS result`)
-    const result = (rows[0] as { result: unknown })?.result
-    return NextResponse.json({ success: true, ...((result ?? {}) as object) })
+    const syncRows = await execute(`SELECT v2.sync_desde_raw() AS result`)
+    const sync = (syncRows[0] as { result: unknown })?.result
+
+    const critRows = await execute(`SELECT v2.recalcular_criticos() AS result`)
+    const criticos = (critRows[0] as { result: unknown })?.result
+
+    return NextResponse.json({ success: true, sync, criticos })
   } catch (e) {
     console.error("[cron/sync-v2]", e)
     return NextResponse.json(

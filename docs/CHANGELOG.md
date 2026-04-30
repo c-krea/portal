@@ -6,6 +6,31 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [Unreleased] — 2026-04-30 (Sync repair + auto-critico + unified Cartera Jurídica — Session 45)
+
+### Fixed — `v2.sync_desde_raw()` broken since col drop
+- Function referenced `o.estado/uno/once/veintiuno/critico` which Session 44 dropped from `siesa_raw.ocupacion`. Cron failed silently for ~24h → unit 311 (and 503, 505, 804) showed empty on portal despite ERP showing them occupied. Migration `v2_sync_repair_post_dropped_cols` rewrites the function without those refs. Default `estado='activo'` on insert; updates only touch contracts in `('activo','critico')`.
+- **Backfill**: 4 contracts inserted (311, 503, 505, 804), 28 updated. Final state: 75 activo + 5 critico contracts; 4 vacant locales (111, 313, 506A, 806).
+
+### Added — Auto-terminate when ERP drops a tenant
+- `v2.sync_desde_raw()` now flips active/critico contracts whose `(inquilino_id, local_id)` pair is absent from `siesa_raw.ocupacion` to `terminado` with `fecha_fin = COALESCE(c.fecha_fin, CURRENT_DATE)`. Guard: only if `v_ocupacion_count > 0` so an empty raw load can't wipe everything. ERP is sole source of truth — no portal-side override.
+
+### Added — Auto-critico nightly recalc
+- New `v2.recalcular_criticos(p_threshold_dias int DEFAULT 60)`. Promotes `activo → critico` when tenant has `MAX(dias_mora) > 60` with `vr_vencido > 0`. Demotes inverse. Replaces ERP-side `critico` flag (dropped Session 44). SECURITY DEFINER, returns `{promoted, demoted}`.
+- Cron `/api/cron/sync-v2` now calls both functions in sequence and returns both payloads. Runs 05:30 COT.
+- Initial recalc: 0 promoted, 15 demoted (ERP had over-flagged).
+
+### Changed — Cartera Jurídica section unified on `/mora`
+- Replaced planned separate "Ex-inquilinos con cartera abierta" section with a single Cartera Jurídica section that includes both `juridica = true` tenants AND tenants with no active/critico contract who still owe (`vr_vencido > 0`). LATERAL join prefers active contract for unit display, falls back to most-recent terminated. Subtitle: "Inquilinos jurídicos + ex-inquilinos con saldo pendiente · No incluida en totales de mora". Surfaces 2 rows today (PEDRAZA + PUNTO ACRILICO).
+
+### Files
+- `src/app/api/cron/sync-v2/route.ts` — call `recalcular_criticos` after `sync_desde_raw`, return both JSONBs.
+- `src/lib/data/mora.ts` — `getJuridicaRows()` widened via OR clause; removed planned `getExInquilinosRows`.
+- `src/app/(app)/mora/page.tsx` — removed planned ex-inquilinos JSX block; updated subtitle.
+- DB migrations: `v2_sync_repair_post_dropped_cols`, `v2_recalcular_criticos`.
+
+---
+
 ## [Unreleased] — 2026-04-29 (Dashboard math + UX — Session 43)
 
 ### Changed — Dashboard projection math (probability → realistic floor)
