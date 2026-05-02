@@ -2072,3 +2072,67 @@ Page-by-page audit reached `/usuarios`. Six findings, all fixed in one pass.
 - `src/app/(app)/usuarios/actions.ts` — split `updateTenantUser` → `updateTenantInquilino` + `updateTenantContract`; UUID/email validation; role whitelist; `createTenantAccount` perfil error capture
 - `src/app/(app)/usuarios/edit-tenant-modal.tsx` — `handleConfirm` calls inquilino once + contract per unit
 - `src/app/(app)/usuarios/tab-switcher.tsx` — `ROLE_LABELS` keys match DB enum; removed unused `EmailEditor` import
+
+---
+
+## 2026-05-02 — Sentry rewire to new org + PostHog install + Vercel relink
+
+Setup session. Production observability stack rewired to new owner accounts after the Vercel project transfer and the Sentry workspace move.
+
+### What happened
+
+**Vercel transfer recovery.**
+- Vercel project moved to new account `gburgos293-6994` (team `transfer-05daf62d`). Local `.vercel/project.json` still pointed at the old org so `vercel ls` came back empty.
+- `vercel logout` → `vercel login` (new email) → `rm -rf .vercel` → `vercel link`. Declined the "overwrite `.env.local`" prompt — would have nuked Supabase/Drizzle/Google secrets.
+- Diff via `vercel env pull .env.vercel.prod` confirmed prod env is complete: DATABASE_URL, Supabase ×3, Google OAuth ×4, CRON_SECRET. Preview env is mostly empty but unused. Temp pulls deleted after diff.
+
+**Sentry org swap.**
+- Old wiring pointed to `workspace-qi` / `javascript-nextjs` with a hardcoded DSN in 3 init files. Old org no longer accessible.
+- Pulled new project keys via `curl https://sentry.io/api/0/projects/reymon/ckrea/keys/` (no `sentry-cli api` subcommand exists).
+- New: org `reymon`, project `ckrea`, DSN `…@o4511318111748096.ingest.us.sentry.io/4511322017038336`.
+- `next.config.ts` org/project updated; 3 init files (`sentry.server.config.ts`, `sentry.edge.config.ts`, `src/instrumentation-client.ts`) now read `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` first with the new DSN as fallback.
+- Tightened sample rates: `tracesSampleRate: NODE_ENV==='development' ? 1.0 : 0.1`. Added `includeLocalVariables: true` server-side per skill.
+- Vercel env: added `SENTRY_AUTH_TOKEN`, `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`. `sentry-cli login --auth-token …` stored to `~/.sentryclirc`.
+- Verified end-to-end with a smoke `Sentry.captureMessage` from a temporary `node` script — event landed in dashboard within ~15s.
+
+**PostHog install (App Router).**
+- Installed `posthog-js`. New `src/components/posthog-provider.tsx` wraps client init + manual `$pageview` capture (App Router has no auto-router events; `capture_pageview: false`, `capture_pageleave: true`, `person_profiles: 'identified_only'`).
+- Wrapped root layout. `NEXT_PUBLIC_POSTHOG_KEY` + `NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com` in `.env.local` and Vercel (Production + Development; Preview skipped).
+- Confirmed live events firing.
+
+**Cleanup.**
+- Removed two dead Google service-account vars from `.env.local` (`GOOGLE_PRIVATE_KEY`, `GOOGLE_SERVICE_ACCOUNT_EMAIL`). Code uses OAuth (CLIENT_ID/SECRET/REFRESH_TOKEN), not service account. The 4 OAuth vars + `GOOGLE_DRIVE_FOLDER_ID` stay — tenant photo upload depends on them.
+- Service account `ckrea-medidores@…iam.gserviceaccount.com` still exists in GCP — flagged for later deletion if confirmed unused everywhere.
+- Deleted Sentry wizard demo files: `src/app/sentry-example-page/` and `src/app/api/sentry-example-api/`.
+
+### Decisions
+
+- 🎯 **`scripts/sync-csf.ts` stays.** German clarified: ERP pushes to Supabase ~every 6 hours, but the local pull script is kept on purpose as a manual top-up between push windows. Do not archive or delete CSF env vars / the script / `npm run sync-csf`. New memory: `erp_push_model.md`.
+- 🎯 **CSF env vars belong only in `.env.local`, never in Vercel.** Script runs from German's Mac. The portal never calls CSF.
+- 🎯 **Defaulted PostHog region to US** (`us.i.posthog.com`). Swap is one line if the project turns out to be EU.
+- ⚠️ **Vercel Hobby commit-author block now needs `gburgos293@gmail.com`.** The old constraint of `germanwarfare07@gmail.com` (memory `feedback_vercel_commit_author.md`) is stale — the new Vercel account owns the project. That memory needs updating before the next deploy.
+
+### Learnings
+
+- 💡 **`vercel env add` accepts only one environment per call.** `vercel env add NAME production preview development` → "Invalid number of arguments". Run three times.
+- 💡 **`sentry-cli api …` subcommand does not exist.** Use `curl` against `https://sentry.io/api/0/...` with the bearer token to fetch DSN keys / project metadata.
+- 💡 **Supabase doesn't "host" integrations.** It's only the database. Code that calls external APIs runs on the laptop (scripts), Vercel (server actions, crons, page renders), or in the browser. Where the *call* happens decides where the secret needs to live.
+- ⚠️ **Wizard demo routes** (`/sentry-example-page` + `/api/sentry-example-api`) returned 404 in Turbopack dev. They are templates the wizard installs and you delete after first verification — production wiring works.
+
+### Files changed
+
+- `next.config.ts` — Sentry org `workspace-qi` → `reymon`, project `javascript-nextjs` → `ckrea`
+- `sentry.server.config.ts` — DSN env-first + new DSN fallback, sample-rate dev/prod split, `includeLocalVariables: true`
+- `sentry.edge.config.ts` — DSN env-first + new DSN fallback, sample-rate dev/prod split
+- `src/instrumentation-client.ts` — DSN env-first + new DSN fallback, sample-rate dev/prod split
+- `src/components/posthog-provider.tsx` (new) — client provider + manual pageview tracker
+- `src/app/layout.tsx` — wraps body in `PostHogProvider`
+- `package.json` / `package-lock.json` — `posthog-js` added
+- Deleted: `src/app/sentry-example-page/`, `src/app/api/sentry-example-api/`
+- `.env.local`, `.env.sentry-build-plugin` — env updates (gitignored, not committed)
+
+### Session-end pointers
+- ADRs: none
+- Lessons: erp_push_model.md (new), feedback_vercel_commit_author.md (needs update — wrong email)
+- State: project_state.md unchanged; observability stack now wired to new accounts
+- Linear: none
