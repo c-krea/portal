@@ -1,6 +1,6 @@
 # C-Krea Portal — DB Schema Reference
 
-**Last updated:** 2026-05-03  
+**Last updated:** 2026-05-03 (updated after pagos/mora/dashboard fixes)  
 **Rule:** siesa_raw = ERP source of truth. v2 = portal working layer derived from siesa_raw. When in doubt, trust siesa_raw.
 
 ---
@@ -72,13 +72,33 @@ No RLS — not exposed via PostgREST. Access via role `siesa_sync` only.
 ---
 
 ### siesa_raw.cartera
-**What it is:** Open (unpaid) invoices only. Manager inputs receipts during the month. Does NOT contain history — once an invoice is paid it may drop off.
+**What it is:** Open (unpaid) invoices only. Once a payment is applied, the invoice reduces or drops off. Does NOT keep history — use siesa_raw.documentos for history.
 
-| Column | Notes |
-|---|---|
-| `row_id` | PK from Siesa |
-| `documento` | NIT of tenant (join key) |
-| `cliente` | Razón social (display only, NOT NIT) |
+| Column | Type | Notes |
+|---|---|---|
+| `row_id` | bigint | PK from Siesa |
+| `documento` | text | **NIT of tenant** — join key (NOT `cliente`) |
+| `cliente` | text | Razón social — display only |
+| `factura` | text | Invoice number. `FVS-` = real invoice. `RK-` = credit note / PP adjustment (negative saldo) |
+| `fecha_factura` | timestamptz | Invoice issue date — use to filter by month |
+| `fecha_pronto_pago` | timestamptz | Deadline for PP discount (usually day 10) |
+| `fecha_vence` | timestamptz | Payment due date |
+| `dias` | integer | Days term of the invoice |
+| `financia` | integer | Days since invoice was issued (aging) |
+| `vr_corriente` | numeric | Amount not yet due (positive for unpaid current invoices) |
+| `vr_vencido` | numeric | Overdue amount (> 0 means past due date) |
+| `saldo` | numeric | Total outstanding = `vr_corriente + vr_vencido`. Negative = credit note |
+| `id_zona` | text | Always `Z40` for C-Krea |
+
+**To query current month's open invoices:**
+```sql
+WHERE fecha_factura >= DATE '2026-05-01'
+  AND fecha_factura  < DATE '2026-06-01'
+  AND factura LIKE 'FVS-%'
+  AND saldo > 0
+```
+
+**Note:** Portal uses `siesa_raw.documentos` (not cartera) as the source for "total invoiced this month" KPI because cartera drops paid invoices mid-month. Cartera is used for real-time open balance lookups only.
 
 ---
 
@@ -235,6 +255,44 @@ The anual projection reads **live from siesa_raw.ocupacion**, not v2.proyeccione
 Projection esperado $238.9M vs actual invoices $236.6M = **<1% error**.
 
 **Known limitation (WOR-78):** Mid-year phase step-downs not modeled. ERP pushes current step rate; portal applies it flat for remaining active months. Intermediate steps (50%→30%→20%) need phase timeline stored in v2.contratos to model properly.
+
+---
+
+## Pagos page — data sources and bucket logic
+
+### KPI: total invoiced this month
+Source: `siesa_raw.documentos`
+```sql
+SELECT ROUND(SUM(ventas + impuesto - retenciones))::numeric
+FROM siesa_raw.documentos
+WHERE periodo = 202605    -- YYYYMM
+  AND tipo = 'Facturas'
+```
+Use documentos (NOT cartera) — cartera drops paid invoices mid-month so the total shrinks as people pay. Documentos always shows the full issued amount for the month.
+
+### KPI: total collected this month
+Source: `v2.vista_pagos` → `siesa_raw.recaudo`
+
+### Payment buckets (primeros 10 días / 11 al 30 / Mora)
+Classification logic per payment:
+1. `dias_mora_al_pago > grace_period_days (30)` → **Mora**
+2. `EXTRACT(DAY FROM fecha_recaudo) BETWEEN 1 AND 10` → **Primeros 10 días**
+3. Everything else → **11 al 30**
+
+`dias_mora_al_pago` = how many days overdue the invoice was when the payment was applied. Calculated by Siesa at payment time, stored in recaudo, surfaced via v2.vista_pagos.
+
+**grace_period_days = 30** (from `v2.reglas_financieras WHERE clave = 'grace_period_days'`)
+
+**Example — FUSION GRAFIK:**
+- Paid Apr 1, `dias_mora_al_pago = 20` → 20 < 30 → day 1 → **Primeros 10 días**
+- Paid Apr 23, `dias_mora_al_pago = 12` → 12 < 30 → day 23 → **11 al 30**
+- Paid Feb 26, `dias_mora_al_pago = 45` → 45 > 30 → **Mora**
+- Once overdue April invoice is fully paid → future May payments at 0 days mora → date-bucket applies
+
+### Mora page — who shows where
+- **Regular mora table** (`getMoraRows`): `juridica = false` AND has active/critico contract AND `vr_vencido > 0` AND `dias_mora > grace`
+- **Cartera Jurídica** (`getJuridicaRows`): `juridica = true` OR no active/critico contract — both with `vr_vencido > 0`
+- **Ex-tenants** (left without paying): show ONLY in Cartera Jurídica via the `NOT EXISTS(active contract)` branch. Never in regular mora.
 
 ---
 
