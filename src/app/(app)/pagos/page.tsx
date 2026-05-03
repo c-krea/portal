@@ -204,12 +204,12 @@ export default async function PagosPage({
           </ul>
         </div>
 
-        {/* Desde mora */}
+        {/* Mora */}
         <div className="rounded-xl border border-rose-100 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-5 py-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-semibold text-slate-800">Desde mora</p>
+                <p className="font-semibold text-slate-800">Mora</p>
                 <p className="text-xs text-slate-400">Pagos aplicados a cartera vencida</p>
               </div>
               <span className="rounded-full bg-rose-50 px-2.5 py-0.5 text-sm font-semibold text-rose-700">
