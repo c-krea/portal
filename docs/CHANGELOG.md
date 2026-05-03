@@ -6,6 +6,31 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [Unreleased] — 2026-05-03 (Gastos + Medidores overhaul — Session 48)
+
+### Changed — Gastos page: live ERP data
+- Source migrated from manual `v2.gastos` → `siesa_raw.estado_resultados` (`ccosto='285'`). 15 months of history vs. 4 months manual.
+- Account codes mapped to 8 categories via CASE WHEN (vigilancia, nómina, reparaciones, etc.).
+- April 2026 corrected: $47.8M real vs. $34.9M incomplete manual entry.
+
+### Added — Gastos UI
+- Year/month dropdowns replace tab strip. KPI left card: "Acumulado YYYY" (current year) or "Total YYYY" (past year).
+- Table: colored dot per category, vs-anterior column (% + absolute delta), % of total column.
+- Detail panel: click any row → per-account breakdown appears below table, accordion (one open at a time).
+- Pie chart legend: names only (no duplicate % — % lives in table).
+
+### Fixed — Medidores admin
+- `revalidatePath("/facturas")` → `/medidores/facturas`: table now refreshes after manual reading save.
+- 4 non-metered internal units excluded from table and KPI counts.
+- Period selector: dropdown for last 3 months only; existing readings locked (cannot overwrite).
+- `lectura_anterior` auto-fills from correct prior month's reading based on selected period.
+- `tarifaKwh` field removed from form — tarifa looked up automatically from `facturas_energia`.
+- Facturas de Energía button moved inline with page title.
+- WOR-47 "Próximamente" banner removed.
+- Year/month dropdowns replace tab strip.
+
+---
+
 ## [Unreleased] — 2026-05-03 (Mobile client portal — Session 47)
 
 ### Added — Portal bottom tab navigation

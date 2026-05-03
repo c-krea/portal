@@ -128,7 +128,7 @@ export function MedidoresAdminTable({
       {showForm && (
         <div className="mb-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="mb-4 text-sm font-semibold text-slate-800">Registrar Lectura Manual</h2>
-          <LecturaForm units={units} />
+          <LecturaForm units={units} periodo={periodo} />
         </div>
       )}
 

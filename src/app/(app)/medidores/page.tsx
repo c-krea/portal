@@ -8,15 +8,15 @@ import { CheckCircle, Clock, AlertCircle, Zap, FileText } from "lucide-react"
 import { MedidoresAdminTable } from "@/components/medidores/medidores-admin-table"
 import Link from "next/link"
 import { isValidPeriodo, isValidYear } from "@/lib/security/validators"
+import { MedidoresFilter } from "@/components/medidores/medidores-filter"
 
 const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
 
 function buildPeriodos(year: number) {
   const now = new Date()
   const maxMonth = year === now.getFullYear() ? now.getMonth() + 1 : 12
-  const minMonth = year === 2025 ? 1 : 1
   const periodos = []
-  for (let m = minMonth; m <= maxMonth; m++) {
+  for (let m = 1; m <= maxMonth; m++) {
     periodos.push({
       label: MONTH_LABELS[m - 1],
       value: `${year}-${String(m).padStart(2, "0")}`,
@@ -54,9 +54,7 @@ export default async function MedidoresPage({
 
   return (
     <>
-      <PageHeader title="Medidores de Energía" />
-
-      <div className="mb-5 flex justify-end">
+      <PageHeader title="Medidores de Energía">
         <Link
           href={`/medidores/facturas?periodo=${periodo}`}
           className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
@@ -64,48 +62,14 @@ export default async function MedidoresPage({
           <FileText className="h-4 w-4 text-slate-500" />
           Facturas de Energía
         </Link>
-      </div>
+      </PageHeader>
 
-      {/* Year + Period tabs */}
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        {/* Year switcher */}
-        <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          {years.map((y) => {
-            const lastMonth = y === now.getFullYear() ? now.getMonth() + 1 : 12
-            const yearPeriodo = `${y}-${String(lastMonth).padStart(2, "0")}`
-            return (
-              <a
-                key={y}
-                href={`/medidores?year=${y}&periodo=${yearPeriodo}`}
-                className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ${
-                  y === selectedYear
-                    ? "bg-slate-900 text-white"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                {y}
-              </a>
-            )
-          })}
-        </div>
-
-        {/* Month tabs */}
-        <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-          {PERIODOS.map((p) => (
-            <a
-              key={p.value}
-              href={`/medidores?year=${selectedYear}&periodo=${p.value}`}
-              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
-                p.value === periodo
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-500 hover:text-slate-800"
-              }`}
-            >
-              {p.label}
-            </a>
-          ))}
-        </div>
-      </div>
+      <MedidoresFilter
+        years={years}
+        periodos={PERIODOS}
+        selectedYear={selectedYear}
+        selectedPeriodo={periodo}
+      />
 
       {/* KPI strip */}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
@@ -144,16 +108,6 @@ export default async function MedidoresPage({
           <p className="mt-2 text-xl sm:text-2xl font-bold text-slate-900">{totalKwh.toLocaleString("es-CO")}</p>
           <p className="mt-0.5 text-xs text-slate-400 truncate">{formatCOP(totalEnergia)}</p>
         </div>
-      </div>
-
-      {/* Notice banner — OCR feature coming */}
-      <div className="mb-5 flex items-start gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-        <Zap className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
-        <span>
-          <strong>WOR-47 — Próximamente:</strong> Inquilinos subirán foto del contador desde el portal.
-          El sistema validará automáticamente vs. promedio de 3 meses (±10%).
-          Sin foto → se cobra 1.5× el promedio. Plazo: primeros 10 días del mes.
-        </span>
       </div>
 
       {/* Admin table */}

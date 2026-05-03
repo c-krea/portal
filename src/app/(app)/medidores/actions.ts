@@ -2,6 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/db/executor"
 import { getEmpresaCkreaId } from "@/lib/empresa"
+import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
 import { isValidPeriodo } from "@/lib/security/validators"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
@@ -11,7 +12,6 @@ const schema = z.object({
   periodo:         z.string().refine(isValidPeriodo, "Período inválido (YYYY-MM)"),
   lecturaAnterior: z.coerce.number().min(0),
   lecturaActual:   z.coerce.number().min(0),
-  tarifaKwh:       z.coerce.number().positive("Tarifa debe ser mayor a 0"),
   notas:           z.string().optional(),
 })
 
@@ -30,7 +30,6 @@ export async function registrarLectura(
     periodo:         formData.get("periodo"),
     lecturaAnterior: formData.get("lecturaAnterior"),
     lecturaActual:   formData.get("lecturaActual"),
-    tarifaKwh:       formData.get("tarifaKwh"),
     notas:           formData.get("notas") || undefined,
   })
 
@@ -38,17 +37,21 @@ export async function registrarLectura(
     return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const { unitId, periodo, lecturaAnterior, lecturaActual, tarifaKwh, notas } = parsed.data
+  const { unitId, periodo, lecturaAnterior, lecturaActual, notas } = parsed.data
 
   if (lecturaActual < lecturaAnterior) {
     return { error: "Lectura actual debe ser mayor o igual a la anterior" }
   }
 
   const kwh = Math.round((lecturaActual - lecturaAnterior) * 100) / 100
-  const totalEnergia = Math.round(kwh * tarifaKwh)
 
   try {
     const empresaId = await getEmpresaCkreaId()
+
+    // Auto-lookup tarifa from the entered invoice for this period + unit's building group.
+    // If no invoice exists yet, save without cost — it will be calculated when invoice arrives.
+    const tarifa = await getElectricityTarifaForUnit(empresaId, unitId, periodo)
+    const totalEnergia = tarifa > 0 ? Math.round(kwh * tarifa) : null
 
     const { error } = await supabaseAdmin
       .schema("v2")
@@ -58,11 +61,11 @@ export async function registrarLectura(
           empresa_id:       empresaId,
           local_id:         unitId,
           periodo,
-          lectura_anterior: String(lecturaAnterior),
-          lectura_actual:   String(lecturaActual),
-          kwh:              String(kwh),
-          tarifa_kwh:       String(tarifaKwh),
-          total_energia:    String(totalEnergia),
+          lectura_anterior: lecturaAnterior,
+          lectura_actual:   lecturaActual,
+          kwh,
+          tarifa_kwh:       tarifa > 0 ? tarifa : null,
+          total_energia:    totalEnergia,
           notas:            notas ?? null,
         },
         { onConflict: "local_id,periodo" },
@@ -70,12 +73,13 @@ export async function registrarLectura(
     if (error) throw new Error(error.message)
 
     revalidatePath("/medidores")
-    revalidatePath("/facturas")
+    revalidatePath("/medidores/facturas")
 
-    return {
-      success: true,
-      message: `Lectura registrada: ${kwh} kWh · $${totalEnergia.toLocaleString("es-CO")}`,
-    }
+    const msg = totalEnergia
+      ? `Lectura registrada: ${kwh} kWh · $${totalEnergia.toLocaleString("es-CO")}`
+      : `Lectura registrada: ${kwh} kWh · costo pendiente (ingresa la factura primero)`
+
+    return { success: true, message: msg }
   } catch (e) {
     console.error(e)
     return { error: "Error al registrar lectura" }

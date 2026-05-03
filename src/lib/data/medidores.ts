@@ -10,6 +10,8 @@ export type UnitWithMeter = {
   lastPeriodo: string | null
   lastKwh: number | null
   lastTotal: number | null
+  readingsByPeriodo: Record<string, number>  // periodo → lectura_actual
+  existingPeriodos: string[]
 }
 
 export type MedidorAdminRow = {
@@ -76,6 +78,9 @@ export async function getMedidoresAdmin(
       ) mr2
     ) avg3 ON true
     WHERE u.empresa_id = '${empresaId}'::uuid
+      AND EXISTS (
+        SELECT 1 FROM v2.lecturas_medidor lm WHERE lm.local_id = u.id
+      )
     ORDER BY u.unidad
   `)
 
@@ -111,9 +116,11 @@ export async function getUnitsWithMeters(empresaId: string): Promise<UnitWithMet
       u.unidad                                           AS unit_number,
       u.codigo                                           AS unit_code,
       COALESCE(t.nombre_corto, t.razon_social)           AS tenant_name,
-      mr_last.periodo                                    AS last_periodo,
-      mr_last.kwh::numeric                               AS last_kwh,
-      mr_last.total_energia::numeric                     AS last_total
+      mr.last_periodo,
+      mr.last_kwh,
+      mr.last_total,
+      mr.readings_map,
+      mr.existing_periodos
     FROM v2.locales u
     LEFT JOIN v2.contratos c
            ON c.local_id = u.id
@@ -121,24 +128,41 @@ export async function getUnitsWithMeters(empresaId: string): Promise<UnitWithMet
           AND c.estado IN ('activo', 'critico')
     LEFT JOIN v2.inquilinos t ON c.inquilino_id = t.id
     LEFT JOIN LATERAL (
-      SELECT periodo, kwh, total_energia
-      FROM v2.lecturas_medidor
-      WHERE local_id = u.id
-      ORDER BY periodo DESC
-      LIMIT 1
-    ) mr_last ON true
+      SELECT
+        MAX(CASE WHEN rn = 1 THEN periodo      END)              AS last_periodo,
+        MAX(CASE WHEN rn = 1 THEN kwh          END)::numeric     AS last_kwh,
+        MAX(CASE WHEN rn = 1 THEN total_energia END)::numeric    AS last_total,
+        JSON_OBJECT_AGG(periodo, lectura_actual::numeric)        AS readings_map,
+        ARRAY_AGG(periodo)
+          FILTER (WHERE periodo >= TO_CHAR(NOW() - INTERVAL '3 months', 'YYYY-MM'))
+                                                                 AS existing_periodos
+      FROM (
+        SELECT periodo, kwh, total_energia, lectura_actual,
+               ROW_NUMBER() OVER (ORDER BY periodo DESC) AS rn
+        FROM v2.lecturas_medidor
+        WHERE local_id = u.id
+        ORDER BY periodo DESC LIMIT 6
+      ) r
+    ) mr ON true
     WHERE u.empresa_id = '${empresaId}'::uuid
     ORDER BY u.unidad
   `)
 
-  return (rows as Array<Record<string, unknown>>).map((r) => ({
-    unitId:      String(r.unit_id),
-    unitNumber:  String(r.unit_number),
-    unitCode:    String(r.unit_code),
-    tenantName:  r.tenant_name ? String(r.tenant_name) : null,
-    hasReading:  r.last_periodo != null,
-    lastPeriodo: r.last_periodo ? String(r.last_periodo) : null,
-    lastKwh:     r.last_kwh != null ? Number(r.last_kwh) : null,
-    lastTotal:   r.last_total != null ? Number(r.last_total) : null,
-  }))
+  return (rows as Array<Record<string, unknown>>).map((r) => {
+    const rawMap = r.readings_map as Record<string, number> | null
+    return {
+      unitId:            String(r.unit_id),
+      unitNumber:        String(r.unit_number),
+      unitCode:          String(r.unit_code),
+      tenantName:        r.tenant_name ? String(r.tenant_name) : null,
+      hasReading:        r.last_periodo != null,
+      lastPeriodo:       r.last_periodo ? String(r.last_periodo) : null,
+      lastKwh:           r.last_kwh != null ? Number(r.last_kwh) : null,
+      lastTotal:         r.last_total != null ? Number(r.last_total) : null,
+      readingsByPeriodo: rawMap
+        ? Object.fromEntries(Object.entries(rawMap).map(([k, v]) => [k, Number(v)]))
+        : {},
+      existingPeriodos:  Array.isArray(r.existing_periodos) ? r.existing_periodos.map(String) : [],
+    }
+  })
 }

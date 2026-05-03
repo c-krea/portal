@@ -3,8 +3,12 @@ export const dynamic = "force-dynamic"
 import { PageHeader } from "@/components/layout/page-header"
 import { GastosTable } from "@/components/gastos/gastos-table"
 import { GastosChart } from "@/components/gastos/gastos-chart"
+import { PeriodoFilter } from "@/components/gastos/periodo-filter"
 import { getGastoRows, getGastoSummary, getGastosForPeriodo, getGastoPeriodos, isValidPeriodo } from "@/lib/data/gastos"
+import { isValidYear } from "@/lib/security/validators"
 import { formatCOP } from "@/lib/formatters"
+
+const MONTH_RE = /^(0[1-9]|1[0-2])$/
 
 const MES_FULL = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]
 
@@ -18,76 +22,71 @@ function fullMesLabel(p: string): string {
 export default async function GastosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string }>
+  searchParams: Promise<{ year?: string; month?: string; periodo?: string }>
 }) {
-  const { periodo: periodoParam } = await searchParams
+  const { year: yearParam, month: monthParam, periodo: periodoParam } = await searchParams
   const periodos = await getGastoPeriodos()
   const fallback = periodos[0]?.value ?? `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`
-  const periodo = periodoParam && isValidPeriodo(periodoParam) ? periodoParam : fallback
 
-  const [rows, summary, chartData] = await Promise.all([
+  let periodo: string
+  if (yearParam && isValidYear(yearParam) && monthParam && MONTH_RE.test(monthParam)) {
+    const candidate = `${yearParam}-${monthParam}`
+    periodo = periodos.some((p) => p.value === candidate) ? candidate : fallback
+  } else if (periodoParam && isValidPeriodo(periodoParam)) {
+    periodo = periodoParam
+  } else {
+    periodo = fallback
+  }
+
+  const [selectedYear, selectedMonth] = periodo.split("-")
+
+  const [rows, summary, monthData] = await Promise.all([
     getGastoRows(periodo),
-    getGastoSummary(),
+    getGastoSummary(selectedYear),
     getGastosForPeriodo(periodo),
   ])
 
   const mesLabel = fullMesLabel(periodo)
+  const currentYear = String(new Date().getFullYear())
+  const yearLabel = selectedYear === currentYear ? `Acumulado ${selectedYear}` : `Total ${selectedYear}`
 
   return (
     <>
       <PageHeader title="Gastos" />
 
-      {/* Period tabs */}
-      <div className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm w-fit max-w-full">
-        {periodos.length === 0 ? (
-          <span className="px-5 py-1.5 text-sm text-slate-400">Sin períodos cargados</span>
-        ) : periodos.map((p) => (
-          <a
-            key={p.value}
-            href={`/gastos?periodo=${p.value}`}
-            className={`shrink-0 rounded-lg px-5 py-1.5 text-sm font-medium transition-colors ${
-              p.value === periodo
-                ? "bg-slate-900 text-white"
-                : "text-slate-500 hover:text-slate-800"
-            }`}
-          >
-            {p.label}
-          </a>
-        ))}
-      </div>
+      <PeriodoFilter
+        periodos={periodos}
+        selectedYear={selectedYear}
+        selectedMonth={selectedMonth}
+      />
 
       {/* KPI strip */}
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4">
         <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Total Histórico</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{yearLabel}</p>
           <p className="mt-1 text-sm sm:text-2xl font-bold text-slate-900 tabular-nums truncate">{formatCOP(summary.totalYtd)}</p>
           <p className="mt-0.5 text-xs text-slate-400">{summary.totalMeses} meses · {formatCOP(summary.avgMensual)}/mes</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4 shadow-sm">
           <p className="text-xs font-medium uppercase tracking-wider text-slate-500">{mesLabel}</p>
-          <p className="mt-1 text-sm sm:text-2xl font-bold text-slate-900 tabular-nums truncate">{formatCOP(chartData.total)}</p>
-          <p className="mt-0.5 text-xs text-slate-400 truncate">{rows.length} registros</p>
+          <p className="mt-1 text-sm sm:text-2xl font-bold text-slate-900 tabular-nums truncate">{formatCOP(monthData.total)}</p>
+          <p className="mt-0.5 text-xs text-slate-400 truncate">{rows.length} categorías</p>
         </div>
       </div>
 
-      {/* Two separate cards */}
+      {/* Table + chart */}
       <div className="flex flex-col lg:flex-row gap-4">
-
-        {/* Left — table */}
         <div className="w-full lg:w-[70%] rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <GastosTable data={rows} embedded />
         </div>
-
-        {/* Right — pie + legend */}
         <div className="flex w-full lg:w-[30%] flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <p className="mb-2 shrink-0 text-sm font-semibold text-slate-900">
-            Distribución — {mesLabel} 2026
+            Distribución — {mesLabel}
           </p>
-          <div className="min-h-0 flex-1">
-            <GastosChart data={chartData} />
+          <div className="min-h-0 flex-1 h-full">
+            <GastosChart data={monthData} />
           </div>
         </div>
-
       </div>
     </>
   )

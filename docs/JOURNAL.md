@@ -2,6 +2,52 @@
 
 ---
 
+## Session 48 — 2026-05-03: Gastos siesa_raw migration + Medidores form overhaul
+
+### Goal
+Migrate gastos page from manual v2.gastos to live siesa_raw data. Full medidores admin review and form improvements.
+
+### What happened
+
+🎯 **Decision — Gastos source of truth → siesa_raw.estado_resultados, ccosto='285'**
+v2.gastos had manual entries (only 4 months, April incomplete). siesa_raw has 15 months of live ERP data. Filter: `ccosto = '285'` = CENTRAL KREATIVA. Account codes mapped to 8 categories via CASE WHEN.
+
+🎯 **Decision — April manual data was $12.8M short**
+Manual entry had 5 rows for April ($34.9M). siesa_raw shows $47.8M. Confirmed Jan–Mar matched exactly; April was abandoned mid-entry. Siesa is canonical from now on.
+
+⚙️ **Gastos UI additions this session**
+- Year/month dropdowns replace period tab strip. Year KPI = Acumulado (current year) or Total (past year).
+- Table: color dots per category, vs-anterior % + absolute delta column, % of total column.
+- Detail panel: click row → shows per-account breakdown below table, one open at a time.
+- Pie chart: reverted to pie after testing horizontal bar + stacked 6-month bar. Simpler wins.
+
+⚠️ **Gotcha — electricity_invoices table confusion**
+Memory said `electricity_invoices` + `electricity_group` were shipped. Actually live tables are `facturas_energia` + `grupo_energia`. Memory was using wrong column/table names. Corrected.
+
+🎯 **Decision — Medidores form: remove tarifaKwh field**
+Form now auto-looks up tarifa from `facturas_energia` for the period + unit's `grupo_energia`. If invoice not entered yet, reading saves without cost; cost fills when invoice arrives (existing propagation in `saveFacturasEnergia` handles it).
+
+🎯 **Decision — lectura_anterior auto-filled from readingsByPeriodo map**
+`getUnitsWithMeters` now returns last 6 readings as a JSON map keyed by period. Form derives correct previous reading based on selected period (not just "most recent"). Selecting March → pulls February reading. Bug was using `lastLecturaActual` which was always most recent regardless of period selected.
+
+💡 **Learning — DB decimal .00 was display artifact**
+All lectura_actual/anterior end in `.00` but stored as numeric integers. `9057.00 = 9057` in PostgreSQL numeric comparison — no update needed, JS Number() drops trailing zeros automatically.
+
+⚙️ **Medidores bug fixes**
+- `revalidatePath("/facturas")` → `/medidores/facturas` (form never refreshed page after save)
+- 4 non-metered internal units (808–821 group) excluded via EXISTS filter
+- Period dropdown: last 3 months only, locks if reading already exists for unit+period
+- WOR-47 banner removed (feature works, not yet released)
+- Facturas button moved inline with page title
+
+### Session-end pointers
+- ADRs: none
+- Lessons: erp_ocupacion_model.md N/A — update feature_electricity_billing.md with correct table names (`facturas_energia`, `grupo_energia`)
+- State: project_state.md — update gastos source, medidores form status
+- Linear: none
+
+---
+
 ## Session 47 — 2026-05-03: Mobile/WhatsApp — Full client portal mobile UI/UX
 
 ### Goal
