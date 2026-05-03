@@ -31,7 +31,13 @@ export async function getMoraSummary(): Promise<MoraSummary> {
       COALESCE(SUM(c.saldo * GREATEST(0, c.dias_mora - ${grace}) * (SELECT rate FROM r)), 0)::numeric AS total_interes,
       COUNT(*)::int AS facturas
     FROM v2.vista_cartera_actual c
+    JOIN v2.inquilinos t2 ON c.inquilino_id = t2.id
     WHERE c.vr_vencido > 0 AND c.dias_mora > ${grace} AND c.juridica = false
+      AND EXISTS (
+        SELECT 1 FROM v2.contratos con2
+        WHERE con2.inquilino_id = t2.id
+          AND con2.estado IN ('activo', 'critico')
+      )
   `)
   const row = (res as Array<Record<string, unknown>>)[0]
 
@@ -67,6 +73,11 @@ export async function getMoraRows(): Promise<MoraRow[]> {
       LIMIT 1
     ) u ON true
     WHERE c.vr_vencido > 0 AND c.dias_mora > ${grace} AND t.juridica = false
+      AND EXISTS (
+        SELECT 1 FROM v2.contratos con2
+        WHERE con2.inquilino_id = t.id
+          AND con2.estado IN ('activo', 'critico')
+      )
     GROUP BY t.id, t.razon_social, t.nombre_corto, u.unidad
     ORDER BY MAX(c.dias_mora) DESC NULLS LAST
   `)
