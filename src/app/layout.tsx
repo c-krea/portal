@@ -10,6 +10,10 @@ export const metadata: Metadata = {
   description: "Portal de control de pagos — Central Kreativa",
 }
 
+export const viewport = {
+  viewportFit: "cover",
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{

@@ -6,18 +6,16 @@ import {
   getPortalProfile,
   getPortalPagos,
   getPortalMedidorStatus,
+  getPortalCartera,
 } from "@/lib/data/portal"
 import { formatCOP, formatDate } from "@/lib/formatters"
 import Link from "next/link"
 import { ProfileCard } from "./profile-card"
-import { TotalBreakdownModal } from "./total-breakdown-modal"
 import {
   CheckCircle2,
   AlertCircle,
-  Clock,
   Zap,
   TrendingUp,
-  ChevronRight,
   TriangleAlert,
   Banknote,
 } from "lucide-react"
@@ -25,12 +23,6 @@ import {
 function currentPeriodo() {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-}
-
-function periodoLabel(periodo: string) {
-  const [year, month] = periodo.split("-")
-  const date = new Date(Number(year), Number(month) - 1, 1)
-  return date.toLocaleDateString("es-CO", { month: "long", year: "numeric" })
 }
 
 function addDays(dateStr: string, days: number): Date {
@@ -65,9 +57,10 @@ export default async function PortalPage() {
   const periodo = currentPeriodo()
   const todayDay = new Date().getDate()
 
-  const [pagos, medidor] = await Promise.all([
+  const [pagos, medidor, cartera] = await Promise.all([
     getPortalPagos(profile.tenantId, 5),
     getPortalMedidorStatus(profile.unitId, periodo),
+    profile.nit ? getPortalCartera(profile.nit) : Promise.resolve({ saldoTotal: 0, facturaCount: 0, vencido: 0, rows: [] }),
   ])
 
   // Next payment estimate: last payment + 30 days
@@ -77,6 +70,9 @@ export default async function PortalPage() {
     : addDays(profile.fechaInicio, 30)
 
   const daysToPayment = daysFromNow(nextPaymentDate)
+  const paymentUrgent = daysToPayment <= 5
+  const paymentWarning = daysToPayment > 5 && daysToPayment <= 10
+  const paymentOverdue = daysToPayment < 0
 
   // Mora: overdue > 35 days since last payment
   const daysSinceLastPago = lastPago
@@ -94,20 +90,12 @@ export default async function PortalPage() {
     : 0
 
   // Medidor deadline
-  // Total a pagar this month
-  const descuento = profile.descuentoPct ?? 0
-  const canonNeto = profile.canonBase * (1 - descuento / 100)
-  const ivaAmount = Math.round(canonNeto * 0.19)
-  const subtotalIva = Math.round(canonNeto * 1.19)
-  const gastoElec = medidor.totalEnergia ?? 0
-  const totalAPagar = subtotalIva + gastoElec
 
   const medidorDeadlineDays = 10 - todayDay // days left in submission window
   const medidorUrgent = !medidor.exists && todayDay <= 10 && medidorDeadlineDays <= 3
-  const medidorOverdue = !medidor.exists && todayDay > 10
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
 
       {/* ── Mora alert banner ── */}
       {enMora && (
@@ -177,232 +165,140 @@ export default async function PortalPage() {
         </div>
       )}
 
-      {/* ── Tenant info card — expandable ── */}
+      {/* ── Tenant info card ── */}
       <ProfileCard profile={profile} />
 
-      {/* ── KPI grid — 3 cards ── */}
-      {(() => {
-        const urgent = daysToPayment <= 5
-        const warning = daysToPayment > 5 && daysToPayment <= 10
-        const overdue = daysToPayment < 0
-        return (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-
-            {/* 1 — Countdown */}
-            {/* 1 — Countdown */}
-            <div className={`flex flex-col rounded-xl border p-5 shadow-sm ${
-              overdue || urgent ? "border-rose-200 bg-rose-50"
-              : warning        ? "border-amber-200 bg-amber-50"
-              :                  "border-slate-200 bg-white"
-            }`}>
-              <div className="flex items-center gap-2 mb-4">
-                <TrendingUp className={`h-4 w-4 ${
-                  overdue || urgent ? "text-rose-400"
-                  : warning         ? "text-amber-400"
-                  :                   "text-slate-400"
-                }`} />
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Próximo Pago
-                </p>
-              </div>
-              <div className="flex-1">
-                {overdue ? (
-                  <p className="text-4xl font-black tracking-tight text-rose-600">VENCIDO</p>
-                ) : daysToPayment === 0 ? (
-                  <p className="text-4xl font-black tracking-tight text-rose-600">HOY</p>
-                ) : (
-                  <div className="flex items-baseline gap-1.5">
-                    <span className={`text-5xl font-black tabular-nums leading-none ${
-                      urgent  ? "text-rose-600"
-                      : warning ? "text-amber-600"
-                      :           "text-slate-900"
-                    }`}>
-                      {daysToPayment}
-                    </span>
-                    <span className={`text-lg font-semibold ${
-                      urgent  ? "text-rose-400"
-                      : warning ? "text-amber-400"
-                      :           "text-slate-400"
-                    }`}>
-                      días
-                    </span>
-                  </div>
-                )}
-              </div>
-              <p className="mt-auto pt-3 text-xs text-slate-400">
-                Aprox.{" "}
-                {nextPaymentDate.toLocaleDateString("es-CO", {
-                  day: "numeric",
-                  month: "long",
-                })}
-              </p>
-            </div>
-
-            {/* 2 — Total a pagar */}
-            <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Banknote className="h-4 w-4 text-slate-400" />
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                    Total a Pagar
-                  </p>
-                </div>
-                <TotalBreakdownModal
-                  canonBase={profile.canonBase}
-                  descuentoPct={descuento}
-                  canonNeto={canonNeto}
-                  ivaAmount={ivaAmount}
-                  subtotalIva={subtotalIva}
-                  gastoElec={gastoElec}
-                  totalAPagar={totalAPagar}
-                  kwh={medidor.lecturaActual}
-                  medidorExists={medidor.exists}
-                />
-              </div>
-              <div className="flex flex-1 items-end">
-                <p className="text-4xl font-black tabular-nums leading-none text-slate-900">
-                  {formatCOP(totalAPagar)}
-                </p>
-              </div>
-              <p className="mt-auto pt-3 text-xs text-slate-400">
-                {medidor.exists && gastoElec > 0
-                  ? "Arrendamiento + electricidad"
-                  : "Arrendamiento · energía pendiente"}
-              </p>
-            </div>
-
-            {/* 3 — Estado de cuenta */}
-            <div className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                {enMora
-                  ? <AlertCircle className="h-4 w-4 text-rose-400" />
-                  : <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                }
-                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                  Estado de Cuenta
-                </p>
-              </div>
-              <div className="flex-1">
-                <p className={`text-5xl font-black leading-none ${
-                  enMora ? "text-rose-600" : "text-emerald-600"
-                }`}>
-                  {enMora ? "En Mora" : "Al Día"}
-                </p>
-              </div>
-              <p className="mt-auto pt-3 text-xs text-slate-400">
-                {enMora
-                  ? `${diasEnMora} días vencido`
-                  : `${pagos.length} pago${pagos.length !== 1 ? "s" : ""} registrados`}
-              </p>
-            </div>
-
-          </div>
-        )
-      })()}
-
-      {/* ── Medidor card — clickable ── */}
-      <Link
-        href="/portal/medidor"
-        className={`flex items-center justify-between rounded-xl border p-5 shadow-sm transition-colors ${
-          medidorOverdue
-            ? "border-slate-200 bg-white hover:border-slate-300"
-            : medidorUrgent
-            ? "border-amber-200 bg-amber-50 hover:border-amber-300"
-            : "border-slate-200 bg-white hover:border-slate-300"
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          <Zap className={`h-4 w-4 ${medidorUrgent ? "text-amber-500" : "text-slate-400"}`} />
-          <div>
-            <p className="text-sm font-medium text-slate-700">
-              Lectura del Contador — {periodoLabel(periodo)}
-            </p>
-            <p className="mt-0.5 text-xs text-slate-400">
-              {medidor.exists
-                ? `${medidor.lecturaActual?.toLocaleString("es-CO")} kWh registrados`
-                : medidorOverdue
-                ? "Plazo vencido — se aplicará cobro por promedio"
-                : `Plazo: días 1–10 del mes · quedan ${medidorDeadlineDays} día${medidorDeadlineDays !== 1 ? "s" : ""}`}
-            </p>
-          </div>
+      {/* ── Estado de Cuenta ── */}
+      <div className={`rounded-xl border p-4 shadow-sm ${
+        enMora ? "border-rose-200 bg-rose-50" : "border-emerald-100 bg-emerald-50"
+      }`}>
+        <div className="flex items-center gap-2 mb-2">
+          {enMora
+            ? <AlertCircle className="h-4 w-4 text-rose-400" />
+            : <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          }
+          <p className="text-sm font-semibold text-slate-500">
+            Estado de Cuenta
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          {medidor.exists ? (
-            <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Enviada
-            </span>
-          ) : medidorOverdue ? (
-            <span className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500">
-              Vencido
-            </span>
-          ) : (
-            <span className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
-              medidorUrgent ? "bg-amber-100 text-amber-700" : "bg-amber-50 text-amber-700"
-            }`}>
-              <Clock className="h-3.5 w-3.5" />
-              Pendiente
-            </span>
-          )}
-          <ChevronRight className="h-4 w-4 text-slate-300" />
-        </div>
-      </Link>
-
-      {/* ── Historial de pagos — últimos 5 ── */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-          <h2 className="text-sm font-semibold text-slate-900">
-            Historial de Pagos
-          </h2>
-          <Link
-            href="/portal/pagos"
-            className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800"
-          >
-            Ver historial completo
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 text-xs font-medium uppercase tracking-wider text-slate-500">
-                <th className="px-5 py-3 text-left">Fecha</th>
-                <th className="hidden sm:table-cell px-5 py-3 text-left">Concepto</th>
-                <th className="px-5 py-3 text-right">Valor</th>
-                <th className="px-5 py-3 text-left">Estado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {pagos.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-5 py-8 text-center text-sm text-slate-400">
-                    Sin pagos registrados
-                  </td>
-                </tr>
-              ) : (
-                pagos.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-50">
-                    <td className="px-5 py-3 font-medium text-slate-700">
-                      {formatDate(p.fechaRecaudo)}
-                    </td>
-                    <td className="hidden sm:table-cell px-5 py-3 text-slate-500">
-                      {p.concepto ?? "—"}
-                    </td>
-                    <td className="px-5 py-3 text-right font-medium text-slate-900">
-                      {formatCOP(p.valorFinal)}
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-                        Recaudado
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <p className={`text-4xl font-black leading-none ${
+          enMora ? "text-rose-600" : "text-emerald-600"
+        }`}>
+          {enMora ? "En Mora" : "Al Día"}
+        </p>
+        <p className="mt-1 text-xs text-slate-400">
+          {enMora
+            ? `${diasEnMora} días vencido`
+            : `${pagos.length} pago${pagos.length !== 1 ? "s" : ""} registrados`}
+        </p>
       </div>
+
+      {/* ── Próximo Pago ── */}
+      <div className={`rounded-xl border p-4 shadow-sm ${
+        paymentOverdue || paymentUrgent ? "border-rose-200 bg-rose-50"
+        : paymentWarning               ? "border-amber-200 bg-amber-50"
+        :                                "border-slate-200 bg-white"
+      }`}>
+        <div className="flex items-center gap-2 mb-2">
+          <TrendingUp className={`h-4 w-4 ${
+            paymentOverdue || paymentUrgent ? "text-rose-400"
+            : paymentWarning               ? "text-amber-400"
+            :                                "text-slate-400"
+          }`} />
+          <p className="text-sm font-semibold text-slate-500">
+            Próximo Pago
+          </p>
+        </div>
+        {paymentOverdue ? (
+          <p className="text-4xl font-black tracking-tight text-rose-600">VENCIDO</p>
+        ) : daysToPayment === 0 ? (
+          <p className="text-4xl font-black tracking-tight text-rose-600">HOY</p>
+        ) : (
+          <div className="flex items-baseline gap-1">
+            <span className={`text-4xl font-black tabular-nums leading-none ${
+              paymentUrgent   ? "text-rose-600"
+              : paymentWarning ? "text-amber-600"
+              :                  "text-slate-900"
+            }`}>
+              {daysToPayment}
+            </span>
+            <span className={`text-lg font-semibold ${
+              paymentUrgent   ? "text-rose-400"
+              : paymentWarning ? "text-amber-400"
+              :                  "text-slate-400"
+            }`}>
+              días
+            </span>
+          </div>
+        )}
+        <p className="mt-1 text-xs text-slate-400">
+          Aprox.{" "}
+          {nextPaymentDate.toLocaleDateString("es-CO", {
+            day: "numeric",
+            month: "long",
+          })}
+        </p>
+      </div>
+
+      {/* ── Total a Pagar ── */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-2 mb-2">
+          <Banknote className="h-4 w-4 text-slate-400" />
+          <p className="text-sm font-semibold text-slate-500">
+            Total a Pagar
+          </p>
+        </div>
+
+        {cartera.saldoTotal > 0 ? (
+          <>
+            <p className="text-4xl font-black tabular-nums leading-none text-slate-900">
+              {formatCOP(cartera.saldoTotal)}
+            </p>
+
+            {/* Per-invoice breakdown — compact 2-line rows */}
+            <div className="mt-3 border-t border-slate-100 pt-3 space-y-2">
+              {cartera.rows.map((row) => {
+                const year = Math.floor(row.periodo / 100)
+                const month = row.periodo % 100
+                const label = new Date(year, month - 1, 1).toLocaleDateString("es-CO", { month: "long", year: "numeric" })
+                const isVencido = row.vencido > 0
+                return (
+                  <div key={`${row.periodo}-${row.unidad}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        {row.unidad && (
+                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-500">
+                            Local {row.unidad}
+                          </span>
+                        )}
+                        <span className="text-xs font-medium text-slate-700 capitalize">{label}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-xs font-medium ${isVencido ? "text-rose-500" : "text-slate-400"}`}>
+                          {isVencido ? "Vencida" : "Al día"}
+                        </span>
+                        <span className="text-sm font-semibold text-slate-900">{formatCOP(row.saldo)}</span>
+                      </div>
+                    </div>
+                    {row.ventas != null && (
+                      <p className="mt-0.5 text-xs text-slate-400">
+                        Arrend. {formatCOP(row.ventas)} · IVA +{formatCOP(row.impuesto!)}
+                        {(row.retenciones ?? 0) > 0 && ` · Ret. −${formatCOP(row.retenciones!)}`}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-4xl font-black tabular-nums leading-none text-emerald-600">$ 0</p>
+            <p className="mt-1 text-xs text-slate-400">Sin facturas pendientes en Siesa</p>
+          </>
+        )}
+      </div>
+
     </div>
   )
 }

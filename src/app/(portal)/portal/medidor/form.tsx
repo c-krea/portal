@@ -310,7 +310,7 @@ export function MedidorForm({
         </div>
       </form>
 
-      <HistorialChart history={history} />
+      <HistorialChart series={[{ label: "Lectura", data: history }]} />
     </div>
   )
 }

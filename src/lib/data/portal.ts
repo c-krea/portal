@@ -9,6 +9,8 @@ export type PortalProfile = {
   unitNumber: string
   unitCode: string
   unitId: string
+  allUnits: string[]
+  allUnitIds: string[]
   entrada: string | null
   fechaInicio: string
   fechaFin: string | null
@@ -29,12 +31,12 @@ export type PortalProfile = {
 export type PortalPago = {
   id: string
   fechaRecaudo: string
-  fechaVencimiento: string | null
+  fechaFactura: string | null
   valorFinal: number
   valorAplicado: number
   concepto: string | null
   status: string
-  diasDiff: number | null
+  diasDesdeFactura: number | null
 }
 
 export type PortalMedidorStatus = {
@@ -63,6 +65,18 @@ export async function getPortalProfile(userId: string): Promise<PortalProfile | 
       u.codigo                                           AS unit_code,
       u.entrada,
       u.id                                               AS unit_id,
+      (
+        SELECT ARRAY_AGG(lu.unidad ORDER BY lu.unidad)
+        FROM v2.contratos cc
+        JOIN v2.locales lu ON lu.id = cc.local_id
+        WHERE cc.inquilino_id = t.id AND cc.estado IN ('activo','critico')
+      )                                                  AS all_units,
+      (
+        SELECT ARRAY_AGG(lu.id::text ORDER BY lu.unidad)
+        FROM v2.contratos cc
+        JOIN v2.locales lu ON lu.id = cc.local_id
+        WHERE cc.inquilino_id = t.id AND cc.estado IN ('activo','critico')
+      )                                                  AS all_unit_ids,
       c.fecha_inicio,
       c.fecha_fin,
       c.canon_base::numeric                              AS canon_base,
@@ -73,7 +87,7 @@ export async function getPortalProfile(userId: string): Promise<PortalProfile | 
       c.descripcion_descuentos
     FROM v2.perfiles p
     JOIN v2.inquilinos t ON t.id = p.inquilino_id
-    JOIN v2.contratos  c ON c.inquilino_id = t.id AND c.estado = 'activo'
+    JOIN v2.contratos  c ON c.inquilino_id = t.id AND c.estado IN ('activo','critico')
     JOIN v2.locales    u ON u.id = c.local_id
     WHERE p.id = '${userId}'
     LIMIT 1
@@ -89,6 +103,8 @@ export async function getPortalProfile(userId: string): Promise<PortalProfile | 
     unitNumber: String(r.unit_number),
     unitCode: String(r.unit_code),
     unitId: String(r.unit_id),
+    allUnits:    Array.isArray(r.all_units)    ? (r.all_units as string[])    : [String(r.unit_number)],
+    allUnitIds:  Array.isArray(r.all_unit_ids) ? (r.all_unit_ids as string[]) : [String(r.unit_id)],
     entrada: r.entrada ? String(r.entrada) : null,
     fechaInicio: String(r.fecha_inicio),
     fechaFin: r.fecha_fin ? String(r.fecha_fin) : null,
@@ -111,12 +127,12 @@ function mapPago(r: Record<string, unknown>): PortalPago {
   return {
     id: String(r.id),
     fechaRecaudo: String(r.fecha_recaudo),
-    fechaVencimiento: r.fecha_vencimiento ? String(r.fecha_vencimiento) : null,
+    fechaFactura: r.fecha_factura ? String(r.fecha_factura) : null,
     valorFinal: Number(r.valor_final),
     valorAplicado: Number(r.valor_aplicado),
-    concepto: null,
+    concepto: r.cruce ? String(r.cruce) : null,
     status: "RECAUDADO",
-    diasDiff: r.dias_diff != null ? Number(r.dias_diff) : null,
+    diasDesdeFactura: r.dias_desde_factura != null ? Number(r.dias_desde_factura) : null,
   }
 }
 
@@ -125,10 +141,11 @@ export async function getPortalPagos(tenantId: string, limit = 5): Promise<Porta
     SELECT
       ROW_NUMBER() OVER (ORDER BY fecha_recaudo DESC, docto, cruce)::text AS id,
       fecha_recaudo,
-      fecha_vencimiento,
-      valor_final::numeric    AS valor_final,
-      valor_aplicado::numeric AS valor_aplicado,
-      (fecha_recaudo - fecha_vencimiento) AS dias_diff
+      fecha_factura,
+      cruce,
+      valor_final::numeric                        AS valor_final,
+      valor_aplicado::numeric                     AS valor_aplicado,
+      (fecha_recaudo - fecha_factura)             AS dias_desde_factura
     FROM v2.vista_pagos
     WHERE inquilino_id = '${tenantId}'::uuid
     ORDER BY fecha_recaudo DESC
@@ -152,11 +169,12 @@ export async function getPortalPagosPage(
     SELECT
       ROW_NUMBER() OVER (ORDER BY fecha_recaudo DESC, docto, cruce)::text AS id,
       fecha_recaudo,
-      fecha_vencimiento,
-      valor_final::numeric    AS valor_final,
-      valor_aplicado::numeric AS valor_aplicado,
-      (fecha_recaudo - fecha_vencimiento) AS dias_diff,
-      COUNT(*) OVER()         AS total_count
+      fecha_factura,
+      cruce,
+      valor_final::numeric                        AS valor_final,
+      valor_aplicado::numeric                     AS valor_aplicado,
+      (fecha_recaudo - fecha_factura)             AS dias_desde_factura,
+      COUNT(*) OVER()                             AS total_count
     FROM v2.vista_pagos
     WHERE inquilino_id = '${tenantId}'::uuid
     ORDER BY fecha_recaudo DESC
@@ -169,34 +187,29 @@ export async function getPortalPagosPage(
 export type PortalPagosKpis = {
   totalPagado: number
   totalCount: number
-  aTiempoCount: number
+  enPlazoCount: number
   tardeCount: number
-  avgDiasTarde: number | null
-  avgDiasAnticipacion: number | null
+  avgDias: number | null
 }
 
 export async function getPortalPagosKpis(tenantId: string): Promise<PortalPagosKpis> {
   const rows = await execute(`
     SELECT
-      COUNT(*)                                                              AS total_count,
-      SUM(valor_final)::numeric                                            AS total_pagado,
-      COUNT(*) FILTER (WHERE fecha_recaudo <= fecha_vencimiento)           AS a_tiempo,
-      COUNT(*) FILTER (WHERE fecha_recaudo > fecha_vencimiento)            AS tarde,
-      ROUND(AVG(fecha_recaudo - fecha_vencimiento)
-        FILTER (WHERE fecha_recaudo > fecha_vencimiento), 1)               AS avg_dias_tarde,
-      ROUND(AVG(fecha_vencimiento - fecha_recaudo)
-        FILTER (WHERE fecha_recaudo < fecha_vencimiento), 1)               AS avg_dias_anticipacion
+      COUNT(*)                                                                    AS total_count,
+      SUM(valor_final)::numeric                                                   AS total_pagado,
+      COUNT(*) FILTER (WHERE fecha_recaudo - fecha_factura <= 30)                 AS en_plazo,
+      COUNT(*) FILTER (WHERE fecha_recaudo - fecha_factura > 30)                 AS tarde,
+      ROUND(AVG(fecha_recaudo - fecha_factura), 1)                                AS avg_dias
     FROM v2.vista_pagos
     WHERE inquilino_id = '${tenantId}'::uuid
   `)
   const r = rows[0] ?? {}
   return {
-    totalPagado:         Number(r.total_pagado ?? 0),
-    totalCount:          Number(r.total_count ?? 0),
-    aTiempoCount:        Number(r.a_tiempo ?? 0),
-    tardeCount:          Number(r.tarde ?? 0),
-    avgDiasTarde:        r.avg_dias_tarde != null ? Number(r.avg_dias_tarde) : null,
-    avgDiasAnticipacion: r.avg_dias_anticipacion != null ? Number(r.avg_dias_anticipacion) : null,
+    totalPagado:  Number(r.total_pagado ?? 0),
+    totalCount:   Number(r.total_count ?? 0),
+    enPlazoCount: Number(r.en_plazo ?? 0),
+    tardeCount:   Number(r.tarde ?? 0),
+    avgDias:      r.avg_dias != null ? Number(r.avg_dias) : null,
   }
 }
 
@@ -228,6 +241,99 @@ export async function getPortalMedidorHistory(
     lecturaActual: Number(r.lectura_actual),
     validationStatus: r.validation_status ? String(r.validation_status) : null,
   }))
+}
+
+export type PortalContrato = {
+  unidad: string
+  entrada: string | null
+  canonBase: number
+  fechaInicio: string
+  fechaFin: string | null
+  descuentoPct: number | null
+  prontoPagoPct: number | null
+  estado: string
+}
+
+export async function getPortalContratos(tenantId: string): Promise<PortalContrato[]> {
+  const rows = await execute(`
+    SELECT
+      l.unidad,
+      l.entrada,
+      c.canon_base::numeric      AS canon_base,
+      c.fecha_inicio,
+      c.fecha_fin,
+      c.descuento_pct::numeric   AS descuento_pct,
+      c.pronto_pago_pct::numeric AS pronto_pago_pct,
+      c.estado
+    FROM v2.contratos c
+    JOIN v2.locales l ON l.id = c.local_id
+    WHERE c.inquilino_id = '${tenantId}'::uuid
+      AND c.estado IN ('activo','critico')
+    ORDER BY l.unidad
+  `)
+  return rows.map((r) => ({
+    unidad:        String(r.unidad),
+    entrada:       r.entrada ? String(r.entrada) : null,
+    canonBase:     Number(r.canon_base),
+    fechaInicio:   String(r.fecha_inicio),
+    fechaFin:      r.fecha_fin ? String(r.fecha_fin) : null,
+    descuentoPct:  r.descuento_pct != null ? Number(r.descuento_pct) : null,
+    prontoPagoPct: r.pronto_pago_pct != null ? Number(r.pronto_pago_pct) : null,
+    estado:        String(r.estado),
+  }))
+}
+
+export type PortalCarteraRow = {
+  periodo: number
+  unidad: string | null
+  saldo: number
+  vencido: number
+  ventas: number | null
+  impuesto: number | null
+  retenciones: number | null
+}
+
+export type PortalCartera = {
+  saldoTotal: number
+  facturaCount: number
+  vencido: number
+  rows: PortalCarteraRow[]
+}
+
+export async function getPortalCartera(nit: string): Promise<PortalCartera> {
+  const rows = await execute(`
+    SELECT
+      (EXTRACT(YEAR FROM c.fecha_factura) * 100 + EXTRACT(MONTH FROM c.fecha_factura))::int AS periodo,
+      REGEXP_REPLACE(c.sucursal, '^.*\\s+', '')                                             AS unidad,
+      ROUND(c.saldo)::numeric       AS saldo,
+      ROUND(c.vr_vencido)::numeric  AS vencido,
+      ROUND(d.ventas)::numeric      AS ventas,
+      ROUND(d.impuesto)::numeric    AS impuesto,
+      ROUND(d.retenciones)::numeric AS retenciones
+    FROM siesa_raw.cartera c
+    LEFT JOIN siesa_raw.documentos d
+      ON d.documento = '001-' || c.factura
+      AND d.tipo = 'Facturas'
+    WHERE c.documento = '${nit}'
+      AND c.factura LIKE 'FVS-%'
+      AND c.saldo > 0
+    ORDER BY c.fecha_factura DESC, c.sucursal
+  `)
+  const mapped: PortalCarteraRow[] = rows.map((r) => ({
+    periodo:     Number(r.periodo),
+    unidad:      r.unidad ? String(r.unidad) : null,
+    saldo:       Number(r.saldo ?? 0),
+    vencido:     Number(r.vencido ?? 0),
+    ventas:      r.ventas != null ? Number(r.ventas) : null,
+    impuesto:    r.impuesto != null ? Number(r.impuesto) : null,
+    retenciones: r.retenciones != null ? Number(r.retenciones) : null,
+  }))
+  return {
+    saldoTotal:   mapped.reduce((s, r) => s + r.saldo, 0),
+    facturaCount: mapped.length,
+    vencido:      mapped.reduce((s, r) => s + r.vencido, 0),
+    rows:         mapped,
+  }
 }
 
 export async function getPortalMedidorStatus(

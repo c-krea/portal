@@ -2,6 +2,92 @@
 
 ---
 
+## Session 47 — 2026-05-03: Mobile/WhatsApp — Full client portal mobile UI/UX
+
+### Goal
+Complete mobile UI/UX for the tenant (inquilino) portal — both layout and data accuracy.
+
+### What shipped
+
+**Navigation & layout:**
+- Bottom tab nav (`PortalBottomNav`) — Inicio / Medidor / Pagos / Perfil, fixed at bottom, safe-area aware, shows on all screen sizes
+- Portal header: C-Krea logo (replaces Zap icon), "Portal del Inquilino" title, icon+text logout button
+- Portal sidebar (`PortalSidebar`) created then reverted — user decided to keep mobile layout consistent across all screen sizes
+
+**Portal Home (Inicio) redesign:**
+- Removed historial de pagos table, medidor card, and "Volver al portal" links
+- 4 full-width cards: ProfileCard (simplified) → Estado de Cuenta → Próximo Pago → Total a Pagar
+- All cards use consistent layout: label + big number + subtext
+- ProfileCard shows all units (`allUnits[]` — "Locales 101 · 118" for multi-unit tenants)
+- "Total a Pagar" now reads live from `siesa_raw.cartera` (not stale formula from v2.contratos)
+- Invoice breakdown per unit with canon / IVA / retención detail, unit label from `cartera.sucursal`
+
+**Medidor page (Phase 2 parking):**
+- Form code saved to `form.phase2.tsx`
+- Page shows "Próximamente" + historial de uso only
+- Linear WOR-79 created: "Phase 2 — Medidores Eléctricos: portal tenant submission"
+- Historial chart updated to support multiple series (one line per unit, colored)
+
+**Pagos page:**
+- Removed "Volver al portal", removed broken Vencimiento/Concepto columns
+- KPIs: Total Pagado · % En Plazo (≤30d) · Promedio días · Pagos en Mora (>30d)
+- Row badges: "En plazo · Xd" (green) / "X días mora" (red) — based on `fecha_recaudo - fecha_factura`
+- Header shows all units for multi-unit tenants
+
+**Perfil page:**
+- Removed "Volver al portal"
+- Header shows all units
+- Fetches all contracts via `getPortalContratos()` — one block per unit with its own entrada, canon, dates, discounts
+- `entrada` now shown per-unit (correct — different units can have different entrances)
+
+### siesa_raw findings (critical — updated memory)
+
+- **cartera.sucursal** = unit identifier (`"MEDIOS IMPRESOS S.A.S. 101"`) — last word = unit number. Replace amount-matching approach entirely.
+- **Correct cartera→documentos join**: `d.documento = '001-' || c.factura` NOT NIT+period (Cartesian product bug for multi-unit tenants).
+- **fecha_vencimiento in recaudo is BROKEN** — stores payment application date (= fecha_recaudo always). Use `fecha_recaudo - fecha_factura` for timing.
+- **ERP pushes 3× per day** (00:00, 08:00, 15:00 Bogotá). Portal data ≤8h stale.
+- **Recaudo history**: Jan 2024 → present (2,834 rows). Full history safe.
+- **Documentos**: ~5-month rolling window (IT-managed).
+- **Cartera**: current open invoices only — Jan 2024 date = old unpaid debt, not history.
+- **Unit per payment (history)**: not possible — cartera drops paid invoices, recaudo/documentos have no sucursal.
+
+### Decisions
+- Portal data must use siesa_raw directly — v2 tables may have Excel residue. Memory updated in `siesa_raw_layer.md`, `recaudo_data_model.md`, `pagos_mora_logic.md`.
+- 30-day threshold for mora/en-plazo portal-wide (matches grace period rule).
+- Phase 2 (medidores OCR + form) parked. WOR-79 created.
+
+---
+
+## Session 46 — 2026-05-03: Proyecciones rewrite — live siesa_raw + phase discount fix
+
+### Goal
+Verify and ship the proyecciones page rewrite before pushing to prod. Deep audit of old vs new data source, UI polish, and DB documentation.
+
+### What shipped
+- **Proyecciones anual rewrite** (was started in prior session, verified + polished this session). All 3 query functions (`getProyeccionBreakdown`, `getProyeccionDetalle`, `getProyeccionMensual`) now read live from `siesa_raw.ocupacion` instead of frozen `v2.proyecciones`. 79 tenants, auto-updates when ERP changes.
+- **Phase discount expiry bug fixed** (critical): `mes_dcto_end` was returning `13` (= apply discount all year) when the phase end date was before the projection year. Should be `0` (= no discount). Fixed in all 3 functions. Impact: recovered $137.9M/year in projections that were being falsely discounted.
+- **UI**: Replaced tiny inline breakdown strip with 4 visible cards below the main Piso/Esperado/Techo row: Canon Bruto · Descuentos de Fase · Bonus PP No Usado · Recaudo Esperado. Matching live page style.
+- **New component**: `MensualDetalleTable` — sortable client-side table for the mensual invoice breakdown view.
+- **`docs/db-schema-reference.md`** created: complete column-level reference for every siesa_raw + v2 table, join patterns, projection logic, phase discount rules, ex-tenant cartera pattern.
+- **Memory updated**: `erp_ocupacion_model.md` rewritten (removed dead sync-csf refs, added phase fix, discount conflict patterns, ex-tenant cartera rule). `project_state.md` updated.
+
+### 🎯 Decision — v2.proyecciones is permanently retired for forward projections
+Verified gaps: 12 missing tenants, BECERRA 120 doubled ($6.1M vs $3.05M), ALARCON 312 ghost through Sep 2026. IPC-inflated rates ~5.9% above ERP. Going forward: any "what will we collect" query derives from siesa_raw.ocupacion. v2.proyecciones kept only for year-start baseline comparison if ever needed.
+
+### 🎯 Decision — Phase discount source: siesa_raw rate + v2.contratos expiry
+ERP pushes the current step rate (50%→30%→20%→0% as phase progresses). Portal uses `o.descuento` as the current rate but applies it only while `mes <= mes_dcto_end` (derived from `c.descuento_hasta_mes`). If phase expired before the projection year → 0% for the whole year, regardless of what ERP still shows (stale ERP data pattern confirmed on 4 tenants).
+
+### 💡 Key finding — 25 discount conflicts between ERP and portal contract records
+3 patterns: (A) ERP=0%, portal has phase% → phase correctly expired, ERP is right. (B) ERP < portal → phase stepping down, ERP is right. (C) ERP=50%, portal lower → ERP not yet updated after expiry, portal overrides with 0% via expiry fix. Only Pattern C is a real data issue; Siesa admin needs to clean up 4 tenants.
+
+### ✅ Accuracy verified
+Jan 2026: projection esperado $238.9M vs actual siesa_raw.documentos $236.6M = <1% error. Strong validation that siesa_raw is the right source.
+
+### ⚠️ Open (WOR-78)
+Mid-year phase step-downs (50%→30%→20%) not modeled. Portal applies current ERP rate flat for the active phase period. Needs phase timeline per contract stored in v2.contratos.
+
+---
+
 ## Session 45 — 2026-04-30: Repair sync_desde_raw + auto-critico + unify Cartera Jurídica
 
 ### Goal

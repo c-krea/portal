@@ -2,14 +2,16 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { supabaseAdmin } from "@/lib/db/executor"
 import { signOut } from "@/app/(auth)/login/actions"
-import { LogOut, Zap } from "lucide-react"
+import { LogOut } from "lucide-react"
+import Image from "next/image"
+import { PortalBottomNav } from "@/components/layout/portal-bottom-nav"
 
 async function SignOutButton() {
   return (
     <form action={signOut}>
       <button
         type="submit"
-        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"
       >
         <LogOut className="h-4 w-4" />
         Cerrar Sesión
@@ -43,19 +45,15 @@ export default async function PortalLayout({
     <div className="w-full min-h-screen bg-slate-50">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white shadow-sm">
         <div className="mx-auto flex h-14 max-w-4xl items-center justify-between px-4 sm:px-6">
-          <div className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-slate-700" />
-            <span className="text-base font-semibold text-slate-900">
-              Portal del Inquilino
-            </span>
+          <div className="flex items-center gap-2.5">
+            <Image src="/ckrea-logo.png" alt="C-Krea" width={28} height={28} className="shrink-0" />
+            <span className="text-base font-semibold text-slate-900">Portal del Inquilino</span>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="hidden sm:inline text-sm text-slate-500">{profile?.nombre_completo}</span>
-            <SignOutButton />
-          </div>
+          <SignOutButton />
         </div>
       </header>
-      <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-8">{children}</main>
+      <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-8 pb-24">{children}</main>
+      <PortalBottomNav />
     </div>
   )
 }

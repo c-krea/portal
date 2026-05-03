@@ -6,6 +6,60 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [Unreleased] — 2026-05-03 (Mobile client portal — Session 47)
+
+### Added — Portal bottom tab navigation
+- Fixed bottom tab bar: Inicio / Medidor / Pagos / Perfil. Safe-area aware. Shows on all screen sizes.
+- C-Krea logo in portal header, replaces Zap icon.
+
+### Changed — Portal home page full redesign
+- 4 full-width cards: ProfileCard → Estado de Cuenta → Próximo Pago → Total a Pagar.
+- Removed: historial de pagos table, medidor card, all "Volver al portal" links.
+- ProfileCard simplified; shows all units for multi-unit tenants.
+- "Total a Pagar" now reads live from `siesa_raw.cartera`. Invoice breakdown per unit with canon/IVA/retención detail. Unit label from `cartera.sucursal`.
+
+### Changed — Medidor page parked (Phase 2)
+- Form code saved to `form.phase2.tsx`. Page shows "Próximamente" + usage history only.
+- Historial chart supports multiple series (one line per unit). Linear WOR-79 created.
+
+### Changed — Pagos page
+- KPIs rewritten: Total Pagado · % En Plazo (≤30d) · Promedio días · Pagos en Mora (>30d).
+- Row badges based on `fecha_recaudo - fecha_factura` (correct metric — fecha_vencimiento was broken).
+- Removed broken Vencimiento/Concepto/Estado columns.
+
+### Changed — Perfil page
+- All units shown in header. Contract section shows one block per unit with its own entrada, canon, dates, discounts via new `getPortalContratos()` function.
+- Entrada now fetched per unit (was incorrectly showing only one unit's entrance).
+
+### Fixed — Multi-unit tenant display across all portal pages
+- `getPortalProfile` now fetches `allUnits[]` and `allUnitIds[]` via subquery aggregation.
+- All pages (home, medidor, pagos, perfil) correctly show "Locales 101 · 118" for multi-unit tenants.
+
+### Fixed — cartera→documentos join Cartesian product bug
+- Join changed from NIT+period to `d.documento = '001-' || c.factura`. Prevents 4 rows for 2-unit tenants.
+
+---
+
+## [Unreleased] — 2026-05-03 (Proyecciones rewrite — Session 46)
+
+### Fixed — Phase discount expiry bug in annual projections
+- `mes_dcto_end` returned `13` (all year) when phase expired before projection year. Now returns `0` (no discount). Affected 3 query functions. Recovered $137.9M/year in projections incorrectly reduced by expired discounts.
+
+### Changed — Proyecciones anual reads live from siesa_raw.ocupacion
+- All 3 projection functions rewritten to query `siesa_raw.ocupacion` directly. Previously read from frozen `v2.proyecciones` (stale Excel snapshot missing 12 tenants). Now reflects current ERP occupancy automatically.
+- Verified accuracy: Jan 2026 projection $238.9M vs actual invoices $236.6M (<1% error).
+
+### Added — Proyecciones UI: 4-card breakdown row
+- Replaced unreadable inline text strip with 4 cards below Piso/Esperado/Techo: Canon Bruto · Descuentos de Fase · Bonus PP No Usado · Recaudo Esperado.
+
+### Added — MensualDetalleTable component
+- Sortable client-side table for the mensual view showing invoices per tenant for the current month.
+
+### Added — docs/db-schema-reference.md
+- Complete column-level reference for all siesa_raw + v2 tables, join patterns, projection logic, and phase discount rules.
+
+---
+
 ## [Unreleased] — 2026-04-30 (Sync repair + auto-critico + unified Cartera Jurídica — Session 45)
 
 ### Fixed — `v2.sync_desde_raw()` broken since col drop

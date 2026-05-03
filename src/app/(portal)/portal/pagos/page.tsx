@@ -9,13 +9,7 @@ import {
 } from "@/lib/data/portal"
 import { formatCOP, formatDate } from "@/lib/formatters"
 import Link from "next/link"
-import {
-  ArrowLeft,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  Banknote,
-} from "lucide-react"
+import { Banknote, Receipt, CheckCircle2, Clock } from "lucide-react"
 
 function PaginationBar({
   page,
@@ -87,87 +81,59 @@ export default async function PagosHistorialPage({
   ])
 
   const totalPages = Math.ceil(totalCount / pageSize)
-  const pctATiempo = kpis.totalCount > 0
-    ? Math.round((kpis.aTiempoCount / kpis.totalCount) * 100)
+  const pctEnPlazo = kpis.totalCount > 0
+    ? Math.round((kpis.enPlazoCount / kpis.totalCount) * 100)
     : 0
+
+  const unitsLabel = profile.allUnits.length > 1
+    ? `Locales ${profile.allUnits.join(" · ")}`
+    : `Local ${profile.unitNumber}`
 
   return (
     <div className="space-y-5">
-      <Link
-        href="/portal"
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Volver al portal
-      </Link>
-
       <div>
         <h1 className="text-xl font-bold text-slate-900">Historial de Pagos</h1>
-        <p className="mt-0.5 text-sm text-slate-500">
-          Local {profile.unitNumber} — {profile.nombreCorto ?? profile.razonSocial}
-        </p>
+        <p className="mt-0.5 text-sm text-slate-500">{unitsLabel}</p>
       </div>
 
       {/* KPI grid */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-2">
             <Banknote className="h-4 w-4 text-slate-400" />
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-              Total Pagado
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Total Pagado</p>
           </div>
-          <p className="text-xl font-bold text-slate-900">
-            {formatCOP(kpis.totalPagado)}
-          </p>
-          <p className="mt-0.5 text-xs text-slate-400">
-            {kpis.totalCount} pagos registrados
-          </p>
+          <p className="text-lg font-bold text-slate-900">{formatCOP(kpis.totalPagado)}</p>
+          <p className="mt-0.5 text-xs text-slate-400">{kpis.totalCount} pagos registrados</p>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-2">
             <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-              A Tiempo
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">En Plazo</p>
           </div>
-          <p className="text-xl font-bold text-emerald-600">{pctATiempo}%</p>
-          <p className="mt-0.5 text-xs text-slate-400">
-            {kpis.aTiempoCount} de {kpis.totalCount} pagos
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertCircle className="h-4 w-4 text-rose-400" />
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-              Días de Mora
-            </p>
-          </div>
-          <p className="text-xl font-bold text-rose-600">
-            {kpis.avgDiasTarde != null ? `${kpis.avgDiasTarde} días` : "—"}
-          </p>
-          <p className="mt-0.5 text-xs text-slate-400">
-            promedio cuando tardío
-          </p>
+          <p className="text-lg font-bold text-emerald-600">{pctEnPlazo}%</p>
+          <p className="mt-0.5 text-xs text-slate-400">{kpis.enPlazoCount} de {kpis.totalCount} · dentro de 30 días</p>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-2">
             <Clock className="h-4 w-4 text-blue-400" />
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-              Días Anticipación
-            </p>
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Promedio días</p>
           </div>
-          <p className="text-xl font-bold text-blue-600">
-            {kpis.avgDiasAnticipacion != null
-              ? `${kpis.avgDiasAnticipacion} días`
-              : "—"}
+          <p className="text-lg font-bold text-slate-900">
+            {kpis.avgDias != null ? `${kpis.avgDias} días` : "—"}
           </p>
-          <p className="mt-0.5 text-xs text-slate-400">
-            promedio cuando a tiempo
-          </p>
+          <p className="mt-0.5 text-xs text-slate-400">desde factura a pago</p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <Receipt className="h-4 w-4 text-rose-400" />
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Pagos en Mora</p>
+          </div>
+          <p className="text-lg font-bold text-rose-600">{kpis.tardeCount}</p>
+          <p className="mt-0.5 text-xs text-slate-400">pagados después de 30 días</p>
         </div>
       </div>
 
@@ -186,43 +152,35 @@ export default async function PagosHistorialPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 text-xs font-medium uppercase tracking-wider text-slate-500">
-                <th className="px-4 sm:px-5 py-3 text-left">Fecha Pago</th>
-                <th className="hidden sm:table-cell px-5 py-3 text-left">Vencimiento</th>
-                <th className="hidden md:table-cell px-5 py-3 text-left">Concepto</th>
-                <th className="px-4 sm:px-5 py-3 text-right">Valor</th>
-                <th className="hidden sm:table-cell px-5 py-3 text-left">Estado</th>
+                <th className="px-4 py-3 text-left">Fecha de Pago</th>
+                <th className="px-4 py-3 text-right">Valor</th>
+                <th className="px-4 py-3 text-left">Estado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {pagos.map((p) => {
-                const late = p.diasDiff != null && p.diasDiff > 0
-                const early = p.diasDiff != null && p.diasDiff < 0
+                const d = p.diasDesdeFactura
+                const enMora = d != null && d > 30
                 return (
                   <tr key={p.id} className="hover:bg-slate-50">
-                    <td className="px-4 sm:px-5 py-3 font-medium text-slate-700">
+                    <td className="px-4 py-3 font-medium text-slate-700">
                       {formatDate(p.fechaRecaudo)}
                     </td>
-                    <td className="hidden sm:table-cell px-5 py-3 text-slate-500">
-                      {p.fechaVencimiento ? formatDate(p.fechaVencimiento) : "—"}
-                    </td>
-                    <td className="hidden md:table-cell px-5 py-3 text-slate-500">
-                      {p.concepto ?? "—"}
-                    </td>
-                    <td className="px-4 sm:px-5 py-3 text-right font-medium text-slate-900">
+                    <td className="px-4 py-3 text-right font-medium text-slate-900">
                       {formatCOP(p.valorFinal)}
                     </td>
-                    <td className="hidden sm:table-cell px-5 py-3">
-                      {late ? (
+                    <td className="px-4 py-3">
+                      {enMora ? (
                         <span className="rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-600">
-                          {p.diasDiff}d tarde
+                          {d} días mora
                         </span>
-                      ) : early ? (
+                      ) : d != null ? (
                         <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-                          {Math.abs(p.diasDiff!)}d anticipado
+                          En plazo · {d}d
                         </span>
                       ) : (
-                        <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-                          A tiempo
+                        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
+                          Recaudado
                         </span>
                       )}
                     </td>
