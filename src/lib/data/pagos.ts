@@ -99,17 +99,12 @@ export async function getPagosKPIs(month?: string): Promise<PagosKPIs> {
       FROM deduped
     ),
     proyectado_mes AS (
-      SELECT ROUND(COALESCE(SUM(
-        (pr.canon_proyectado - pr.descuento_proyectado)
-        * (1 - (COALESCE(o.pronto_pago, c.pronto_pago_pct, 0) / 100.0) * (COALESCE(t.pp_historico_pct, 0) / 100.0))
-        * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
-      ), 0)) AS total
-      FROM v2.proyecciones pr
-      JOIN v2.contratos c ON pr.contrato_id = c.id
-      JOIN v2.locales u ON c.local_id = u.id
-      JOIN v2.inquilinos t ON c.inquilino_id = t.id
-      LEFT JOIN siesa_raw.ocupacion o ON o.loc = u.unidad
-      WHERE pr.anio = ${year} AND pr.mes = ${monthNum}
+      SELECT ROUND(COALESCE(SUM(saldo), 0))::numeric AS total
+      FROM siesa_raw.cartera
+      WHERE fecha_factura >= ${monthExpr}
+        AND fecha_factura  <  ${monthExpr} + INTERVAL '1 month'
+        AND factura LIKE 'FVS-%'
+        AND saldo > 0
     ),
     ultimo AS (
       SELECT d.fecha_recaudo, COALESCE(t.nombre_corto, t.razon_social) AS cliente, d.valor_final
