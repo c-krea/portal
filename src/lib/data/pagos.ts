@@ -99,12 +99,10 @@ export async function getPagosKPIs(month?: string): Promise<PagosKPIs> {
       FROM deduped
     ),
     proyectado_mes AS (
-      SELECT ROUND(COALESCE(SUM(saldo), 0))::numeric AS total
-      FROM siesa_raw.cartera
-      WHERE fecha_factura >= ${monthExpr}
-        AND fecha_factura  <  ${monthExpr} + INTERVAL '1 month'
-        AND factura LIKE 'FVS-%'
-        AND saldo > 0
+      SELECT ROUND(COALESCE(SUM(ventas + impuesto - retenciones), 0))::numeric AS total
+      FROM siesa_raw.documentos
+      WHERE periodo = ${year * 100 + monthNum}
+        AND tipo = 'Facturas'
     ),
     ultimo AS (
       SELECT d.fecha_recaudo, COALESCE(t.nombre_corto, t.razon_social) AS cliente, d.valor_final
