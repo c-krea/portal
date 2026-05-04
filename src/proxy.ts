@@ -41,7 +41,11 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/auth/confirm") ||
     pathname.startsWith("/api/") ||
     pathname.startsWith("/_next/") ||
-    pathname.startsWith("/favicon")
+    pathname.startsWith("/favicon") ||
+    pathname.startsWith("/icons/") ||
+    pathname === "/manifest.webmanifest" ||
+    pathname === "/sw.js" ||
+    pathname === "/offline"
   ) {
     return supabaseResponse
   }
@@ -86,6 +90,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons/|offline|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 }
