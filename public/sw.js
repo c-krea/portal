@@ -1,9 +1,19 @@
-const CACHE = "ckrea-v1";
+const CACHE = "ckrea-v2";
 const OFFLINE_URL = "/offline";
+
+const STATIC_ASSETS = [
+  OFFLINE_URL,
+  "/manifest.json",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/icons/icon-maskable-512.png",
+  "/icons/apple-touch-icon.png",
+  "/icons/favicon-32x32.png",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll([OFFLINE_URL]))
+    caches.open(CACHE).then((cache) => cache.addAll(STATIC_ASSETS))
   );
   self.skipWaiting();
 });
@@ -18,11 +28,27 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.mode === "navigate") {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // Static assets — cache first, fallback to network
+  if (STATIC_ASSETS.some((path) => url.pathname === path)) {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(OFFLINE_URL))
+      caches.match(request).then((cached) => cached ?? fetch(request))
     );
+    return;
   }
+
+  // Page navigations — network only. Offline → show block page.
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request).catch(() => caches.match(OFFLINE_URL))
+    );
+    return;
+  }
+
+  // Everything else (API calls, data) — network only, no caching.
+  // Payment data must always be fresh.
 });
 
 // Push notifications

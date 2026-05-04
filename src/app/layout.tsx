@@ -3,6 +3,7 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { PostHogProvider } from "@/components/posthog-provider"
 import { PwaRegister } from "@/components/pwa-register"
+import { OfflineDetector } from "@/components/offline-detector"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
 
@@ -42,6 +43,7 @@ export default function RootLayout({
       <body className="flex h-full bg-slate-50">
         <PostHogProvider>{children}</PostHogProvider>
         <PwaRegister />
+        <OfflineDetector />
       </body>
     </html>
   )
