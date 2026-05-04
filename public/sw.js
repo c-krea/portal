@@ -1,4 +1,4 @@
-const CACHE = "ckrea-v3";
+const CACHE = "ckrea-v4";
 const OFFLINE_URL = "/offline";
 
 const STATIC_ASSETS = [
@@ -7,7 +7,7 @@ const STATIC_ASSETS = [
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/icon-maskable-512.png",
-  "/icons/apple-touch-icon-v2.png",
+  "/icons/apple-touch-icon-v3.png",
   "/icons/favicon-32x32.png",
 ];
 
