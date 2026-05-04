@@ -11,6 +11,7 @@ import {
 import { formatCOP, formatDate } from "@/lib/formatters"
 import Link from "next/link"
 import { ProfileCard } from "./profile-card"
+import { WompiButton } from "./wompi-button"
 import {
   CheckCircle2,
   AlertCircle,
@@ -283,6 +284,9 @@ export default async function PortalPage() {
           </>
         )}
       </div>
+
+      {/* ── Pago en línea ── */}
+      <WompiButton unitNumber={profile.unitNumber} />
 
     </div>
   )
