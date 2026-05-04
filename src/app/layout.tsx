@@ -19,7 +19,6 @@ export const metadata: Metadata = {
     apple: [
       { url: "/icons/apple-touch-icon-v3.png", sizes: "180x180", type: "image/png" },
     ],
-    shortcut: "/icons/favicon-32x32.png",
   },
   appleWebApp: {
     capable: true,
