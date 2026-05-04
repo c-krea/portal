@@ -36,6 +36,9 @@ export async function proxy(request: NextRequest) {
   // Public routes — allow through always
   if (
     pathname.startsWith("/login") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/update-password") ||
+    pathname.startsWith("/auth/confirm") ||
     pathname.startsWith("/api/") ||
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/favicon")

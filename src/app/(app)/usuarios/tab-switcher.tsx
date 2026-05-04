@@ -163,14 +163,13 @@ export function TabSwitcher({
                   <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Email</th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Rol</th>
                   <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Último Acceso</th>
-                  <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Creado</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
                 {admins.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-400">
+                    <td colSpan={5} className="px-5 py-10 text-center text-sm text-slate-400">
                       Sin usuarios administrativos registrados
                     </td>
                   </tr>
@@ -189,11 +188,6 @@ export function TabSwitcher({
                         </td>
                         <td className="hidden md:table-cell px-4 py-3 text-xs font-medium text-slate-700">
                           {lastSignInLabel(u.lastSignIn)}
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-xs text-slate-400">
-                          {new Date(u.createdAt).toLocaleDateString("es-CO", {
-                            day: "2-digit", month: "short", year: "numeric",
-                          })}
                         </td>
                         <td className="px-3 py-3">
                           <EditAdminModal user={u} />

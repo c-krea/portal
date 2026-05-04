@@ -51,18 +51,26 @@ export function LoginForm() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          id="remember_me"
-          name="remember_me"
-          value="1"
-          defaultChecked
-          className="h-4 w-4 rounded border-slate-600 bg-slate-700 accent-blue-500"
-        />
-        <label htmlFor="remember_me" className="text-xs text-slate-400 select-none cursor-pointer">
-          Recordarme
-        </label>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="remember_me"
+            name="remember_me"
+            value="1"
+            defaultChecked
+            className="h-4 w-4 rounded border-slate-600 bg-slate-700 accent-blue-500"
+          />
+          <label htmlFor="remember_me" className="text-xs text-slate-400 select-none cursor-pointer">
+            Recordarme
+          </label>
+        </div>
+        <a
+          href="/forgot-password"
+          className="text-xs text-blue-400 hover:text-blue-300"
+        >
+          ¿Olvidaste tu contraseña?
+        </a>
       </div>
 
       {state.error && (

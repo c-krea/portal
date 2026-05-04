@@ -2,6 +2,40 @@
 
 ---
 
+## Session 50 — 2026-05-04: Auth emails + domain launch
+
+### Goal
+Set up tenant auth emails (welcome + reset password), wire Brevo, connect ckrea.com.co to Vercel.
+
+### What happened
+- 🎯 **Decision:** Use `admin.generateLink({ type: 'recovery' })` + Brevo instead of Supabase's built-in email — full control over template, no SMTP config in Supabase dashboard.
+- ⚠️ **Gotcha:** `admin.generateLink()` uses implicit flow (token in URL fragment `#access_token=...`), not PKCE (`?code=...`). Our `/api/auth/callback` Route Handler never saw the token. Fix: added client-side `/auth/confirm` page that reads the fragment and calls `supabase.auth.setSession()`.
+- ⚠️ **Gotcha:** Brevo `@getbrevo/brevo` v5 has a completely new API (`BrevoClient` + `brevo.transactionalEmails.sendTransacEmail()`). The old v3 class-based API (`TransactionalEmailsApi`, `SendSmtpEmail`) no longer exists.
+- 💡 **Learning:** Cloudflare + Vercel A record approach works fine despite "DNS Change Recommended" warning. Root domain needs an `A @` record; www needs `CNAME www → cname.vercel-dns.com`. Both DNS only (grey cloud) — orange cloud blocks Vercel SSL provisioning.
+- ⚙️ **Workflow:** Welcome email doubles as password-setup flow — admin creates account (no password), welcome email contains recovery link → tenant clicks → sets password. No separate invite flow needed.
+
+### Files changed
+- `src/lib/email/index.ts` (new) — Brevo client, `sendWelcomeEmail`, `sendPasswordResetEmail`
+- `src/app/(auth)/forgot-password/` (new) — page + form + action
+- `src/app/(auth)/update-password/` (new) — page + form + action
+- `src/app/(auth)/auth/confirm/` (new) — client-side fragment handler
+- `src/app/api/auth/callback/route.ts` (new) — PKCE fallback
+- `src/app/(app)/usuarios/send-email-modal.tsx` (new) — welcome/reset picker modal
+- `src/app/(app)/usuarios/actions.ts` — `sendSystemEmail` action added
+- `src/app/(app)/usuarios/page.tsx` — SendEmailModal wired
+- `src/app/(app)/usuarios/tab-switcher.tsx` — "Creado" column removed
+- `src/components/auth/login-form.tsx` — forgot password link added
+- `src/proxy.ts` — new public routes added
+- `package.json` — `resend` → `@getbrevo/brevo`
+
+### Session-end pointers
+- ADRs: none
+- Lessons: none (Brevo v5 API + Cloudflare gotchas captured inline above)
+- State: project_state.md — update: auth email system live, domain ckrea.com.co launched
+- Linear: none
+
+---
+
 ## Session 49 — 2026-05-03: Full locales + portal review + financial rule correction
 
 ### Goal

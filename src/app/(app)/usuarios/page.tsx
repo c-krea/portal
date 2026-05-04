@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 import { PageHeader } from "@/components/layout/page-header"
 import { getPortalTenants, getUsuarios } from "@/lib/data/usuarios"
 import { TabSwitcher } from "./tab-switcher"
+import { SendEmailModal } from "./send-email-modal"
 import { Mail, UserCheck, CheckCircle2 } from "lucide-react"
 
 export default async function UsuariosPage() {
@@ -20,10 +21,13 @@ export default async function UsuariosPage() {
 
   return (
     <>
-      <PageHeader title="Usuarios" />
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <PageHeader title="Usuarios" />
+        <SendEmailModal tenants={tenants} admins={admins} />
+      </div>
 
       {/* Stats */}
-      <div className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3 -mt-2">
         <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
           <span className="text-slate-500">Inquilinos activos: </span>
           <span className="font-semibold text-slate-900">{tenants.length}</span>

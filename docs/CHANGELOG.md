@@ -6,6 +6,30 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [Unreleased] — 2026-05-04 (Auth emails + domain launch — Session 49)
+
+### Added — Tenant auth email system (Brevo)
+- Welcome email: branded HTML, logo, 4 feature cards (payments, electricity, contract info, coming soon), "Crear mi contraseña" CTA, admin contact link. Sent automatically when admin creates a tenant portal account.
+- Password reset email: branded, "Restablecer contraseña" CTA, 1-hour expiry notice.
+- `/forgot-password` page: email form → generates recovery link via `admin.generateLink()` → sends via Brevo. Anti-enumeration: always returns success.
+- `/update-password` page: new password form. Handles both first-time setup (from welcome email) and resets.
+- `/auth/confirm` page: client-side fragment handler for Supabase implicit-flow recovery links.
+
+### Added — Manual email sender in /usuarios
+- "Enviar Email" button (top-right of Usuarios page) opens modal.
+- Modal: recipient dropdown (grouped Inquilinos / Administración) + two card options: Bienvenida or Restablecer contraseña.
+- Sends via same Brevo system — generates fresh recovery link per send.
+
+### Changed — /usuarios admin table
+- Removed "Creado" column (redundant, rarely needed).
+
+### Infra — Domain ckrea.com.co live
+- Domain added to Vercel project. Cloudflare: A record `@ → 76.76.21.21` + CNAME `www → cname.vercel-dns.com`, both DNS only.
+- `NEXT_PUBLIC_SITE_URL` updated to `https://ckrea.com.co` on Vercel.
+- Supabase Auth redirect URLs updated to include `https://ckrea.com.co/**`.
+
+---
+
 ## [Unreleased] — 2026-05-03 (Gastos + Medidores overhaul — Session 48)
 
 ### Changed — Gastos page: live ERP data
