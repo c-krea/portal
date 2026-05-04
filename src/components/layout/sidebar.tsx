@@ -3,10 +3,19 @@
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LogOut, Settings } from "lucide-react"
+import { LogOut, Settings, User } from "lucide-react"
 import { NAV_ITEMS } from "@/lib/constants"
 import { cn } from "@/lib/utils"
 import { useTransition } from "react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { NotificationToggle } from "@/components/notification-toggle"
 
 type SidebarProps = {
   displayName: string
@@ -59,11 +68,6 @@ export function Sidebar({ displayName, signOutAction }: SidebarProps) {
       {/* Bottom */}
       <div className="mx-4 border-t border-slate-700" />
       <div className="flex flex-col gap-1 px-3 py-4">
-        {/* User display */}
-        <div className="mb-1 truncate px-3 py-1 text-xs text-slate-500">
-          {displayName}
-        </div>
-
         <Link
           href="/configuracion"
           className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
@@ -72,14 +76,30 @@ export function Sidebar({ displayName, signOutAction }: SidebarProps) {
           Configuración
         </Link>
 
-        <button
-          onClick={() => startTransition(() => signOutAction())}
-          disabled={pending}
-          className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm text-slate-400 transition-colors hover:bg-slate-700 hover:text-slate-200 disabled:opacity-50"
-        >
-          <LogOut className="h-5 w-5 shrink-0" />
-          {pending ? "Saliendo..." : "Cerrar Sesión"}
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white w-full">
+            <User className="h-5 w-5 shrink-0 text-slate-400" />
+            <span className="truncate">{displayName}</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
+            <DropdownMenuLabel className="text-xs text-slate-500 font-normal truncate">
+              {displayName}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <div className="px-1 py-1">
+              <NotificationToggle />
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => startTransition(() => signOutAction())}
+              disabled={pending}
+              className="text-rose-500 focus:text-rose-500 cursor-pointer"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              {pending ? "Saliendo..." : "Cerrar Sesión"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </aside>
   )
