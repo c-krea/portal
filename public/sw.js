@@ -7,7 +7,7 @@ const STATIC_ASSETS = [
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/icon-maskable-512.png",
-  "/icons/apple-touch-icon.png",
+  "/icons/apple-touch-icon-v2.png",
   "/icons/favicon-32x32.png",
 ];
 
