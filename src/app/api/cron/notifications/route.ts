@@ -14,6 +14,28 @@ function dateStr(d: Date) {
   return d.toISOString().split("T")[0]
 }
 
+// Returns true and logs if notification hasn't been sent yet; false if duplicate.
+async function tryLog(userId: string, type: string, refId: string): Promise<boolean> {
+  const { error } = await supabaseAdmin
+    .schema("v2")
+    .from("push_notification_log")
+    .insert({ user_id: userId, type, reference_id: refId })
+  return !error
+}
+
+async function notify(
+  userId: string,
+  type: string,
+  refId: string,
+  payload: { title: string; body: string; url?: string },
+  results: string[]
+) {
+  const ok = await tryLog(userId, type, refId)
+  if (!ok) return
+  await sendPushToUser(userId, payload)
+  results.push(`${type}:${userId}`)
+}
+
 export async function GET(req: Request) {
   if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -23,41 +45,44 @@ export async function GET(req: Request) {
   const todayStr = dateStr(today)
   const in3Days = new Date(today); in3Days.setDate(today.getDate() + 3)
   const in3DaysStr = dateStr(in3Days)
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
+  const yesterdayStr = dateStr(yesterday)
   const dayOfMonth = today.getDate()
   const isMonday = today.getDay() === 1
+  const weekRef = `${today.getFullYear()}-W${String(Math.ceil(today.getDate() / 7)).padStart(2, "0")}`
   const currentPeriodo = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`
-
-  // All inquilino users with push subscriptions
-  const users = await execute(`
-    SELECT
-      ps.user_id,
-      i.nit,
-      i.nombre_corto,
-      u.id   AS unit_id,
-      c.fecha_fin::text AS fecha_fin
-    FROM v2.push_subscriptions ps
-    JOIN v2.perfiles p   ON p.id = ps.user_id AND p.rol = 'inquilino'
-    JOIN v2.inquilinos i ON i.id = p.inquilino_id
-    JOIN v2.contratos  c ON c.inquilino_id = i.id AND c.estado IN ('activo','critico')
-    JOIN v2.locales    u ON u.id = c.local_id
-    GROUP BY ps.user_id, i.nit, i.nombre_corto, u.id, c.fecha_fin
-  `)
-
-  if (!users.length) return NextResponse.json({ sent: 0 })
 
   const results: string[] = []
 
-  for (const user of users) {
-    const userId = String(user.user_id)
-    const nit = user.nit ? String(user.nit) : null
-    const nombre = user.nombre_corto ? String(user.nombre_corto) : "Inquilino"
-    const unitId = String(user.unit_id)
-    const fechaFin = user.fecha_fin ? new Date(String(user.fecha_fin)) : null
+  // ── All subscribed tenants ────────────────────────────────────────
+  const users = await execute(`
+    SELECT DISTINCT
+      ps.user_id,
+      i.nit,
+      i.nombre_corto,
+      u.id       AS unit_id,
+      c.fecha_fin::text AS fecha_fin,
+      p.inquilino_id
+    FROM v2.push_subscriptions ps
+    JOIN v2.perfiles   p ON p.id = ps.user_id AND p.rol = 'inquilino'
+    JOIN v2.inquilinos i ON i.id = p.inquilino_id
+    JOIN v2.contratos  c ON c.inquilino_id = i.id AND c.estado IN ('activo','critico')
+    JOIN v2.locales    u ON u.id = c.local_id
+  `)
 
-    // ── Cartera checks ────────────────────────────────────────────
+  for (const user of users) {
+    const userId    = String(user.user_id)
+    const nit       = user.nit ? String(user.nit) : null
+    const nombre    = user.nombre_corto ? String(user.nombre_corto) : "Inquilino"
+    const unitId    = String(user.unit_id)
+    const fechaFin  = user.fecha_fin ? new Date(String(user.fecha_fin)) : null
+    const inquilinoId = String(user.inquilino_id)
+
+    // ── Cartera checks ──────────────────────────────────────────────
     if (nit) {
       const cartera = await execute(`
         SELECT
+          c.factura,
           ROUND(c.saldo)::int                                        AS saldo,
           c.fecha_vence::date                                        AS fecha_vence,
           GREATEST(0, CURRENT_DATE - c.fecha_vence::date)::int      AS dias_mora,
@@ -68,72 +93,61 @@ export async function GET(req: Request) {
           AND c.saldo > 0
       `)
 
-      // Payment due in 3 days
-      const dueIn3 = cartera.filter((r) => String(r.fecha_vence) === in3DaysStr)
-      if (dueIn3.length > 0) {
-        const total = dueIn3.reduce((s: number, r) => s + Number(r.saldo), 0)
-        await sendPushToUser(userId, {
+      // Payment due in 3 days — once per invoice
+      for (const row of cartera.filter((r) => String(r.fecha_vence) === in3DaysStr)) {
+        await notify(userId, "due3d", `${nit}-${row.factura}`, {
           title: "Pago próximo a vencer",
-          body: `${nombre}, tu factura de ${cop(total)} vence en 3 días.`,
+          body: `${nombre}, tu factura de ${cop(Number(row.saldo))} vence en 3 días.`,
           url: "/portal/pagos",
-        })
-        results.push(`due3d:${userId}`)
+        }, results)
       }
 
-      // Payment due today
-      const dueToday = cartera.filter((r) => String(r.fecha_vence) === todayStr)
-      if (dueToday.length > 0) {
-        const total = dueToday.reduce((s: number, r) => s + Number(r.saldo), 0)
-        await sendPushToUser(userId, {
+      // Payment due today — once per invoice
+      for (const row of cartera.filter((r) => String(r.fecha_vence) === todayStr)) {
+        await notify(userId, "due0d", `${nit}-${row.factura}`, {
           title: "Pago vence hoy",
-          body: `${nombre}, tu factura de ${cop(total)} vence hoy. Evita intereses de mora.`,
+          body: `${nombre}, tu factura de ${cop(Number(row.saldo))} vence hoy. Evita intereses de mora.`,
           url: "/portal/pagos",
-        })
-        results.push(`due0d:${userId}`)
+        }, results)
       }
 
-      // First overdue day (financia = 31 → just crossed grace period)
-      const firstOverdue = cartera.filter((r) => Number(r.financia) === 31)
-      if (firstOverdue.length > 0) {
-        const total = firstOverdue.reduce((s: number, r) => s + Number(r.saldo), 0)
-        await sendPushToUser(userId, {
+      // First overdue (financia = 31) — once per invoice
+      for (const row of cartera.filter((r) => Number(r.financia) === 31)) {
+        await notify(userId, "overdue", `${nit}-${row.factura}`, {
           title: "Pago vencido",
-          body: `${nombre}, tienes ${cop(total)} en mora. Ya empiezan a correr intereses del 0.05% diario.`,
+          body: `${nombre}, tu factura de ${cop(Number(row.saldo))} entró en mora. Interés del 0.05% diario.`,
           url: "/portal/pagos",
-        })
-        results.push(`overdue:${userId}`)
+        }, results)
       }
 
-      // Mora escalation — Mondays only, for all active mora > 31
+      // Mora escalation — Mondays, once per week per user
       if (isMonday) {
         const inMora = cartera.filter((r) => Number(r.financia) > 31)
         if (inMora.length > 0) {
-          const total = inMora.reduce((s: number, r) => s + Number(r.saldo), 0)
+          const total   = inMora.reduce((s: number, r) => s + Number(r.saldo), 0)
           const maxDays = Math.max(...inMora.map((r) => Number(r.dias_mora)))
-          await sendPushToUser(userId, {
+          await notify(userId, "mora_weekly", `${userId}-${weekRef}`, {
             title: "Recordatorio de mora",
             body: `${nombre}, llevas ${maxDays} días en mora con ${cop(total)} pendiente. Contáctanos para ponerte al día.`,
             url: "/portal/pagos",
-          })
-          results.push(`mora:${userId}`)
+          }, results)
         }
       }
     }
 
-    // ── Lease expiring ────────────────────────────────────────────
+    // ── Lease expiring — once per threshold ─────────────────────────
     if (fechaFin) {
       const daysLeft = Math.ceil((fechaFin.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
       if (daysLeft === 60 || daysLeft === 30) {
-        await sendPushToUser(userId, {
+        await notify(userId, `lease${daysLeft}d`, userId, {
           title: "Contrato próximo a vencer",
           body: `${nombre}, tu contrato vence en ${daysLeft} días. Contacta al administrador para renovar.`,
           url: "/portal",
-        })
-        results.push(`lease${daysLeft}d:${userId}`)
+        }, results)
       }
     }
 
-    // ── Meter reading reminder (day 7, no reading yet) ────────────
+    // ── Meter reading reminder — day 7, once per period ─────────────
     if (dayOfMonth === 7) {
       const { data: reading } = await supabaseAdmin
         .schema("v2")
@@ -144,13 +158,29 @@ export async function GET(req: Request) {
         .maybeSingle()
 
       if (!reading) {
-        await sendPushToUser(userId, {
+        await notify(userId, "meter", `${userId}-${currentPeriodo}`, {
           title: "Lectura de medidor pendiente",
-          body: `${nombre}, tienes 3 días para registrar tu lectura de energía de ${currentPeriodo}. Hazlo desde el portal.`,
+          body: `${nombre}, tienes 3 días para registrar tu lectura de energía de ${currentPeriodo}.`,
           url: "/portal/medidor",
-        })
-        results.push(`meter:${userId}`)
+        }, results)
       }
+    }
+
+    // ── Payment confirmation — yesterday's payments ──────────────────
+    const payments = await execute(`
+      SELECT docto, cruce, valor_final::int AS valor
+      FROM v2.vista_pagos
+      WHERE inquilino_id = '${inquilinoId}'
+        AND fecha_recaudo = '${yesterdayStr}'
+    `)
+
+    for (const pago of payments) {
+      const ref = `${String(pago.docto)}-${String(pago.cruce)}`
+      await notify(userId, "payment_confirmed", ref, {
+        title: "Pago registrado",
+        body: `${nombre}, tu pago de ${cop(Number(pago.valor))} ha sido registrado exitosamente.`,
+        url: "/portal/pagos",
+      }, results)
     }
   }
 
