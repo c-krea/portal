@@ -14,8 +14,33 @@
   "lang": "es",
   "categories": ["finance", "business"],
   "prefer_related_applications": false,
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
   "scope_extensions": [
     { "origin": "https://www.ckrea.com.co" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "url": "/",
+      "description": "Resumen general de recaudo"
+    },
+    {
+      "name": "Pagos",
+      "url": "/pagos",
+      "description": "Registro y consulta de pagos"
+    },
+    {
+      "name": "Proyecciones",
+      "url": "/proyecciones",
+      "description": "Proyecciones de facturación"
+    },
+    {
+      "name": "Mora",
+      "url": "/mora",
+      "description": "Seguimiento de cartera en mora"
+    }
   ],
   "icons": [
     {
