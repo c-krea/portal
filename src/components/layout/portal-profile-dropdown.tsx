@@ -22,14 +22,13 @@ export function PortalProfileDropdown({ displayName, signOutAction }: Props) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors">
+      <DropdownMenuTrigger className="flex items-center justify-center rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors">
         <User className="h-4 w-4" />
-        <span className="hidden sm:inline truncate max-w-[120px]">{displayName}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="bottom" align="end" className="w-56">
-        <DropdownMenuLabel className="text-xs text-slate-500 font-normal truncate">
+        <div className="px-2 py-1.5 text-xs text-slate-500 font-normal truncate">
           {displayName}
-        </DropdownMenuLabel>
+        </div>
         <DropdownMenuSeparator />
         <div className="px-1 py-1">
           <NotificationToggle />

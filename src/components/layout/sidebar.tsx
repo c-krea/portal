@@ -11,7 +11,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -82,9 +81,9 @@ export function Sidebar({ displayName, signOutAction }: SidebarProps) {
             <span className="truncate">{displayName}</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
-            <DropdownMenuLabel className="text-xs text-slate-500 font-normal truncate">
+            <div className="px-2 py-1.5 text-xs text-slate-500 font-normal truncate">
               {displayName}
-            </DropdownMenuLabel>
+            </div>
             <DropdownMenuSeparator />
             <div className="px-1 py-1">
               <NotificationToggle />
