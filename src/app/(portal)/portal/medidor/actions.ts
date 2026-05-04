@@ -9,9 +9,10 @@ import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
 const schema = z.object({
-  periodo:      z.string().refine(isValidPeriodo),
+  periodo:       z.string().refine(isValidPeriodo),
+  localId:       z.string().uuid("Local inválido"),
   lecturaActual: z.coerce.number().min(0, "Ingrese la lectura del contador"),
-  notas:        z.string().optional(),
+  notas:         z.string().optional(),
 })
 
 export type MedidorPortalState = {
@@ -32,16 +33,23 @@ export async function submitLectura(
   const profile = await getPortalProfile(user.id)
   if (!profile) return { error: "Perfil no encontrado" }
 
-  const { unitId, companyId } = profile
+  const { companyId } = profile
 
   const parsed = schema.safeParse({
     periodo:       formData.get("periodo"),
+    localId:       formData.get("localId"),
     lecturaActual: formData.get("lecturaActual"),
     notas:         formData.get("notas") || undefined,
   })
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
 
-  const { periodo, lecturaActual, notas } = parsed.data
+  const { periodo, localId, lecturaActual, notas } = parsed.data
+
+  // Security: localId must belong to this tenant
+  if (!profile.allUnitIds.includes(localId)) return { error: "Local no autorizado" }
+
+  const unitId = localId
+  const unitNumber = profile.allUnits[profile.allUnitIds.indexOf(localId)] ?? profile.unitNumber
 
   const prevRows = await execute(`
     SELECT lectura_actual::numeric AS lectura_actual, tarifa_kwh::numeric AS tarifa_kwh
@@ -112,7 +120,7 @@ export async function submitLectura(
       const { fileId, url } = await uploadMeterPhoto(
         buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
         fotoMime,
-        profile.unitNumber,
+        unitNumber,
         periodo,
       )
       fotoDriveId = fileId

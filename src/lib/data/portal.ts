@@ -21,6 +21,7 @@ export type PortalProfile = {
   telefono: string | null
   contactoNombre: string | null
   tipoCliente: string | null
+  tipoPersona: string | null
   descuentoPct: number | null
   prontoPagoPct: number | null
   incrementoIpc: number | null
@@ -59,6 +60,7 @@ export async function getPortalProfile(userId: string): Promise<PortalProfile | 
       t.telefono,
       t.contacto_nombre,
       t.tipo_cliente,
+      t.tipo_persona,
       u.unidad                                           AS unit_number,
       u.codigo                                           AS unit_code,
       u.entrada,
@@ -114,6 +116,7 @@ export async function getPortalProfile(userId: string): Promise<PortalProfile | 
     telefono: r.telefono ? String(r.telefono) : null,
     contactoNombre: r.contacto_nombre ? String(r.contacto_nombre) : null,
     tipoCliente: r.tipo_cliente ? String(r.tipo_cliente) : null,
+    tipoPersona: r.tipo_persona ? String(r.tipo_persona) : null,
     descuentoPct: r.descuento_pct != null ? Number(r.descuento_pct) : null,
     prontoPagoPct: r.pronto_pago_pct != null ? Number(r.pronto_pago_pct) : null,
     incrementoIpc: r.incremento_ipc != null ? Number(r.incremento_ipc) : null,
@@ -363,6 +366,36 @@ export async function getPortalCartera(nit: string): Promise<PortalCartera> {
     maxDiasInterest: mapped.reduce((m, r) => Math.max(m, r.diasInterest), 0),
     interesEstimado: rows.reduce((s, r) => s + Number(r.interes_est ?? 0), 0),
     rows:            mapped,
+  }
+}
+
+export type PortalMedidorRef = {
+  lecturaAnteriorRef: number
+  tarifaKwh: number
+  alreadySubmitted: boolean
+}
+
+export async function getPortalMedidorRef(
+  unitId: string,
+  periodo: string,
+): Promise<PortalMedidorRef> {
+  const [prevRows, currentRows] = await Promise.all([
+    execute(`
+      SELECT lectura_actual::numeric AS la, tarifa_kwh::numeric AS tk
+      FROM v2.lecturas_medidor
+      WHERE local_id = '${unitId}'::uuid AND periodo < '${periodo}'
+      ORDER BY periodo DESC LIMIT 1
+    `),
+    execute(`
+      SELECT id FROM v2.lecturas_medidor
+      WHERE local_id = '${unitId}'::uuid AND periodo = '${periodo}'
+      LIMIT 1
+    `),
+  ])
+  return {
+    lecturaAnteriorRef: prevRows[0] ? Number(prevRows[0].la) : 0,
+    tarifaKwh:          prevRows[0] ? Number(prevRows[0].tk) : 0,
+    alreadySubmitted:   currentRows.length > 0,
   }
 }
 

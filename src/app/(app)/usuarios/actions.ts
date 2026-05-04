@@ -45,39 +45,24 @@ export async function updatePortalEmail(inquilinoId: string, email: string) {
 
 export async function updateTenantInquilino(
   inquilinoId: string,
-  data: {
-    nombre: string
-    razonSocial: string
-    nit: string
-    telefono: string
-    contactoNombre: string
-    portalEmail: string
-    businessEmail: string
-  },
+  data: { telefono: string; email: string },
 ) {
   assertUuid(inquilinoId)
-  if (!data.razonSocial.trim()) return { error: "La razón social es obligatoria" }
-  const portalEmail = data.portalEmail.trim().toLowerCase()
-  if (portalEmail && !isValidEmail(portalEmail)) return { error: "Email portal inválido" }
-  const bizEmail = data.businessEmail.trim().toLowerCase()
-  if (bizEmail && !isValidEmail(bizEmail)) return { error: "Email de contacto inválido" }
+  const email = data.email.trim().toLowerCase()
+  if (email && !isValidEmail(email)) return { error: "Email inválido" }
 
   const { error: inquilinoError } = await supabaseAdmin
     .schema("v2")
     .from("inquilinos")
     .update({
-      nombre_corto:    data.nombre.trim() || null,
-      razon_social:    data.razonSocial.trim(),
-      nit:             data.nit.trim() || null,
-      telefono:        data.telefono.trim() || null,
-      contacto_nombre: data.contactoNombre.trim() || null,
-      email_contacto:  bizEmail || null,
-      portal_email:    portalEmail || null,
+      telefono:       data.telefono.trim() || null,
+      email_contacto: email || null,
+      portal_email:   email || null,
     })
     .eq("id", inquilinoId)
   if (inquilinoError) return { error: inquilinoError.message }
 
-  if (portalEmail) {
+  if (email) {
     const { data: profile } = await supabaseAdmin
       .schema("v2")
       .from("perfiles")
@@ -88,7 +73,7 @@ export async function updateTenantInquilino(
     if (profile?.id) {
       const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
         profile.id,
-        { email: portalEmail }
+        { email }
       )
       if (authError) return { error: `Guardado, pero error en auth: ${authError.message}` }
     }
@@ -98,55 +83,6 @@ export async function updateTenantInquilino(
   return { success: true }
 }
 
-export async function updateTenantContract(
-  contractId: string,
-  localId: string,
-  data: {
-    unitNumber: string
-    entrada: string
-    canonBase?: number
-    descuentoPct?: number | null
-    prontoPagoPct?: number | null
-    fechaInicio?: string
-    fechaFin?: string | null
-    descripcionDescuentos?: string | null
-  },
-) {
-  assertUuid(contractId)
-  assertUuid(localId)
-
-  const localUpdate: Record<string, string> = {}
-  if (data.unitNumber.trim()) localUpdate.unidad = data.unitNumber.trim()
-  if (data.entrada.trim()) localUpdate.entrada = data.entrada.trim()
-  if (Object.keys(localUpdate).length > 0) {
-    const { error: localError } = await supabaseAdmin
-      .schema("v2")
-      .from("locales")
-      .update(localUpdate)
-      .eq("id", localId)
-    if (localError) return { error: `Error en local: ${localError.message}` }
-  }
-
-  if (data.canonBase != null) {
-    const { error: contractError } = await supabaseAdmin
-      .schema("v2")
-      .from("contratos")
-      .update({
-        canon_base:             data.canonBase,
-        descuento_pct:          data.descuentoPct ?? 0,
-        pronto_pago_pct:        data.prontoPagoPct ?? 0,
-        fecha_inicio:           data.fechaInicio ?? undefined,
-        fecha_fin:              data.fechaFin ?? null,
-        descripcion_descuentos: data.descripcionDescuentos ?? null,
-        updated_at:             new Date().toISOString(),
-      })
-      .eq("id", contractId)
-    if (contractError) return { error: `Error en contrato: ${contractError.message}` }
-  }
-
-  revalidatePath("/usuarios")
-  return { success: true }
-}
 
 export async function createTenantAccount(inquilinoId: string) {
   assertUuid(inquilinoId)

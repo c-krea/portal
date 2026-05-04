@@ -14,6 +14,7 @@ import { CarteraTable } from "@/components/clientes/cartera-table"
 import { formatCOP, formatDate, formatDateShort } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
 import { isValidUuid } from "@/lib/security/validators"
+import { BadgePercent } from "lucide-react"
 
 const CONTRACT_STATUS_CONFIG = {
   activo: { cls: "bg-emerald-50 text-emerald-700", label: "Activo" },
@@ -76,6 +77,25 @@ export default async function ClienteDetailPage({
   const valorVencidoTotal = cartera.reduce((s, c) => s + c.valorVencido, 0)
   const interesTotal = cartera.reduce((s, c) => s + c.interesAcumulado, 0)
   const maxDias = cartera.length ? Math.max(...cartera.map((c) => c.diasInterest)) : 0
+
+  // Pronto pago: per-unit rate, current month invoices only, first 10 days
+  const now = new Date()
+  const todayDay = now.getDate()
+  const currentYYYYMM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+  const ppByUnit: Record<string, number> = {}
+  for (const c of contracts) {
+    if (c.unitNumber && c.prontoPagoPct > 0) ppByUnit[c.unitNumber] = c.prontoPagoPct
+  }
+  const isPpWindow = todayDay <= 10
+  const ppDiscountTotal = isPpWindow
+    ? cartera
+        .filter(item => item.fechaFactura?.startsWith(currentYYYYMM))
+        .reduce((sum, item) => {
+          const ppPct = item.unidad ? (ppByUnit[item.unidad] ?? 0) : 0
+          return sum + (ppPct > 0 ? Math.round(item.saldo * ppPct / 100) : 0)
+        }, 0)
+    : 0
+  const saldoConPP = saldoTotal - ppDiscountTotal
 
   return (
     <>
@@ -175,7 +195,19 @@ export default async function ClienteDetailPage({
         {/* Cartera KPIs */}
         {cartera.length > 0 ? (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <KpiCard label="Saldo Total" value={formatCOP(saldoTotal)} subtitle="incl. facturas vigentes" />
+            {isPpWindow && ppDiscountTotal > 0 ? (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-emerald-700">Saldo Total</p>
+                  <BadgePercent className="h-3.5 w-3.5 text-emerald-500" />
+                </div>
+                <p className="mt-1 text-sm sm:text-lg font-semibold text-emerald-800 truncate">{formatCOP(saldoConPP)}</p>
+                <p className="mt-0.5 text-xs text-emerald-600 line-through">{formatCOP(saldoTotal)}</p>
+                <p className="mt-0.5 text-[10px] text-emerald-500">c/pronto pago · día {todayDay}</p>
+              </div>
+            ) : (
+              <KpiCard label="Saldo Total" value={formatCOP(saldoTotal)} subtitle="incl. facturas vigentes" />
+            )}
             <KpiCard
               label="Valor Vencido"
               value={formatCOP(valorVencidoTotal)}

@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+### Session 51 — 2026-05-04: Portal Inquilino — PP, Medidor multi-local, Wompi, Usuarios
+
+#### Portal Inquilino — Pronto Pago
+- "Total a Pagar" muestra saldo con descuento PP incluido días 1–10, por factura del periodo actual
+- Badge PP% + monto ahorrado (−$X) alineado a la derecha del grand total
+- Cartera breakdown: lista de facturas siempre visible, sub-detalle (arrend/IVA/ret) colapsable por fila
+- PP −$X visible inline en cada fila junto a "Al día/Vencida"
+
+#### Portal Inquilino — Wompi
+- Modal "Pagar en línea" rediseñado: selector de locales compacto (solo números), dos filas copiables (NIT/cédula + total)
+- Referencia siempre es NIT (PJ) o cédula (PN) — nunca número de local
+- Saldos en modal incluyen descuento PP cuando aplica
+- Modal permanece abierto al hacer clic en "Ir a pagar"
+- "Incluye PP X% · Válido hasta DD/MM" cuando PP activo
+
+#### Portal Inquilino — Medidor multi-local
+- Página de medidor activada (era "Próximamente")
+- Tabs por local para inquilinos con múltiples unidades; ✅ en tab si ya enviaron ese mes
+- Server action valida que `localId` pertenece al tenant (seguridad)
+- Nueva función `getPortalMedidorRef` en portal.ts (lectura anterior + tarifa + submitted flag)
+
+#### Admin — Usuarios
+- Edit modal simplificado: solo email y teléfono editables; razón social, NIT y contratos bloqueados (vienen del ERP)
+- Email único para email_contacto + portal_email + auth.users simultáneamente
+
+#### Admin — Locales ficha cliente
+- KPI "Saldo Total" muestra saldo con PP en días 1–10, por unidad con tasa propia del contrato
+
+#### DB
+- Cuenta inquilino.test@ckrea.co transferida a Rebelarte Comunicacion Visual SAS (3 locales)
+- `v2.inquilinos.tipo_persona` expuesto en PortalProfile para diferenciar NIT/cédula en Wompi
+
 ### Session 50 — 2026-05-04: PWA + Push Notifications
 
 #### PWA — installable app

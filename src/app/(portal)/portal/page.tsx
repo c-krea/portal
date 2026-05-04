@@ -12,17 +12,16 @@ import { formatCOP, formatDate } from "@/lib/formatters"
 import Link from "next/link"
 import { ProfileCard } from "./profile-card"
 import { WompiButton } from "./wompi-button"
+import { CarteraBreakdown, type BreakdownRow } from "./cartera-breakdown"
 import {
   CheckCircle2,
   AlertCircle,
   Zap,
   TrendingUp,
   TriangleAlert,
-  Banknote,
 } from "lucide-react"
 
-function currentPeriodo() {
-  const now = new Date()
+function currentPeriodo(now: Date) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
 }
 
@@ -49,8 +48,10 @@ export default async function PortalPage() {
     )
   }
 
-  const periodo = currentPeriodo()
-  const todayDay = new Date().getDate()
+  const now = new Date()
+  const periodo = currentPeriodo(now)
+  const todayDay = now.getDate()
+  const currentPeriodInt = now.getFullYear() * 100 + (now.getMonth() + 1)
 
   const [pagos, medidor, cartera] = await Promise.all([
     getPortalPagos(profile.tenantId, 5),
@@ -59,6 +60,16 @@ export default async function PortalPage() {
   ])
 
   const lastPago = pagos[0]
+
+  // Pronto pago: apply per invoice, current period only, within first 10 days
+  const ppPct = (profile.prontoPagoPct ?? 0) / 100
+  const isPpWindow = todayDay <= 10 && ppPct > 0
+  const ppDiscountTotal = isPpWindow
+    ? cartera.rows
+        .filter(r => r.periodo === currentPeriodInt)
+        .reduce((sum, r) => sum + Math.round(r.saldo * ppPct), 0)
+    : 0
+  const saldoConPp = cartera.saldoTotal - ppDiscountTotal
 
   const enMora = cartera.vencido > 0
   const maxDiasMora = cartera.maxDiasMora
@@ -227,66 +238,44 @@ export default async function PortalPage() {
       </div>
 
       {/* ── Total a Pagar ── */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-2 mb-2">
-          <Banknote className="h-4 w-4 text-slate-400" />
-          <p className="text-sm font-semibold text-slate-500">
-            Total a Pagar
-          </p>
-        </div>
-
-        {cartera.saldoTotal > 0 ? (
-          <>
-            <p className="text-4xl font-black tabular-nums leading-none text-slate-900">
-              {formatCOP(cartera.saldoTotal)}
-            </p>
-
-            {/* Per-invoice breakdown — compact 2-line rows */}
-            <div className="mt-3 border-t border-slate-100 pt-3 space-y-2">
-              {cartera.rows.map((row) => {
-                const year = Math.floor(row.periodo / 100)
-                const month = row.periodo % 100
-                const label = new Date(year, month - 1, 1).toLocaleDateString("es-CO", { month: "long", year: "numeric" })
-                const isVencido = row.vencido > 0
-                return (
-                  <div key={`${row.periodo}-${row.unidad}`}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5">
-                        {row.unidad && (
-                          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-500">
-                            Local {row.unidad}
-                          </span>
-                        )}
-                        <span className="text-xs font-medium text-slate-700 capitalize">{label}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs font-medium ${isVencido ? "text-rose-500" : "text-slate-400"}`}>
-                          {isVencido ? "Vencida" : "Al día"}
-                        </span>
-                        <span className="text-sm font-semibold text-slate-900">{formatCOP(row.saldo)}</span>
-                      </div>
-                    </div>
-                    {row.ventas != null && (
-                      <p className="mt-0.5 text-xs text-slate-400">
-                        Arrend. {formatCOP(row.ventas)} · IVA +{formatCOP(row.impuesto!)}
-                        {(row.retenciones ?? 0) > 0 && ` · Ret. −${formatCOP(row.retenciones!)}`}
-                      </p>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="text-4xl font-black tabular-nums leading-none text-emerald-600">$ 0</p>
-            <p className="mt-1 text-xs text-slate-400">Sin facturas pendientes en Siesa</p>
-          </>
-        )}
-      </div>
+      <CarteraBreakdown
+        saldoTotal={cartera.saldoTotal}
+        saldoConPp={saldoConPp}
+        ppDiscountTotal={ppDiscountTotal}
+        isPpWindow={isPpWindow}
+        ppPct={profile.prontoPagoPct ?? 0}
+        rows={cartera.rows.map((row): BreakdownRow => ({
+          periodo:     row.periodo,
+          unidad:      row.unidad,
+          saldo:       row.saldo,
+          ppDiscount:  isPpWindow && row.periodo === currentPeriodInt
+                         ? Math.round(row.saldo * ppPct)
+                         : 0,
+          vencido:     row.vencido > 0,
+          ventas:      row.ventas,
+          impuesto:    row.impuesto,
+          retenciones: row.retenciones,
+        }))}
+      />
 
       {/* ── Pago en línea ── */}
-      <WompiButton unitNumber={profile.unitNumber} />
+      <WompiButton
+        nit={profile.nit ?? ""}
+        tipoPersona={profile.tipoPersona}
+        hasPp={isPpWindow && ppDiscountTotal > 0}
+        ppPct={profile.prontoPagoPct ?? 0}
+        units={profile.allUnits.map(unitNumber => {
+          const rawSaldo = cartera.rows
+            .filter(r => r.unidad === unitNumber)
+            .reduce((s, r) => s + r.saldo, 0)
+          const unitPpDiscount = isPpWindow
+            ? cartera.rows
+                .filter(r => r.unidad === unitNumber && r.periodo === currentPeriodInt)
+                .reduce((sum, r) => sum + Math.round(r.saldo * ppPct), 0)
+            : 0
+          return { unitNumber, saldo: rawSaldo - unitPpDiscount }
+        })}
+      />
 
     </div>
   )

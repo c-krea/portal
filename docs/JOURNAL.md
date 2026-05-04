@@ -2,6 +2,34 @@
 
 ---
 
+## Session 52 — 2026-05-04: Portal PP, Medidor multi-local, Wompi, Usuarios
+
+### What happened
+- 🎯 **Decision:** PP en portal inquilino aplica solo a facturas del periodo actual (`periodo_int === currentPeriodInt`), no a cartera vencida de meses anteriores. Lógica distinta al admin — aquí es "precio de acción", no proyección.
+- 🎯 **Decision:** Referencia Wompi = NIT/cédula siempre (no número de local), diferenciada por `tipo_persona PJ/PN`. Un solo pago cubre todos los locales con NIT como clave de búsqueda en Siesa.
+- 🎯 **Decision:** Edit modal de usuarios bloqueado a solo email + teléfono. Razón social, NIT y condiciones de contrato vienen del ERP — editarlos localmente genera divergencia silenciosa.
+- 💡 **Learning:** `tipo_persona` (PJ/PN) no estaba en `PortalProfile`. Hay que agregarlo explícitamente en la query de `getPortalProfile` — no viene implícito por el JOIN.
+- ⚠️ **Gotcha:** Cuenta transferida (inquilino.test → Rebelarte) rompió el portal momentáneamente por sesión cacheada en el browser. Solución: logout + login fuerza recarga del perfil. No fue error de código.
+- ⚙️ **Workflow:** Para medidor multi-local, cargar `getPortalMedidorRef` para todos los locales en paralelo en el server component y pasar el array al client component. Evita waterfalls y mantiene el form como client-only.
+
+### Files changed
+- `src/app/(portal)/portal/page.tsx` — PP logic, CarteraBreakdown, WompiButton props
+- `src/app/(portal)/portal/cartera-breakdown.tsx` (new) — collapsible invoice breakdown client component
+- `src/app/(portal)/portal/wompi-button.tsx` — multi-unit, NIT ref, copy rows, modal stays open
+- `src/app/(portal)/portal/medidor/page.tsx` — activado, multi-unit tabs
+- `src/app/(portal)/portal/medidor/form.tsx` — UnitMedidorData, tabs, localId hidden field
+- `src/app/(portal)/portal/medidor/actions.ts` — localId validation against allUnitIds
+- `src/app/(app)/locales/[id]/page.tsx` — PP KPI card días 1–10
+- `src/app/(app)/usuarios/edit-tenant-modal.tsx` — solo email + teléfono
+- `src/app/(app)/usuarios/actions.ts` — updateTenantInquilino simplificado, updateTenantContract removido
+- `src/lib/data/portal.ts` — getPortalMedidorRef (new), tipoPersona en PortalProfile
+
+### Session-end pointers
+- ADRs: none
+- Lessons: none (gotchas ya en JOURNAL)
+- State: project_state.md — actualizar fase portal inquilino a activo
+- Linear: none vinculado esta sesión
+
 ## Session 51 — 2026-05-04: PWA + Push Notifications
 
 ### Goal
