@@ -26,7 +26,7 @@ export function MobileNav({ displayName, signOutAction }: Props) {
   return (
     <>
       {/* Top bar — mobile only */}
-      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
+      <header className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-200 bg-white px-4 pb-3 pt-[max(12px,env(safe-area-inset-top))] lg:hidden">
         <div className="flex items-center gap-2">
           <Image src="/ckrea-logo.png" alt="C-Krea" width={28} height={28} className="shrink-0" />
           <span className="text-sm font-semibold tracking-wide text-slate-900">C-KREA</span>

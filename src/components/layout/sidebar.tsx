@@ -25,7 +25,7 @@ export function Sidebar({ displayName, signOutAction }: SidebarProps) {
   return (
     <aside className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-50 lg:flex w-[220px] flex-col bg-slate-900">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5">
+      <div className="flex items-center gap-3 px-5 pb-5 pt-[max(20px,env(safe-area-inset-top))]">
         <Image src="/ckrea-logo.png" alt="C-Krea" width={36} height={36} className="shrink-0" />
         <span className="text-sm font-semibold tracking-wide text-white">C-KREA</span>
       </div>
