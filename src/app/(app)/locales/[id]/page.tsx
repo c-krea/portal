@@ -11,9 +11,9 @@ import {
 } from "@/lib/data/tenant-detail"
 import { PageHeader } from "@/components/layout/page-header"
 import { CarteraTable } from "@/components/clientes/cartera-table"
-import { formatCOP, formatPercent, formatDateShort } from "@/lib/formatters"
+import { formatCOP, formatDate, formatDateShort } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
-import { isValidUuid, isValidUnit } from "@/lib/security/validators"
+import { isValidUuid } from "@/lib/security/validators"
 
 const CONTRACT_STATUS_CONFIG = {
   activo: { cls: "bg-emerald-50 text-emerald-700", label: "Activo" },
@@ -25,59 +25,61 @@ const CONTRACT_STATUS_CONFIG = {
 function KpiCard({
   label,
   value,
+  subtitle,
   warning,
 }: {
   label: string
   value: string
+  subtitle?: string
   warning?: boolean
 }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <p className="text-xs text-slate-500">{label}</p>
-      <p
-        className={cn(
-          "mt-1 text-sm sm:text-lg font-semibold truncate",
-          warning ? "text-rose-600" : "text-slate-900",
-        )}
-      >
+      <p className={cn("mt-1 text-sm sm:text-lg font-semibold truncate", warning ? "text-rose-600" : "text-slate-900")}>
         {value}
       </p>
+      {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
     </div>
   )
 }
+
+const PAGE_SIZE = 10
 
 export default async function ClienteDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>
-  searchParams: Promise<{ unit?: string }>
+  searchParams: Promise<{ ppage?: string }>
 }) {
   const { id } = await params
-  const { unit } = await searchParams
+  const { ppage } = await searchParams
 
   if (!isValidUuid(id)) notFound()
-  const safeUnit = isValidUnit(unit) ? unit : undefined
 
-  const [detail, contracts, cartera, pagos] = await Promise.all([
-    getTenantDetail(id, safeUnit),
+  const rawPage = Math.max(1, parseInt(ppage ?? "1", 10) || 1)
+
+  const [detail, contracts, cartera, { pagos, totalCount, totals }] = await Promise.all([
+    getTenantDetail(id),
     getTenantContracts(id),
     getTenantCartera(id),
-    getTenantPayments(id),
+    getTenantPayments(id, rawPage, PAGE_SIZE),
   ])
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE) || 1
+  const page = Math.min(rawPage, totalPages)
 
   if (!detail) notFound()
 
   const saldoTotal = cartera.reduce((s, c) => s + c.saldo, 0)
   const valorVencidoTotal = cartera.reduce((s, c) => s + c.valorVencido, 0)
   const interesTotal = cartera.reduce((s, c) => s + c.interesAcumulado, 0)
-  const maxDias = cartera.length ? Math.max(...cartera.map((c) => c.diasMora)) : 0
-
-  const displayName = detail.nombreCorto ?? detail.razonSocial
+  const maxDias = cartera.length ? Math.max(...cartera.map((c) => c.diasInterest)) : 0
 
   return (
     <>
-      <PageHeader title={displayName}>
+      <PageHeader title={detail.razonSocial}>
         <BackButton label="Locales" />
       </PageHeader>
 
@@ -87,19 +89,13 @@ export default async function ClienteDetailPage({
           {/* Tenant info */}
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              Datos del Cliente
+              Datos del Inquilino
             </h2>
             <div className="space-y-3">
               <div>
                 <p className="text-xs text-slate-400">Razón Social</p>
                 <p className="font-medium text-slate-900">{detail.razonSocial}</p>
               </div>
-              {detail.nombreCorto && detail.nombreCorto !== detail.razonSocial && (
-                <div>
-                  <p className="text-xs text-slate-400">Nombre Corto</p>
-                  <p className="text-slate-700">{detail.nombreCorto}</p>
-                </div>
-              )}
               <div className="flex gap-6">
                 <div>
                   <p className="text-xs text-slate-400">NIT</p>
@@ -118,19 +114,13 @@ export default async function ClienteDetailPage({
                   <p className="text-slate-700">{detail.contactoNombre}</p>
                 </div>
               )}
-              <div className="flex flex-wrap gap-6">
-                {detail.email && (
-                  <div>
-                    <p className="text-xs text-slate-400">Email</p>
-                    <p className="text-sm text-slate-700">{detail.email}</p>
-                  </div>
-                )}
-                {detail.telefono && (
-                  <div>
-                    <p className="text-xs text-slate-400">Teléfono</p>
-                    <p className="text-slate-700">{detail.telefono}</p>
-                  </div>
-                )}
+              <div>
+                <p className="text-xs text-slate-400">Email</p>
+                <p className="text-sm text-slate-700">{detail.email ?? <span className="text-slate-300">—</span>}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Teléfono</p>
+                <p className="text-slate-700">{detail.telefono ?? <span className="text-slate-300">—</span>}</p>
               </div>
             </div>
           </div>
@@ -150,37 +140,29 @@ export default async function ClienteDetailPage({
                     ?? { cls: "bg-slate-100 text-slate-500", label: con.contractStatus }
                   return (
                     <div key={con.contractId} className="rounded-lg border border-slate-100 p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-lg font-bold text-slate-900">
+                      <div className="flex items-center justify-between">
+                        <p className="font-bold text-slate-900">
                           Local {con.unitNumber ?? "—"}
+                          {con.entrada && (
+                            <span className="ml-1.5 font-bold text-slate-900">
+                              · E{con.entrada === "ZONA 8" ? "8" : con.entrada}
+                            </span>
+                          )}
                         </p>
                         <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", cfg.cls)}>
                           {cfg.label}
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500">
-                        {con.entrada && <span>Entrada: {con.entrada}</span>}
-                        {con.areaM2 && <span>Área: {con.areaM2} m²</span>}
-                        <span>Inicio: {con.fechaInicio ?? "—"}</span>
-                        <span>Fin: {con.fechaFin ?? "Indefinido"}</span>
-                      </div>
-                      <div className="mt-2 border-t border-slate-100 pt-2">
-                        <span className="font-semibold text-slate-800">
-                          {formatCOP(con.canonReal > 0 ? con.canonReal : con.canonBase)}
+                      <div className="mt-1.5 flex items-center justify-between">
+                        <span className="text-xs text-slate-400">
+                          Desde {con.fechaInicio ? formatDate(con.fechaInicio) : "—"}
                         </span>
-                        <span className="ml-1 text-xs text-slate-400">/ mes</span>
-                        {con.canonReal > 0 && con.canonBase > 0 && con.canonReal !== con.canonBase && (
-                          <span className="ml-2 text-xs text-slate-400">
-                            (base {formatCOP(con.canonBase)})
+                        <span className="text-sm font-semibold text-slate-800">
+                          {formatCOP(con.canonReal > 0 ? con.canonReal : con.canonBase)}
+                          <span className="ml-1 text-xs font-normal text-slate-400">
+                            {con.canonReal > 0 ? "c/IVA" : "s/IVA"}
                           </span>
-                        )}
-                        {(con.descuentoPct > 0 || con.prontoPagoPct > 0) && (
-                          <span className="ml-3 text-xs text-slate-400">
-                            {con.descuentoPct > 0 && `Dto: ${formatPercent(con.descuentoPct)}`}
-                            {con.descuentoPct > 0 && con.prontoPagoPct > 0 && " · "}
-                            {con.prontoPagoPct > 0 && `PP: ${formatPercent(con.prontoPagoPct)}`}
-                          </span>
-                        )}
+                        </span>
                       </div>
                     </div>
                   )
@@ -191,24 +173,37 @@ export default async function ClienteDetailPage({
         </div>
 
         {/* Cartera KPIs */}
-        {cartera.length > 0 && (
+        {cartera.length > 0 ? (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <KpiCard label="Saldo Total" value={formatCOP(saldoTotal)} />
+            <KpiCard label="Saldo Total" value={formatCOP(saldoTotal)} subtitle="incl. facturas vigentes" />
             <KpiCard
               label="Valor Vencido"
               value={formatCOP(valorVencidoTotal)}
-              warning={valorVencidoTotal > 0}
+              warning={valorVencidoTotal > 1000}
             />
             <KpiCard
-              label="Interés Acumulado"
+              label="Interés Est."
               value={formatCOP(interesTotal)}
-              warning={interesTotal > 0}
+              warning={interesTotal > 1000}
             />
             <KpiCard
-              label="Máx. Días Mora"
-              value={`${maxDias} días`}
+              label="Días en Mora"
+              value={maxDias > 0 ? `${maxDias} días` : "—"}
+              subtitle={maxDias > 0 ? "desde factura" : undefined}
               warning={maxDias > 30}
             />
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100">
+              <svg className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-emerald-800">Al día</p>
+              <p className="text-xs text-emerald-600">Sin saldos pendientes en Siesa</p>
+            </div>
           </div>
         )}
 
@@ -230,8 +225,8 @@ export default async function ClienteDetailPage({
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 px-5 py-4">
             <h2 className="font-semibold text-slate-800">Historial de Pagos</h2>
-            {pagos.length > 0 && (
-              <p className="text-xs text-slate-400">{pagos.length} pagos registrados</p>
+            {totalCount > 0 && (
+              <p className="text-xs text-slate-400">{totalCount} pagos registrados</p>
             )}
           </div>
           {pagos.length > 0 ? (
@@ -244,6 +239,7 @@ export default async function ClienteDetailPage({
                     <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Factura</th>
                     <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Aplicado</th>
                     <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">PP</th>
+                    <th className="hidden sm:table-cell px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Días</th>
                     <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Neto</th>
                   </tr>
                 </thead>
@@ -261,8 +257,13 @@ export default async function ClienteDetailPage({
                         <td className="hidden md:table-cell px-4 py-3 font-mono text-slate-500">
                           {p.siesaDocto ?? "—"}
                         </td>
-                        <td className="hidden md:table-cell px-4 py-3 font-mono text-slate-500">
-                          {p.siesaCruce ?? (p.concepto ? p.concepto : "—")}
+                        <td className="hidden md:table-cell px-4 py-3">
+                          <span className="font-mono text-slate-500">{p.siesaCruce ?? "—"}</span>
+                          {p.fechaFactura && (
+                            <span className="ml-1.5 text-xs text-slate-400">
+                              {new Date(p.fechaFactura + "T00:00:00").toLocaleDateString("es-CO", { month: "short", year: "numeric" })}
+                            </span>
+                          )}
                         </td>
                         <td className="hidden sm:table-cell px-4 py-3 text-right font-medium text-slate-900 tabular-nums">
                           {formatCOP(p.valorAplicado)}
@@ -271,6 +272,18 @@ export default async function ClienteDetailPage({
                           {p.prontoPagoAplicado > 0 ? formatCOP(p.prontoPagoAplicado) : (
                             <span className="text-slate-300">—</span>
                           )}
+                        </td>
+                        <td className="hidden sm:table-cell px-4 py-3 text-right tabular-nums">
+                          {p.diasDesdeFactura != null ? (
+                            <span className={cn(
+                              "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                              p.diasDesdeFactura > 30
+                                ? "bg-rose-100 text-rose-700"
+                                : "bg-emerald-50 text-emerald-700"
+                            )}>
+                              {p.diasDesdeFactura}d
+                            </span>
+                          ) : <span className="text-slate-300">—</span>}
                         </td>
                         <td className={cn("px-4 py-3 text-right font-semibold tabular-nums", isAnticipo ? "text-rose-600" : "text-slate-900")}>
                           {formatCOP(p.valorFinal)}
@@ -291,6 +304,7 @@ export default async function ClienteDetailPage({
                     <td className="hidden sm:table-cell px-4 py-3 text-right text-xs font-semibold text-emerald-600 tabular-nums">
                       {formatCOP(pagos.reduce((s, p) => s + p.prontoPagoAplicado, 0))}
                     </td>
+                    <td className="hidden sm:table-cell" />
                     <td className="px-4 py-3 text-right text-xs font-semibold text-slate-900 tabular-nums">
                       {formatCOP(pagos.reduce((s, p) => s + p.valorFinal, 0))}
                     </td>
@@ -303,6 +317,62 @@ export default async function ClienteDetailPage({
               <p className="text-sm text-slate-400">Sin pagos registrados</p>
             </div>
           )}
+
+          {/* Total histórico */}
+          {totalCount > 0 && (
+            <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3">
+              <span className="text-xs text-slate-400">{totalCount} pagos · total histórico</span>
+              <div className="flex items-center gap-4 text-xs">
+                {totals.prontoPago > 0 && (
+                  <span className="text-emerald-600">PP {formatCOP(totals.prontoPago)}</span>
+                )}
+                <span className="font-semibold text-slate-700">{formatCOP(totals.valorFinal)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (() => {
+            const pages: (number | "…")[] = []
+            if (totalPages <= 7) {
+              for (let i = 1; i <= totalPages; i++) pages.push(i)
+            } else {
+              pages.push(1)
+              if (page > 3) pages.push("…")
+              for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) pages.push(i)
+              if (page < totalPages - 2) pages.push("…")
+              pages.push(totalPages)
+            }
+            return (
+              <div className="flex items-center gap-1 border-t border-slate-100 px-5 py-3">
+                {page > 1 && (
+                  <Link href={`?ppage=${page - 1}`} className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                    ← Anterior
+                  </Link>
+                )}
+                {pages.map((p, i) =>
+                  p === "…" ? (
+                    <span key={`e-${i}`} className="px-1.5 text-xs text-slate-400">…</span>
+                  ) : (
+                    <Link
+                      key={p}
+                      href={`?ppage=${p}`}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                        p === page ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"
+                      }`}
+                    >
+                      {p}
+                    </Link>
+                  )
+                )}
+                {page < totalPages && (
+                  <Link href={`?ppage=${page + 1}`} className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+                    Siguiente →
+                  </Link>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </div>
     </>

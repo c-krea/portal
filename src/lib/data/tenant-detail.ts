@@ -1,28 +1,14 @@
 import { execute } from "@/lib/db/executor"
-import { getGracePeriod } from "@/lib/data/configuracion"
-import { assertUuid, assertUnit } from "@/lib/security/validators"
+import { assertUuid } from "@/lib/security/validators"
 
 export type TenantDetail = {
   id: string
   razonSocial: string
-  nombreCorto: string | null
   nit: string
   email: string | null
   telefono: string | null
   contactoNombre: string | null
   condicionPago: string | null
-  contractId: string | null
-  contractStatus: string | null
-  fechaInicio: string | null
-  fechaFin: string | null
-  canonBase: number
-  descuentoPct: number
-  prontoPagoPct: number
-  descripcionDescuentos: string | null
-  unitNumber: string | null
-  entrada: string | null
-  areaM2: number | null
-  clasificacion: string | null
 }
 
 export type CarteraItem = {
@@ -30,64 +16,36 @@ export type CarteraItem = {
   siesaFactura: string | null
   fechaFactura: string | null
   fechaVence: string | null
+  unidad: string | null
   diasMora: number
+  diasInterest: number
   saldo: number
   valorVencido: number
   interesAcumulado: number
-  observacion: string | null
 }
 
 export type PagoHistorialItem = {
   id: string
   fechaRecaudo: string
+  fechaFactura: string | null
   valorAplicado: number
   prontoPagoAplicado: number
   valorFinal: number
   concepto: string | null
   siesaDocto: string | null
   siesaCruce: string | null
-  siesaClasificacion: string | null
-  status: string
+  diasDesdeFactura: number | null
 }
 
-export type ContractPhaseItem = {
-  id: string
-  phaseNumber: number
-  name: string
-  startDate: string
-  endDate: string | null
-  descuentoPct: number
-  prontoPagoPct: number
-  isActive: boolean
-}
-
-export async function getTenantDetail(tenantId: string, unitNumber?: string): Promise<TenantDetail | null> {
+export async function getTenantDetail(tenantId: string): Promise<TenantDetail | null> {
   assertUuid(tenantId)
-  if (unitNumber) assertUnit(unitNumber)
-  const unitFilter = unitNumber ? `AND u.unidad = '${unitNumber}'` : ""
   const rows = await execute(`
     SELECT
-      t.id, t.razon_social, t.nombre_corto, t.nit,
+      t.id, t.razon_social, t.nit,
       COALESCE(t.email_contacto, t.portal_email) AS email,
-      t.telefono, t.contacto_nombre, t.condicion_pago,
-      c.id                                           AS contract_id,
-      c.estado                                       AS contract_status,
-      c.fecha_inicio, c.fecha_fin,
-      COALESCE(c.canon_base, 0)::numeric             AS canon_base,
-      COALESCE(c.descuento_pct, 0)::numeric          AS descuento_pct,
-      COALESCE(c.pronto_pago_pct, 0)::numeric        AS pronto_pago_pct,
-      c.descripcion_descuentos,
-      u.unidad                                       AS unit_number,
-      u.entrada,
-      u.area_m2::numeric                             AS area_m2,
-      u.clasificacion
+      t.telefono, t.contacto_nombre, t.condicion_pago
     FROM v2.inquilinos t
-    LEFT JOIN v2.contratos c
-      ON c.inquilino_id = t.id
-      AND c.estado IN ('activo', 'critico', 'vencido', 'terminado')
-    LEFT JOIN v2.locales u ON c.local_id = u.id
-    WHERE t.id = '${tenantId}' ${unitFilter}
-    ORDER BY c.created_at DESC NULLS LAST
+    WHERE t.id = '${tenantId}'
     LIMIT 1
   `)
   if (!rows.length) return null
@@ -95,24 +53,11 @@ export async function getTenantDetail(tenantId: string, unitNumber?: string): Pr
   return {
     id: String(r.id),
     razonSocial: String(r.razon_social),
-    nombreCorto: r.nombre_corto ? String(r.nombre_corto) : null,
     nit: String(r.nit),
     email: r.email ? String(r.email) : null,
     telefono: r.telefono ? String(r.telefono) : null,
     contactoNombre: r.contacto_nombre ? String(r.contacto_nombre) : null,
     condicionPago: r.condicion_pago ? String(r.condicion_pago) : null,
-    contractId: r.contract_id ? String(r.contract_id) : null,
-    contractStatus: r.contract_status ? String(r.contract_status) : null,
-    fechaInicio: r.fecha_inicio ? String(r.fecha_inicio) : null,
-    fechaFin: r.fecha_fin ? String(r.fecha_fin) : null,
-    canonBase: Number(r.canon_base ?? 0),
-    descuentoPct: Number(r.descuento_pct ?? 0),
-    prontoPagoPct: Number(r.pronto_pago_pct ?? 0),
-    descripcionDescuentos: r.descripcion_descuentos ? String(r.descripcion_descuentos) : null,
-    unitNumber: r.unit_number ? String(r.unit_number) : null,
-    entrada: r.entrada ? String(r.entrada) : null,
-    areaM2: r.area_m2 !== null && r.area_m2 !== undefined ? Number(r.area_m2) : null,
-    clasificacion: r.clasificacion ? String(r.clasificacion) : null,
   }
 }
 
@@ -134,9 +79,6 @@ export type TenantContract = {
 
 export async function getTenantContracts(tenantId: string): Promise<TenantContract[]> {
   assertUuid(tenantId)
-  const now = new Date()
-  const yr = now.getFullYear()
-  const mo = now.getMonth() + 1
 
   const rows = await execute(`
     SELECT
@@ -144,10 +86,15 @@ export async function getTenantContracts(tenantId: string): Promise<TenantContra
       c.fecha_inicio, c.fecha_fin,
       COALESCE(c.canon_base, 0)::numeric        AS canon_base,
       COALESCE((
-        SELECT (pr.canon_proyectado - pr.descuento_proyectado)
-             * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
-        FROM v2.proyecciones pr
-        WHERE pr.contrato_id = c.id AND pr.anio = ${yr} AND pr.mes = ${mo}
+        SELECT
+          o.precio * (1 - COALESCE(o.descuento, 0) / 100.0)
+          * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
+        FROM siesa_raw.ocupacion o
+        WHERE o.documento = t.nit
+          AND o.loc = u.unidad
+          AND o.razon_social IS NOT NULL
+          AND COALESCE(o.precio, 0) > 0
+        ORDER BY o.precio DESC
         LIMIT 1
       ), 0)::numeric                            AS canon_real,
       COALESCE(c.descuento_pct, 0)::numeric     AS descuento_pct,
@@ -183,20 +130,21 @@ export async function getTenantContracts(tenantId: string): Promise<TenantContra
 
 export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]> {
   assertUuid(tenantId)
-  const grace = await getGracePeriod()
   const rows = await execute(`
     WITH r AS (
       SELECT valor::numeric AS rate FROM v2.reglas_financieras WHERE clave = 'interes_mora_diario' LIMIT 1
     )
     SELECT
-      row_id::text                                AS id,
-      factura                                     AS siesa_factura,
+      row_id::text                                              AS id,
+      factura                                                   AS siesa_factura,
       fecha_factura,
-      fecha_vencimiento                           AS fecha_vence,
-      COALESCE(dias_mora, 0)                      AS dias_mora,
-      COALESCE(saldo, 0)::numeric                 AS saldo,
-      COALESCE(vr_vencido, 0)::numeric            AS valor_vencido,
-      (COALESCE(saldo, 0) * GREATEST(0, COALESCE(dias_mora, 0) - ${grace}) * (SELECT rate FROM r))::numeric AS interes
+      fecha_vencimiento                                         AS fecha_vence,
+      REVERSE(SPLIT_PART(REVERSE(sucursal), ' ', 1))              AS unidad,
+      COALESCE(dias_mora, 0)                                              AS dias_mora,
+      GREATEST(0, COALESCE(dias_financia, 0) - 30)                       AS dias_interest,
+      COALESCE(saldo, 0)::numeric                                        AS saldo,
+      COALESCE(vr_vencido, 0)::numeric                                   AS valor_vencido,
+      (COALESCE(saldo, 0) * GREATEST(0, COALESCE(dias_financia, 0) - 30) * (SELECT rate FROM r))::numeric AS interes
     FROM v2.vista_cartera_actual
     WHERE inquilino_id = '${tenantId}'
     ORDER BY fecha_vencimiento DESC NULLS LAST
@@ -206,16 +154,25 @@ export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]>
     siesaFactura: r.siesa_factura ? String(r.siesa_factura) : null,
     fechaFactura: r.fecha_factura ? String(r.fecha_factura) : null,
     fechaVence: r.fecha_vence ? String(r.fecha_vence) : null,
+    unidad: r.unidad ? String(r.unidad) : null,
     diasMora: Number(r.dias_mora ?? 0),
+    diasInterest: Number(r.dias_interest ?? 0),
     saldo: Number(r.saldo ?? 0),
     valorVencido: Number(r.valor_vencido ?? 0),
     interesAcumulado: Number(r.interes ?? 0),
-    observacion: null,
   }))
 }
 
-export async function getTenantPayments(tenantId: string): Promise<PagoHistorialItem[]> {
+export type PagoTotals = { valorFinal: number; prontoPago: number }
+
+export async function getTenantPayments(
+  tenantId: string,
+  page = 1,
+  pageSize = 10,
+): Promise<{ pagos: PagoHistorialItem[]; totalCount: number; totals: PagoTotals }> {
   assertUuid(tenantId)
+  const offset = (page - 1) * pageSize
+
   const rows = await execute(`
     WITH standalones AS (
       SELECT p.docto, p.cruce, p.valor_final, p.fecha_recaudo,
@@ -257,7 +214,12 @@ export async function getTenantPayments(tenantId: string): Promise<PagoHistorial
       COALESCE(pronto_pago_aplicado, 0)::numeric  AS pronto_pago_aplicado,
       COALESCE(valor_final, 0)::numeric           AS valor_final,
       docto                                       AS siesa_docto,
-      cruce                                       AS siesa_cruce
+      cruce                                       AS siesa_cruce,
+      fecha_factura,
+      (fecha_recaudo - fecha_factura)             AS dias_desde_factura,
+      COUNT(*) OVER()                             AS total_count,
+      SUM(COALESCE(valor_final, 0)) OVER()        AS grand_total_final,
+      SUM(COALESCE(pronto_pago_aplicado, 0)) OVER() AS grand_total_pp
     FROM v2.vista_pagos p
     WHERE p.inquilino_id = '${tenantId}'
       AND NOT (
@@ -271,18 +233,29 @@ export async function getTenantPayments(tenantId: string): Promise<PagoHistorial
             AND p2.valor_final = p.valor_final
         )
       )
-    ORDER BY fecha_recaudo DESC
+    ORDER BY fecha_recaudo DESC, docto, cruce
+    LIMIT ${pageSize} OFFSET ${offset}
   `)
-  return rows.map((r) => ({
-    id: String(r.id),
-    fechaRecaudo: String(r.fecha_recaudo),
-    valorAplicado: Number(r.valor_aplicado ?? 0),
-    prontoPagoAplicado: Number(r.pronto_pago_aplicado ?? 0),
-    valorFinal: Number(r.valor_final ?? 0),
-    concepto: null,
-    siesaDocto: r.siesa_docto ? String(r.siesa_docto) : null,
-    siesaCruce: r.siesa_cruce ? String(r.siesa_cruce) : null,
-    siesaClasificacion: null,
-    status: "RECAUDADO",
-  }))
+
+  const totalCount = rows[0] ? Number(rows[0].total_count) : 0
+  const totals: PagoTotals = {
+    valorFinal: rows[0] ? Number(rows[0].grand_total_final ?? 0) : 0,
+    prontoPago: rows[0] ? Number(rows[0].grand_total_pp ?? 0) : 0,
+  }
+  return {
+    pagos: rows.map((r) => ({
+      id: String(r.id),
+      fechaRecaudo: String(r.fecha_recaudo),
+      valorAplicado: Number(r.valor_aplicado ?? 0),
+      prontoPagoAplicado: Number(r.pronto_pago_aplicado ?? 0),
+      valorFinal: Number(r.valor_final ?? 0),
+      concepto: null,
+      siesaDocto: r.siesa_docto ? String(r.siesa_docto) : null,
+      siesaCruce: r.siesa_cruce ? String(r.siesa_cruce) : null,
+      fechaFactura: r.fecha_factura ? String(r.fecha_factura) : null,
+      diasDesdeFactura: r.dias_desde_factura != null ? Number(r.dias_desde_factura) : null,
+    })),
+    totalCount,
+    totals,
+  }
 }

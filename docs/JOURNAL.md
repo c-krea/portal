@@ -2,6 +2,62 @@
 
 ---
 
+## Session 49 — 2026-05-03: Full locales + portal review + financial rule correction
+
+### Goal
+Deep review of locales list, locales per-client, and tenant portal pages. Fix data accuracy issues, improve UX, correct financial rules.
+
+### What happened
+
+🎯 **Decision — Rule C corrected: interest starts day 31, not day 11**
+German clarified the full payment timeline: days 1–10 = PP window, days 11–30 = normal payment (no interest), day 31+ = mora at 0.05%/day. Prior CLAUDE.md said "starts day 11" — wrong. Interest formula updated to `GREATEST(0, financia - 30)` using `siesa_raw.cartera.financia` (days since invoice date). `financia` bypasses the Siesa `fecha_vence` misconfiguration where pre-May invoices had `fecha_vence = day 10` (PP date) instead of `day 30` (actual due date). May+ invoices have the correct `fecha_vence = day 30`.
+
+🎯 **Decision — v2.proyecciones fully removed from codebase**
+Both `getClienteRows()` and `getTenantContracts()` were reading canon from the retired `v2.proyecciones` table (stale Excel snapshot, missing 12 tenants, doubled BECERRA). Both now query `siesa_raw.ocupacion` directly.
+
+🎯 **Decision — nombreCorto removed from per-client page**
+ERP's `razonSocial` is now the single source of truth. `nombreCorto` was a manually-maintained field that drifted from ERP reality. Removed from `TenantDetail` type, query, and display.
+
+⚙️ **Locales list page changes**
+- KPI cards: replaced Cartera total + En mora + Recaudado → Vacantes + Canon Mensual Neto + Contratos por vencer (60 days)
+- Entrada filter: URL-driven `?entrada=X` updates KPI cards server-side. All 3 data functions accept entrada param with `ENTRADA_RE` validation.
+- Filter UI: replaced tab strip + entrada pills with single "Filtros" button → expandable panel with Estado + Entrada sections + active chip row.
+- Unit chips show `E1·101` format.
+
+⚙️ **Per-client detail page changes**
+- "Datos del Cliente" → "Datos del Inquilino"
+- Email + Teléfono always visible (— when empty, no more conditional hide)
+- Contracts card: entrada inline with unit (`Local 516 · E5`), start date DD/MM/YYYY, canon c/IVA vs s/IVA label, PP/Dto removed
+- Cartera table: new Local column (unit from sucursal via REVERSE/SPLIT_PART), Mora column uses `diasInterest` (GREATEST(0, financia-30)), MoraBadge thresholds calibrated to interest-days scale
+- KPI cards: "Interés Acumulado" → "Interés Est.", warning threshold raised to >$1,000, "Días en Mora" shows correct interest-days not inflated dias_mora, "Saldo Total" subtitle "incl. facturas vigentes"
+- "Al Día" green banner when cartera is empty
+- Payment history: paginated (10/page) with ellipsis navigation, timing column (días desde factura, green ≤30d / rose >30d), invoice month label (`feb. 2026`), total histórico footer (all-time totals via SUM OVER())
+
+⚙️ **Portal tenant pages changes**
+- Mora detection: `lastPago + 35d` → `cartera.vencido > 0` (live from Siesa)
+- Interest estimate: now DB-driven via `v2.reglas_financieras` rate, uses `maxDiasInterest` not raw `dias_mora`
+- Next payment: `lastPago + 30d` → earliest `fecha_vence` from open invoices
+- `getPortalContratos` canon/discount: `v2.contratos` → `siesa_raw.ocupacion` with ORDER BY + razon_social guard
+- `getPortalProfile`: added `ORDER BY u.unidad` before LIMIT 1 (multi-unit tenant determinism)
+- Portal pagos: NaN page guard, capped at totalPages, PaginationBar with ellipsis
+- Portal cartera: NIT validation guard, unidad via REVERSE/SPLIT_PART, `financia` field added
+
+⚠️ **Gotcha — REGEXP_MATCHES drops rows**
+Using `(REGEXP_MATCHES(col, pattern))[1]` in a SELECT list is a set-returning function — returns empty set when no match, silently dropping the entire row. MEDIOS IMPRESOS showed "Al Día" (no cartera rows) because the initial regex approach dropped all rows. Fix: always use `REVERSE(SPLIT_PART(REVERSE(col), ' ', 1))` which always returns a string.
+
+💡 **Learning — Siesa fecha_vence misconfiguration**
+Pre-May invoices: `fecha_vence = fecha_pronto_pago = invoice + 10 days` (PP date, not real due date). May+ invoices: `fecha_vence = invoice + 29 days` (real 30-day due date). Use `financia` (days since invoice date) for all mora/interest calculations — it's invariant to this misconfiguration.
+
+🔵 **WOR-80 created**: Interés mora — calcular sobre saldo histórico diario. Current formula understates interest for partial payers (uses current saldo not historical daily balance).
+
+### Session-end pointers
+- ADRs: none
+- Lessons: financial_rules_payment_timeline.md (new — Rule C correction + Siesa fecha_vence finding)
+- State: project_state.md — update locales + portal review status
+- Linear: WOR-80 created (future interest improvement)
+
+---
+
 ## Session 48 — 2026-05-03: Gastos siesa_raw migration + Medidores form overhaul
 
 ### Goal

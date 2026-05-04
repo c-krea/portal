@@ -17,9 +17,9 @@ import type { CarteraItem } from "@/lib/data/tenant-detail"
 function MoraBadge({ dias }: { dias: number }) {
   if (dias === 0) return <span className="text-slate-400">—</span>
   const cfg =
-    dias > 90
+    dias > 30
       ? { cls: "bg-rose-100 text-rose-700", label: `${dias}d` }
-      : dias > 30
+      : dias > 10
         ? { cls: "bg-orange-100 text-orange-700", label: `${dias}d` }
         : { cls: "bg-amber-100 text-amber-700", label: `${dias}d` }
   return (
@@ -37,6 +37,17 @@ declare module "@tanstack/react-table" {
 }
 
 const columns: ColumnDef<CarteraItem>[] = [
+  {
+    accessorKey: "unidad",
+    header: "Local",
+    size: 70,
+    cell: ({ getValue }) => {
+      const v = getValue<string | null>()
+      return v ? (
+        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600">{v}</span>
+      ) : <span className="text-slate-300">—</span>
+    },
+  },
   {
     accessorKey: "siesaFactura",
     header: "Factura",
@@ -66,7 +77,7 @@ const columns: ColumnDef<CarteraItem>[] = [
     },
   },
   {
-    accessorKey: "diasMora",
+    accessorKey: "diasInterest",
     header: "Mora",
     size: 90,
     cell: ({ getValue }) => <MoraBadge dias={getValue<number>()} />,
@@ -112,19 +123,11 @@ const columns: ColumnDef<CarteraItem>[] = [
       )
     },
   },
-  {
-    accessorKey: "observacion",
-    header: "Nota",
-    meta: { className: "hidden lg:table-cell" },
-    cell: ({ getValue }) => (
-      <span className="text-xs text-slate-500">{getValue<string | null>() ?? ""}</span>
-    ),
-  },
 ]
 
 export function CarteraTable({ data }: { data: CarteraItem[] }) {
   const [sorting, setSorting] = useState<SortingState>([
-    { id: "diasMora", desc: true },
+    { id: "diasInterest", desc: true },
   ])
 
   const table = useReactTable({

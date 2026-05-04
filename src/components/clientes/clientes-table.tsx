@@ -11,7 +11,7 @@ import {
 } from "@tanstack/react-table"
 import { useState, useMemo, useEffect } from "react"
 import { useSearchParams, useRouter, usePathname } from "next/navigation"
-import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight } from "lucide-react"
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, SlidersHorizontal, X } from "lucide-react"
 import { formatCOP } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
 import type { ClienteRow } from "@/lib/data/clientes"
@@ -23,14 +23,23 @@ const STATUS_CONFIG = {
   inactivo: { dot: "bg-slate-300",   label: "Inactivo" },
 } as const
 
+const ENTRADAS = [
+  { value: "1",      label: "Entrada 1" },
+  { value: "2",      label: "Entrada 2" },
+  { value: "3",      label: "Entrada 3" },
+  { value: "4",      label: "Entrada 4" },
+  { value: "5",      label: "Entrada 5" },
+  { value: "ZONA 8", label: "Zona 8"    },
+]
+
 type Tab = "todos" | "al_dia" | "en_mora" | "criticos" | "inactivos"
 
-const TABS: { id: Tab; label: string }[] = [
+const ESTADO_OPTIONS: { id: Tab; label: string }[] = [
   { id: "todos",     label: "Todos" },
   { id: "al_dia",    label: "Al Día" },
   { id: "en_mora",   label: "En Mora" },
   { id: "criticos",  label: "Críticos" },
-  { id: "inactivos", label: "Inactivos" },
+  { id: "inactivos", label: "Vacantes" },
 ]
 
 const TAB_DEFAULT_SORT: Record<Tab, SortingState> = {
@@ -86,16 +95,22 @@ const columns: ColumnDef<ClienteRow>[] = [
       if (!isNaN(an) && !isNaN(bn)) return an - bn
       return av.localeCompare(bv)
     },
-    cell: ({ getValue }) => {
-      const units = getValue<string[]>()
+    cell: ({ row }) => {
+      const units = row.original.unitNumbers
+      const entradas = row.original.entradas
       if (!units.length) return <span className="text-slate-400">—</span>
       return (
         <div className="flex flex-wrap gap-1">
-          {units.map((u) => (
+          {units.map((u, i) => (
             <span
               key={u}
-              className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600"
+              className="flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600"
             >
+              {entradas[i] && (
+                <span className="text-slate-400">
+                  E{entradas[i] === "ZONA 8" ? "8" : entradas[i]}·
+                </span>
+              )}
               {u}
             </span>
           ))}
@@ -158,13 +173,29 @@ const columns: ColumnDef<ClienteRow>[] = [
   },
 ]
 
-export function ClientesTable({ data, vacantUnits }: { data: ClienteRow[]; vacantUnits: ClienteRow[] }) {
+export function ClientesTable({
+  data,
+  vacantUnits,
+  activeEntrada,
+}: {
+  data: ClienteRow[]
+  vacantUnits: ClienteRow[]
+  activeEntrada?: string
+}) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
 
   const rawTab = searchParams.get("tab")
   const tab: Tab = (["todos","al_dia","en_mora","criticos","inactivos"].includes(rawTab ?? "") ? rawTab : "todos") as Tab
+
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [sorting, setSorting] = useState<SortingState>(TAB_DEFAULT_SORT[tab])
+  const [globalFilter, setGlobalFilter] = useState("")
+
+  useEffect(() => { setSorting(TAB_DEFAULT_SORT[tab]) }, [tab])
+
+  const activeFilterCount = (tab !== "todos" ? 1 : 0) + (activeEntrada ? 1 : 0)
 
   function setTab(next: Tab) {
     const params = new URLSearchParams(searchParams.toString())
@@ -173,12 +204,18 @@ export function ClientesTable({ data, vacantUnits }: { data: ClienteRow[]; vacan
     router.replace(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
-  const [sorting, setSorting] = useState<SortingState>(TAB_DEFAULT_SORT[tab])
-  const [globalFilter, setGlobalFilter] = useState("")
+  function setEntrada(next: string | undefined) {
+    const params = new URLSearchParams(searchParams.toString())
+    if (!next) params.delete("entrada")
+    else params.set("entrada", next)
+    params.delete("tab")
+    router.push(`${pathname}?${params.toString()}`, { scroll: false })
+  }
 
-  useEffect(() => {
-    setSorting(TAB_DEFAULT_SORT[tab])
-  }, [tab])
+  function clearAll() {
+    router.push(pathname, { scroll: false })
+    setGlobalFilter("")
+  }
 
   const tabCounts = useMemo(
     () => ({
@@ -188,7 +225,7 @@ export function ClientesTable({ data, vacantUnits }: { data: ClienteRow[]; vacan
       criticos:  data.filter((r) => r.status === "critico").length,
       inactivos: vacantUnits.length,
     }),
-    [data]
+    [data, vacantUnits]
   )
 
   const filtered = useMemo(() => filterByTab(data, tab, vacantUnits), [data, tab, vacantUnits])
@@ -206,8 +243,8 @@ export function ClientesTable({ data, vacantUnits }: { data: ClienteRow[]; vacan
 
   return (
     <div>
-      {/* Search */}
-      <div className="mb-4">
+      {/* Toolbar */}
+      <div className="mb-3 flex items-center gap-2">
         <input
           type="text"
           placeholder="Buscar cliente o NIT..."
@@ -215,33 +252,123 @@ export function ClientesTable({ data, vacantUnits }: { data: ClienteRow[]; vacan
           onChange={(e) => setGlobalFilter(e.target.value)}
           className="w-full max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
+
+        <button
+          onClick={() => setFiltersOpen((o) => !o)}
+          className={cn(
+            "flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium shadow-sm transition-colors",
+            filtersOpen || activeFilterCount > 0
+              ? "border-blue-500 bg-blue-50 text-blue-700"
+              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+          )}
+        >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Filtros
+          {activeFilterCount > 0 && (
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+
+        {activeFilterCount > 0 && (
+          <button
+            onClick={clearAll}
+            className="flex shrink-0 items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
+          >
+            <X className="h-3 w-3" />
+            Limpiar
+          </button>
+        )}
       </div>
 
-      {/* Tabs */}
-      <div className="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200">
-        {TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={cn(
-              "flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors",
-              tab === id
-                ? "border-blue-500 text-blue-600"
-                : "border-transparent text-slate-500 hover:text-slate-700"
-            )}
-          >
-            {label}
-            <span
-              className={cn(
-                "rounded-full px-1.5 py-0.5 text-xs",
-                tab === id ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"
-              )}
-            >
-              {tabCounts[id]}
+      {/* Filter panel */}
+      {filtersOpen && (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+
+          {/* Estado */}
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Estado</p>
+            <div className="flex flex-wrap gap-2">
+              {ESTADO_OPTIONS.map(({ id, label }) => (
+                <button
+                  key={id}
+                  onClick={() => setTab(id)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                    tab === id
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  )}
+                >
+                  {label}
+                  <span className={cn(
+                    "rounded-full px-1.5 py-0.5 text-[10px]",
+                    tab === id ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"
+                  )}>
+                    {tabCounts[id]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Entrada */}
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Entrada</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setEntrada(undefined)}
+                className={cn(
+                  "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                  !activeEntrada
+                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                Todas
+              </button>
+              {ENTRADAS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setEntrada(activeEntrada === value ? undefined : value)}
+                  className={cn(
+                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                    activeEntrada === value
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* Active filter chips */}
+      {activeFilterCount > 0 && (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {tab !== "todos" && (
+            <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+              {ESTADO_OPTIONS.find((o) => o.id === tab)?.label}
+              <button onClick={() => setTab("todos")} className="ml-0.5 hover:text-blue-900">
+                <X className="h-3 w-3" />
+              </button>
             </span>
-          </button>
-        ))}
-      </div>
+          )}
+          {activeEntrada && (
+            <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+              {ENTRADAS.find((e) => e.value === activeEntrada)?.label}
+              <button onClick={() => setEntrada(undefined)} className="ml-0.5 hover:text-blue-900">
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Table */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">

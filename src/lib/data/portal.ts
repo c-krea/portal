@@ -23,7 +23,6 @@ export type PortalProfile = {
   tipoCliente: string | null
   descuentoPct: number | null
   prontoPagoPct: number | null
-  gracePeriodDays: number | null
   incrementoIpc: number | null
   descripcionDescuentos: string | null
 }
@@ -35,7 +34,6 @@ export type PortalPago = {
   valorFinal: number
   valorAplicado: number
   concepto: string | null
-  status: string
   diasDesdeFactura: number | null
 }
 
@@ -90,6 +88,7 @@ export async function getPortalProfile(userId: string): Promise<PortalProfile | 
     JOIN v2.contratos  c ON c.inquilino_id = t.id AND c.estado IN ('activo','critico')
     JOIN v2.locales    u ON u.id = c.local_id
     WHERE p.id = '${userId}'
+    ORDER BY u.unidad
     LIMIT 1
   `)
   const r = rows[0]
@@ -117,7 +116,6 @@ export async function getPortalProfile(userId: string): Promise<PortalProfile | 
     tipoCliente: r.tipo_cliente ? String(r.tipo_cliente) : null,
     descuentoPct: r.descuento_pct != null ? Number(r.descuento_pct) : null,
     prontoPagoPct: r.pronto_pago_pct != null ? Number(r.pronto_pago_pct) : null,
-    gracePeriodDays: null,
     incrementoIpc: r.incremento_ipc != null ? Number(r.incremento_ipc) : null,
     descripcionDescuentos: r.descripcion_descuentos ? String(r.descripcion_descuentos) : null,
   }
@@ -131,7 +129,6 @@ function mapPago(r: Record<string, unknown>): PortalPago {
     valorFinal: Number(r.valor_final),
     valorAplicado: Number(r.valor_aplicado),
     concepto: r.cruce ? String(r.cruce) : null,
-    status: "RECAUDADO",
     diasDesdeFactura: r.dias_desde_factura != null ? Number(r.dias_desde_factura) : null,
   }
 }
@@ -259,14 +256,25 @@ export async function getPortalContratos(tenantId: string): Promise<PortalContra
     SELECT
       l.unidad,
       l.entrada,
-      c.canon_base::numeric      AS canon_base,
+      COALESCE(ocu.precio, c.canon_base)::numeric      AS canon_base,
       c.fecha_inicio,
       c.fecha_fin,
-      c.descuento_pct::numeric   AS descuento_pct,
-      c.pronto_pago_pct::numeric AS pronto_pago_pct,
+      COALESCE(ocu.descuento, c.descuento_pct)::numeric   AS descuento_pct,
+      COALESCE(ocu.pronto_pago, c.pronto_pago_pct)::numeric AS pronto_pago_pct,
       c.estado
     FROM v2.contratos c
     JOIN v2.locales l ON l.id = c.local_id
+    JOIN v2.inquilinos ti ON ti.id = c.inquilino_id
+    LEFT JOIN LATERAL (
+      SELECT o.precio, o.descuento, o.pronto_pago
+      FROM siesa_raw.ocupacion o
+      WHERE o.documento = ti.nit
+        AND o.loc = l.unidad
+        AND o.razon_social IS NOT NULL
+        AND COALESCE(o.precio, 0) > 0
+      ORDER BY o.precio DESC
+      LIMIT 1
+    ) ocu ON TRUE
     WHERE c.inquilino_id = '${tenantId}'::uuid
       AND c.estado IN ('activo','critico')
     ORDER BY l.unidad
@@ -288,6 +296,9 @@ export type PortalCarteraRow = {
   unidad: string | null
   saldo: number
   vencido: number
+  diasMora: number
+  diasInterest: number
+  fechaVence: string | null
   ventas: number | null
   impuesto: number | null
   retenciones: number | null
@@ -297,16 +308,29 @@ export type PortalCartera = {
   saldoTotal: number
   facturaCount: number
   vencido: number
+  maxDiasMora: number
+  maxDiasInterest: number
+  interesEstimado: number
   rows: PortalCarteraRow[]
 }
 
+const NIT_RE = /^\d{5,12}(-\d)?$/
+
 export async function getPortalCartera(nit: string): Promise<PortalCartera> {
+  if (!NIT_RE.test(nit)) return { saldoTotal: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }
   const rows = await execute(`
+    WITH rate AS (
+      SELECT valor::numeric AS r FROM v2.reglas_financieras WHERE clave = 'interes_mora_diario' LIMIT 1
+    )
     SELECT
       (EXTRACT(YEAR FROM c.fecha_factura) * 100 + EXTRACT(MONTH FROM c.fecha_factura))::int AS periodo,
-      REGEXP_REPLACE(c.sucursal, '^.*\\s+', '')                                             AS unidad,
-      ROUND(c.saldo)::numeric       AS saldo,
-      ROUND(c.vr_vencido)::numeric  AS vencido,
+      REVERSE(SPLIT_PART(REVERSE(c.sucursal), ' ', 1))                                      AS unidad,
+      ROUND(c.saldo)::numeric                                     AS saldo,
+      ROUND(c.vr_vencido)::numeric                                AS vencido,
+      GREATEST(0, CURRENT_DATE - c.fecha_vence::date)::int        AS dias_mora,
+      GREATEST(0, COALESCE(c.financia, 0) - 30)::int              AS dias_interest,
+      ROUND(c.vr_vencido * GREATEST(0, COALESCE(c.financia, 0) - 30) * (SELECT r FROM rate))::numeric AS interes_est,
+      c.fecha_vence::date                                         AS fecha_vence,
       ROUND(d.ventas)::numeric      AS ventas,
       ROUND(d.impuesto)::numeric    AS impuesto,
       ROUND(d.retenciones)::numeric AS retenciones
@@ -324,15 +348,21 @@ export async function getPortalCartera(nit: string): Promise<PortalCartera> {
     unidad:      r.unidad ? String(r.unidad) : null,
     saldo:       Number(r.saldo ?? 0),
     vencido:     Number(r.vencido ?? 0),
+    diasMora:    Number(r.dias_mora ?? 0),
+    diasInterest: Number(r.dias_interest ?? 0),
+    fechaVence:  r.fecha_vence ? String(r.fecha_vence) : null,
     ventas:      r.ventas != null ? Number(r.ventas) : null,
     impuesto:    r.impuesto != null ? Number(r.impuesto) : null,
     retenciones: r.retenciones != null ? Number(r.retenciones) : null,
   }))
   return {
-    saldoTotal:   mapped.reduce((s, r) => s + r.saldo, 0),
-    facturaCount: mapped.length,
-    vencido:      mapped.reduce((s, r) => s + r.vencido, 0),
-    rows:         mapped,
+    saldoTotal:      mapped.reduce((s, r) => s + r.saldo, 0),
+    facturaCount:    mapped.length,
+    vencido:         mapped.reduce((s, r) => s + r.vencido, 0),
+    maxDiasMora:     mapped.reduce((m, r) => Math.max(m, r.diasMora), 0),
+    maxDiasInterest: mapped.reduce((m, r) => Math.max(m, r.diasInterest), 0),
+    interesEstimado: rows.reduce((s, r) => s + Number(r.interes_est ?? 0), 0),
+    rows:            mapped,
   }
 }
 

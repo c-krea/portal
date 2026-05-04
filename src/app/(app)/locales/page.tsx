@@ -4,13 +4,19 @@ import { PageHeader } from "@/components/layout/page-header"
 import { ClientesTable } from "@/components/clientes/clientes-table"
 import { getClienteRows, getVacantUnitRows, getLocalesKPIs } from "@/lib/data/clientes"
 import { formatCOP } from "@/lib/formatters"
-import { Building2, AlertTriangle, CreditCard, TrendingUp } from "lucide-react"
+import { Building2, DoorOpen, TrendingUp, CalendarClock } from "lucide-react"
 
-export default async function ClientesPage() {
+export default async function ClientesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ entrada?: string }>
+}) {
+  const { entrada } = await searchParams
+
   const [rows, vacantRows, kpis] = await Promise.all([
-    getClienteRows(),
-    getVacantUnitRows(),
-    getLocalesKPIs(),
+    getClienteRows(entrada),
+    getVacantUnitRows(entrada),
+    getLocalesKPIs(entrada),
   ])
 
   const occupancyPct = kpis.totalUnits > 0
@@ -43,46 +49,44 @@ export default async function ClientesPage() {
           </div>
         </div>
 
-        {/* Cartera total */}
+        {/* Vacantes */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Cartera total</p>
-            <TrendingUp className="h-4 w-4 text-amber-500" />
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Vacantes</p>
+            <DoorOpen className="h-4 w-4 text-slate-400" />
           </div>
-          <p className="mt-2 text-2xl font-bold text-slate-900">
-            {formatCOP(kpis.carteraTotal)}
+          <p className="mt-2 text-2xl font-bold text-slate-900">{kpis.vacantes}</p>
+          <p className="mt-1 text-xs text-slate-400">
+            {kpis.vacantes === 1 ? "local sin arrendar" : "locales sin arrendar"}
           </p>
-          <p className="mt-1 text-xs text-slate-400">saldo pendiente total</p>
         </div>
 
-        {/* Recaudado este mes */}
+        {/* Canon mensual */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Recaudado este mes</p>
-            <CreditCard className="h-4 w-4 text-emerald-500" />
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Canon mensual neto</p>
+            <TrendingUp className="h-4 w-4 text-emerald-500" />
           </div>
-          <p className="mt-2 text-2xl font-bold text-slate-900">
-            {formatCOP(kpis.recaudadoEsteMes)}
-          </p>
-          <p className="mt-1 text-xs text-slate-400">desde el ERP</p>
+          <p className="mt-2 text-2xl font-bold text-slate-900">{formatCOP(kpis.canonMensual)}</p>
+          <p className="mt-1 text-xs text-slate-400">sin IVA · neto descuentos de fase</p>
         </div>
 
-        {/* Locales en mora */}
+        {/* Contratos por vencer */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">En mora</p>
-            <AlertTriangle className="h-4 w-4 text-rose-500" />
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">Por vencer</p>
+            <CalendarClock className="h-4 w-4 text-amber-500" />
           </div>
-          <p className="mt-2 text-2xl font-bold text-slate-900">
-            {kpis.localesEnMora}
+          <p className={`mt-2 text-2xl font-bold ${kpis.contratosPorVencer > 0 ? "text-amber-600" : "text-slate-900"}`}>
+            {kpis.contratosPorVencer}
           </p>
           <p className="mt-1 text-xs text-slate-400">
-            {kpis.localesEnMora === 1 ? "local con saldo vencido" : "locales con saldo vencido"}
+            {kpis.contratosPorVencer === 1 ? "contrato vence en 60 días" : "contratos vencen en 60 días"}
           </p>
         </div>
       </div>
 
-      <ClientesTable data={rows} vacantUnits={vacantRows} />
+      <ClientesTable data={rows} vacantUnits={vacantRows} activeEntrada={entrada} />
     </>
   )
 }

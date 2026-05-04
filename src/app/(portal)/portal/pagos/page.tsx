@@ -20,36 +20,41 @@ function PaginationBar({
 }) {
   if (totalPages <= 1) return null
 
-  const pages = Array.from({ length: totalPages }, (_, i) => i + 1)
+  const pages: (number | "…")[] = []
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pages.push(i)
+  } else {
+    pages.push(1)
+    if (page > 3) pages.push("…")
+    for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) pages.push(i)
+    if (page < totalPages - 2) pages.push("…")
+    pages.push(totalPages)
+  }
 
   return (
     <div className="flex items-center gap-1 px-5 py-3 border-t border-slate-100">
       {page > 1 && (
-        <Link
-          href={`?page=${page - 1}`}
-          className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
-        >
+        <Link href={`?page=${page - 1}`} className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
           ← Anterior
         </Link>
       )}
-      {pages.map((p) => (
-        <Link
-          key={p}
-          href={`?page=${p}`}
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-            p === page
-              ? "bg-slate-900 text-white"
-              : "text-slate-500 hover:bg-slate-100"
-          }`}
-        >
-          {p}
-        </Link>
-      ))}
+      {pages.map((p, i) =>
+        p === "…" ? (
+          <span key={`ellipsis-${i}`} className="px-1.5 text-xs text-slate-400">…</span>
+        ) : (
+          <Link
+            key={p}
+            href={`?page=${p}`}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              p === page ? "bg-slate-900 text-white" : "text-slate-500 hover:bg-slate-100"
+            }`}
+          >
+            {p}
+          </Link>
+        )
+      )}
       {page < totalPages && (
-        <Link
-          href={`?page=${page + 1}`}
-          className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100"
-        >
+        <Link href={`?page=${page + 1}`} className="rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
           Siguiente →
         </Link>
       )}
@@ -72,15 +77,15 @@ export default async function PagosHistorialPage({
   if (!profile) redirect("/portal")
 
   const { page: pageParam } = await searchParams
-  const page = Math.max(1, parseInt(pageParam ?? "1", 10))
   const pageSize = 10
 
   const [{ pagos, totalCount }, kpis] = await Promise.all([
-    getPortalPagosPage(profile.tenantId, page, pageSize),
+    getPortalPagosPage(profile.tenantId, Math.max(1, parseInt(pageParam ?? "1", 10) || 1), pageSize),
     getPortalPagosKpis(profile.tenantId),
   ])
 
-  const totalPages = Math.ceil(totalCount / pageSize)
+  const totalPages = Math.ceil(totalCount / pageSize) || 1
+  const page = Math.min(Math.max(1, parseInt(pageParam ?? "1", 10) || 1), totalPages)
   const pctEnPlazo = kpis.totalCount > 0
     ? Math.round((kpis.enPlazoCount / kpis.totalCount) * 100)
     : 0

@@ -25,12 +25,6 @@ function currentPeriodo() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
 }
 
-function addDays(dateStr: string, days: number): Date {
-  const d = new Date(dateStr + "T00:00:00")
-  d.setDate(d.getDate() + days)
-  return d
-}
-
 function daysFromNow(date: Date): number {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -60,34 +54,24 @@ export default async function PortalPage() {
   const [pagos, medidor, cartera] = await Promise.all([
     getPortalPagos(profile.tenantId, 5),
     getPortalMedidorStatus(profile.unitId, periodo),
-    profile.nit ? getPortalCartera(profile.nit) : Promise.resolve({ saldoTotal: 0, facturaCount: 0, vencido: 0, rows: [] }),
+    profile.nit ? getPortalCartera(profile.nit) : Promise.resolve({ saldoTotal: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }),
   ])
 
-  // Next payment estimate: last payment + 30 days
   const lastPago = pagos[0]
-  const nextPaymentDate = lastPago
-    ? addDays(lastPago.fechaRecaudo, 30)
-    : addDays(profile.fechaInicio, 30)
 
+  const enMora = cartera.vencido > 0
+  const maxDiasMora = cartera.maxDiasMora
+  const interesEstimado = enMora ? cartera.interesEstimado : 0
+
+  // Next payment: earliest due date from open invoices, else 1st of next month
+  const earliestVence = cartera.rows.map((r) => r.fechaVence).filter(Boolean).sort()[0] ?? null
+  const nextPaymentDate = earliestVence
+    ? new Date(earliestVence + "T00:00:00")
+    : (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 1) })()
   const daysToPayment = daysFromNow(nextPaymentDate)
-  const paymentUrgent = daysToPayment <= 5
+  const paymentUrgent = daysToPayment >= 0 && daysToPayment <= 5
   const paymentWarning = daysToPayment > 5 && daysToPayment <= 10
   const paymentOverdue = daysToPayment < 0
-
-  // Mora: overdue > 35 days since last payment
-  const daysSinceLastPago = lastPago
-    ? Math.floor(
-        (Date.now() - new Date(lastPago.fechaRecaudo + "T00:00:00").getTime()) /
-          (1000 * 60 * 60 * 24),
-      )
-    : Infinity
-  const enMora = daysSinceLastPago > 35
-  // Days actually in mora (after the 30-day cycle)
-  const diasEnMora = enMora ? daysSinceLastPago - 30 : 0
-  // Estimated interest: 0.05%/day on canon, starts after 10 grace days of mora
-  const interesEstimado = enMora
-    ? Math.round(profile.canonBase * 0.0005 * Math.max(0, diasEnMora - 10))
-    : 0
 
   // Medidor deadline
 
@@ -104,11 +88,12 @@ export default async function PortalPage() {
             <TriangleAlert className="h-5 w-5 shrink-0 text-rose-500 mt-0.5" />
             <div className="flex-1">
               <p className="font-semibold text-rose-800">
-                Cuenta en mora — {diasEnMora} día{diasEnMora !== 1 ? "s" : ""} vencida
+                Cuenta en mora — {maxDiasMora} día{maxDiasMora !== 1 ? "s" : ""} vencida
               </p>
               <p className="mt-1 text-sm text-rose-700">
-                El último pago registrado fue el{" "}
-                <strong>{formatDate(lastPago!.fechaRecaudo)}</strong>.
+                {lastPago
+                  ? <>El último pago registrado fue el{" "}<strong>{formatDate(lastPago.fechaRecaudo)}</strong>.</>
+                  : <>Sin pagos registrados.</>}
                 {interesEstimado > 0 && (
                   <> Interés acumulado estimado:{" "}
                     <strong>{formatCOP(interesEstimado)}</strong>
@@ -188,7 +173,7 @@ export default async function PortalPage() {
         </p>
         <p className="mt-1 text-xs text-slate-400">
           {enMora
-            ? `${diasEnMora} días vencido`
+            ? `${maxDiasMora} días vencido`
             : `${pagos.length} pago${pagos.length !== 1 ? "s" : ""} registrados`}
         </p>
       </div>
