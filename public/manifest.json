@@ -4,12 +4,19 @@
   "description": "Portal de control de pagos — Central Kreativa",
   "id": "CKREA",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#f8fafc",
   "theme_color": "#0f172a",
   "orientation": "portrait-primary",
+  "dir": "ltr",
   "lang": "es",
   "categories": ["finance", "business"],
+  "prefer_related_applications": false,
+  "scope_extensions": [
+    { "origin": "https://www.ckrea.com.co" }
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",
