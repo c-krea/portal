@@ -2,6 +2,39 @@
 
 ## [Unreleased]
 
+### Session 50 — 2026-05-04: PWA + Push Notifications
+
+#### PWA — installable app
+- Web app manifest (`public/manifest.json`) with full field set: id, scope, display_override, dir, lang, categories, launch_handler, shortcuts, scope_extensions, prefer_related_applications
+- Service worker (`public/sw.js`): cache-first for static assets, network-only for data, offline block page
+- Offline detector component: full-screen overlay fires instantly on connection loss — prevents stale payment data from being read
+- `proxy.ts` public-route allowlist updated to pass manifest.json, sw.js, icons/ without auth
+
+#### Icons — cross-platform
+- Root cause found: `ckrea-logo.png` has opaque white pixels — fixed by stripping near-white (R,G,B > 220) before compositing on dark background
+- Generated: apple-touch-icon 180×180 (iOS), icon-192, icon-512, maskable-512, favicon-32, favicon-16
+- All icons: dark slate-900 background, circular mask with transparent corners for browser tab
+- Safe area insets added to MobileNav, sidebar, and portal header — fixes iPhone status bar overlap in PWA mode
+
+#### Push notifications infrastructure
+- VAPID keys generated; `NEXT_PUBLIC_VAPID_PUBLIC_KEY` + `VAPID_PRIVATE_KEY` added to Vercel env
+- `v2.push_subscriptions` table with RLS
+- `POST/DELETE /api/push` — save/remove subscriptions per authenticated user
+- `lib/push.ts` — `sendPushToUser()` and `sendPushToAll()` server actions
+- `NotificationToggle` component: fully wired subscribe/unsubscribe with loading state
+- Profile dropdown in sidebar (replaces logout button): user icon → dropdown with notification toggle + red logout
+
+#### Notification cron (`/api/cron/notifications`, 8am COT daily)
+- `v2.push_notification_log` table — unique constraint on (user_id, type, reference_id) prevents duplicate sends
+- 7 notification types for clients:
+  - Payment due in 3 days (once per invoice via factura key)
+  - Payment due today (once per invoice)
+  - First overdue — fires on financia = 31, first day past grace period (once per invoice)
+  - Mora escalation — Mondays only, once per week per user
+  - Lease expiring — exactly 60 and 30 days before fecha_fin
+  - Meter reading reminder — day 7 of month if no reading submitted for current period
+  - Payment confirmed — yesterday's `vista_pagos` payments, once per docto+cruce
+
 ### Session 49 — 2026-05-03: Locales + Portal deep review
 
 #### Locales list (`/locales`)

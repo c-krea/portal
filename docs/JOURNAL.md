@@ -2,6 +2,51 @@
 
 ---
 
+## Session 51 — 2026-05-04: PWA + Push Notifications
+
+### Goal
+Make the portal installable as a PWA on iPhone and Android, fix icons, wire push notifications end-to-end with 7 client-facing notification types.
+
+### What happened
+- 🎯 **Decision:** Serve manifest as `public/manifest.json` (static) not `app/manifest.ts` (route handler). Root cause: Next.js 16 uses `proxy.ts` as middleware (renames `proxy.js` → `middleware.js` at build time). The route handler was being intercepted by auth middleware and returning 307 → /login.
+- ⚠️ **Gotcha:** `ckrea-logo.png` has opaque white pixels as background — not transparent. `sharp`'s background fill only covers transparent areas, so setting a dark background left the white logo background intact. Fix: strip pixels where R,G,B > 220 to alpha=0 before compositing.
+- ⚠️ **Gotcha:** iOS caches `apple-touch-icon` aggressively. Even deleting and re-adding the PWA doesn't always clear it. Fix: rename the file (e.g. `-v3`) so iOS fetches a new URL it has never cached.
+- 💡 **Learning:** Next.js 16 breaking change — middleware file is now `proxy.ts`, not `middleware.ts`. Compiled as `proxy.js` → renamed to `middleware.js` at build time. This is why `"ƒ Proxy (Middleware)"` appears in build output.
+- 💡 **Learning:** For dedup of push notifications, use a `UNIQUE(user_id, type, reference_id)` table and attempt an INSERT — if it conflicts (already sent), skip. Cleaner than querying first.
+- ⚙️ **Workflow:** Test icon pixel colors locally with `sharp().raw().toBuffer()` before committing — avoids deploy-test-fix loops.
+- 🎯 **Decision:** Offline = hard block. Payment portal must not show stale data. `OfflineDetector` covers runtime connection loss; SW covers navigation failures.
+- 🎯 **Decision:** Payment confirmation notification uses 24h delay (ERP syncs every 3h; check `vista_pagos WHERE fecha_recaudo = yesterday`). Avoids race with ERP push window.
+
+### Files changed
+- `public/manifest.json` (new) — full PWA manifest
+- `public/sw.js` (new) — service worker with cache-first static, network-only data, offline block
+- `public/icons/` (new) — 6 icon sizes, all with white-stripped dark-background circular treatment
+- `src/app/icon.png` (new) — replaces default Next.js favicon
+- `src/components/pwa-register.tsx` (new) — SW registration with scope + updateViaCache
+- `src/components/offline-detector.tsx` (new) — full-screen offline overlay
+- `src/components/notification-toggle.tsx` — fully wired push subscribe/unsubscribe
+- `src/components/layout/sidebar.tsx` — profile dropdown replaces logout
+- `src/components/ui/dropdown-menu.tsx` (new) — shadcn dropdown
+- `src/app/api/push/route.ts` (new) — subscribe/unsubscribe endpoint
+- `src/app/api/cron/notifications/route.ts` (new) — 7 notification types with dedup
+- `src/lib/push.ts` (new) — sendPushToUser, sendPushToAll
+- `src/app/layout.tsx` — manifest link, icons metadata, offline detector, pwa register
+- `src/app/(portal)/layout.tsx` — safe area insets
+- `src/components/layout/mobile-nav.tsx` — safe area insets
+- `src/proxy.ts` — allowlist manifest.json, sw.js, icons/ paths
+- `next.config.ts` — sw.js + manifest.json cache headers
+- `vercel.json` — /api/cron/notifications at 8am COT
+- `package.json` — web-push added
+- DB migrations: `v2.push_subscriptions`, `v2.push_notification_log`
+
+### Session-end pointers
+- ADRs: none
+- Lessons: none (gotchas above are sufficient)
+- State: project_state.md should note PWA shipped + push notifications live
+- Linear: none
+
+---
+
 ## Session 50 — 2026-05-04: Auth emails + domain launch
 
 ### Goal
