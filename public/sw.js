@@ -1,4 +1,4 @@
-const CACHE = "ckrea-v2";
+const CACHE = "ckrea-v3";
 const OFFLINE_URL = "/offline";
 
 const STATIC_ASSETS = [
