@@ -2,23 +2,9 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { supabaseAdmin } from "@/lib/db/executor"
 import { signOut } from "@/app/(auth)/login/actions"
-import { LogOut } from "lucide-react"
 import Image from "next/image"
 import { PortalBottomNav } from "@/components/layout/portal-bottom-nav"
-
-async function SignOutButton() {
-  return (
-    <form action={signOut}>
-      <button
-        type="submit"
-        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors"
-      >
-        <LogOut className="h-4 w-4" />
-        Cerrar Sesión
-      </button>
-    </form>
-  )
-}
+import { PortalProfileDropdown } from "@/components/layout/portal-profile-dropdown"
 
 export default async function PortalLayout({
   children,
@@ -49,7 +35,10 @@ export default async function PortalLayout({
             <Image src="/ckrea-logo.png" alt="C-Krea" width={28} height={28} className="shrink-0" />
             <span className="text-base font-semibold text-slate-900">Portal del Inquilino</span>
           </div>
-          <SignOutButton />
+          <PortalProfileDropdown
+            displayName={profile?.nombre_completo ?? "Inquilino"}
+            signOutAction={signOut}
+          />
         </div>
       </header>
       <main className="mx-auto max-w-4xl px-4 sm:px-6 py-6 sm:py-8 pb-24">{children}</main>
