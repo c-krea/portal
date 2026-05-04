@@ -22,8 +22,8 @@ export function PortalProfileDropdown({ displayName, signOutAction }: Props) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center justify-center rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors">
-        <User className="h-4 w-4" />
+      <DropdownMenuTrigger className="flex items-center justify-center rounded-lg p-2 hover:bg-slate-100 transition-colors">
+        <User className="h-5 w-5 text-slate-500" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="bottom" align="end" className="w-56">
         <div className="px-2 py-1.5 text-xs text-slate-500 font-normal truncate">
