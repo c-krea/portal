@@ -2,7 +2,7 @@
   "name": "C-Krea PayControl",
   "short_name": "PayControl",
   "description": "Portal de control de pagos — Central Kreativa",
-  "id": "/",
+  "id": "CKREA",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8fafc",
