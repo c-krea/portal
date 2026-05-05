@@ -6,7 +6,7 @@ import { getElectricityInvoices } from "@/lib/data/electricity"
 import { getMeterYears } from "@/lib/data/medidores"
 import { InvoiceForm } from "./invoice-form"
 import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Download } from "lucide-react"
 import { isValidPeriodo, isValidYear } from "@/lib/security/validators"
 
 const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
@@ -62,7 +62,7 @@ export default async function FacturasEnergiaPage({
       </Link>
 
       {/* Year + period tabs */}
-      <div className="mb-5 flex flex-wrap items-center gap-3">
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
           {years.map((y) => {
             const lastMonth = y === now.getFullYear() ? now.getMonth() + 1 : 12
@@ -98,6 +98,14 @@ export default async function FacturasEnergiaPage({
             </a>
           ))}
         </div>
+
+        <a
+          href={`/api/medidores/export-energia?periodo=${periodo}`}
+          className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors"
+        >
+          <Download className="h-4 w-4" />
+          Exportar Excel
+        </a>
       </div>
 
       {/* Info banner */}

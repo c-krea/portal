@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Session 52 — 2026-05-05: Medidores Excel export + ERP electricity auto-fill
+
+#### Medidores — Excel Export
+- New "Exportar Excel" button on `/medidores` page, inline with year/month filters
+- Downloads single-period `.xlsx` with two sheets: Facturas Energía + Consumo por Local
+- Facturas sheet: 6 rows (one per address group) with dirección, proveedor, fecha, valor, kWh, tarifa + totals row
+- Consumo sheet: all metered units with tenant name, address, lec. anterior/actual, kWh, total COP + totals row
+
+#### Medidores — ERP Auto-fill
+- `valor_factura` for all 6 electricity groups now auto-populated from Siesa — no manual entry needed for the peso amount
+- Matched by contract number pattern in ERP `notas` field (6 contracts, one per address group)
+- `kwh_factura` computed from sum of tenant meter readings for that address group and period
+- `fecha_factura` shown as YYYY/MM (billing period from ERP — no exact day stored)
+- Blue "ERP" badge in Facturas de Energía form on auto-filled rows
+- Address labels updated to match ERP text exactly (e.g. "CARRERA 27 #10-65")
+- Admin-saved records always take priority over ERP fallback
+
 ### Session 51 — 2026-05-04: Portal Inquilino — PP, Medidor multi-local, Wompi, Usuarios
 
 #### Portal Inquilino — Pronto Pago

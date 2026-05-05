@@ -2,6 +2,32 @@
 
 ---
 
+## Session 53 — 2026-05-05: Medidores Excel export + ERP electricity auto-fill
+
+### What happened
+- 🎯 **Decision:** `valor_factura` for all 6 electricity groups auto-filled from `siesa_raw.estado_resultados` using contract number patterns in `notas` field (359580, 359581, 359583, 354985, 902329, 359585). Admin still enters `kwh_factura` manually from paper receipt — ERP does not store kWh.
+- 🎯 **Decision:** Tarifa is fixed from the receipt (valor ÷ kwh), NOT from sum of tenant readings. Missing tenant = pays 0, tarifa for everyone else unchanged. C-Krea absorbs the gap. 1.5× penalty = incentive only, not a math fix.
+- 🎯 **Decision:** direccion labels updated to match ERP text exactly (e.g. "CARRERA 27 #10-65" not "Cra 27 10 65 (F2)") — single source of truth is ELECTRICITY_GROUPS constant, drives both UI and export.
+- 💡 **Learning:** siesa_raw.estado_resultados has 6 distinct electricity bills per month (one per C-Krea address group), not 3. Earlier confusion was from querying only cuenta=51353001. Full query needs accounts 51353001 + 52353001 + 73353001. "Calle 11 #27-47" (354988) = Raymond shared bill, not C-Krea.
+- 💡 **Learning:** siesa_raw stores billing month as integer (202603) but no exact invoice date. Date shown as "YYYY/MM" in export — matches ERP as closely as possible without inventing a day.
+- ⚠️ **Gotcha:** Export route was querying `v2.facturas_energia` directly, bypassing the ERP fallback in `getElectricityInvoices`. Fixed by calling the shared function instead of inline SQL.
+- ⚙️ **Workflow:** Excel export button moved from PageHeader to inline with year/month filters in MedidoresFilter component — more natural UX next to the period selector.
+
+### Files changed
+- `src/lib/data/electricity.ts` — ELECTRICITY_GROUPS + contrato mapping, ERP fallback in getElectricityInvoices, computed kWh from readings, YYYY/MM date
+- `src/app/api/medidores/export-energia/route.ts` (new) — single-period xlsx export via getElectricityInvoices
+- `src/app/(app)/medidores/page.tsx` — export button removed from PageHeader
+- `src/app/(app)/medidores/facturas/page.tsx` — export button added next to filters (later moved to component)
+- `src/app/(app)/medidores/facturas/invoice-form.tsx` — blue ERP badge on auto-filled rows
+- `src/components/medidores/medidores-filter.tsx` — export button inline with filters
+- `package.json` / `package-lock.json` — xlsx (SheetJS) added
+
+### Session-end pointers
+- ADRs: none
+- Lessons: none (gotchas above sufficient)
+- State: project_state.md — add electricity ERP auto-fill shipped
+- Linear: none linked this session
+
 ## Session 52 — 2026-05-04: Portal PP, Medidor multi-local, Wompi, Usuarios
 
 ### What happened

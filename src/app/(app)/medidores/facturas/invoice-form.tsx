@@ -81,7 +81,14 @@ export function InvoiceForm({
               return (
                 <tr key={inv.electricity_group} className="hover:bg-slate-50/50">
                   <td className="px-4 py-3">
-                    <p className="font-medium text-slate-800">{inv.direccion}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-slate-800">{inv.direccion}</p>
+                      {inv.from_erp && (
+                        <span className="inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                          ERP
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">

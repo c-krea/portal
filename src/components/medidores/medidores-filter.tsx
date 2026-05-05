@@ -1,6 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import { Download } from "lucide-react"
 
 type Periodo = { label: string; value: string }
 
@@ -53,6 +54,14 @@ export function MedidoresFilter({ years, periodos, selectedYear, selectedPeriodo
           ))}
         </select>
       </div>
+
+      <a
+        href={`/api/medidores/export-energia?periodo=${selectedPeriodo}`}
+        className="self-end inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm hover:bg-emerald-100 transition-colors"
+      >
+        <Download className="h-4 w-4" />
+        Exportar Excel
+      </a>
     </div>
   )
 }
