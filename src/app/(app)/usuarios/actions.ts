@@ -97,44 +97,60 @@ export async function createTenantAccount(inquilinoId: string) {
   if (fetchError || !inquilino) return { error: "Inquilino no encontrado" }
   if (!inquilino.portal_email) return { error: "Sin email configurado" }
 
+  const email    = inquilino.portal_email as string
   const fullName = (inquilino.nombre_corto || inquilino.razon_social) as string
 
-  const { data, error: authError } = await supabaseAdmin.auth.admin.createUser({
-    email: inquilino.portal_email as string,
+  // Try to create; if email already exists, recover the existing auth user
+  let authUserId: string
+  const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
+    email,
     email_confirm: true,
     user_metadata: { full_name: fullName, role: "inquilino" },
   })
 
-  if (authError) return { error: authError.message }
+  if (createError) {
+    const alreadyExists =
+      createError.message.toLowerCase().includes("already") ||
+      createError.message.toLowerCase().includes("registered")
 
-  // Trigger creates perfil — patch it with inquilino_id + rol
+    if (!alreadyExists) {
+      return { error: `Error al crear la cuenta: ${createError.message}` }
+    }
+
+    // Email already in auth.users — find and reuse that user
+    const { data: allUsers } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+    const existing = allUsers?.users?.find(u => u.email === email)
+    if (!existing) return { error: "El email ya está registrado pero no se pudo localizar la cuenta. Contacta soporte." }
+    authUserId = existing.id
+  } else {
+    authUserId = created.user.id
+  }
+
+  // Upsert perfiles to link this auth user to the tenant
   const { error: perfilError } = await supabaseAdmin
     .schema("v2")
     .from("perfiles")
-    .update({
-      inquilino_id: inquilinoId,
-      rol: "inquilino",
+    .upsert({
+      id:              authUserId,
+      inquilino_id:    inquilinoId,
+      rol:             "inquilino",
       nombre_completo: fullName,
-      empresa_id: inquilino.empresa_id,
-    })
-    .eq("id", data.user.id)
+      empresa_id:      inquilino.empresa_id,
+      email,
+    }, { onConflict: "id" })
   if (perfilError) {
-    return { error: `Cuenta creada, pero error al asignar perfil: ${perfilError.message}` }
+    return { error: `Cuenta lista, pero error al vincular perfil: ${perfilError.message}` }
   }
 
-  // Generate password-setup link and send welcome email
+  // Send welcome email with password-setup link
   const redirectTo = `${SITE}/auth/confirm`
   const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
     type: "recovery",
-    email: inquilino.portal_email as string,
+    email,
     options: { redirectTo },
   })
   if (linkData?.properties?.action_link) {
-    await sendWelcomeEmail({
-      to: inquilino.portal_email as string,
-      name: fullName,
-      setupUrl: linkData.properties.action_link,
-    })
+    await sendWelcomeEmail({ to: email, name: fullName, setupUrl: linkData.properties.action_link })
   }
 
   revalidatePath("/usuarios")

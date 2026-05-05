@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { Building2, ShieldCheck, CheckCircle2, CircleDashed, Mail, UserCheck, UserPlus, Loader2 } from "lucide-react"
+import { Building2, ShieldCheck, CheckCircle2, CircleDashed, Mail, UserCheck, UserPlus, Loader2, Clock } from "lucide-react"
 import { EditAdminModal } from "./edit-admin-modal"
 import { EditTenantModal } from "./edit-tenant-modal"
 import { createTenantAccount } from "./actions"
@@ -112,6 +112,7 @@ export function TabSwitcher({
                 {tenants.map((t) => {
                   const hasAccount = !!t.authUserId
                   const hasEmail   = !!t.portalEmail
+                  const hasSignedIn = !!t.lastSignIn
                   return (
                     <tr key={t.tenantId} className="border-b border-slate-50 hover:bg-slate-50">
                       <td className="px-4 py-3 font-mono text-xs font-medium text-slate-600">{t.units}</td>
@@ -120,13 +121,17 @@ export function TabSwitcher({
                         {t.portalEmail ?? <span className="italic text-slate-400">Sin email</span>}
                       </td>
                       <td className="px-4 py-3">
-                        {hasAccount ? (
+                        {hasAccount && hasSignedIn ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-                            <CheckCircle2 className="h-3 w-3" /><span className="hidden sm:inline">Cuenta activa</span><span className="sm:hidden">✓</span>
+                            <CheckCircle2 className="h-3 w-3" /><span className="hidden sm:inline">Activo</span><span className="sm:hidden">✓</span>
+                          </span>
+                        ) : hasAccount && !hasSignedIn ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                            <Clock className="h-3 w-3" /><span className="hidden sm:inline">Invitado</span><span className="sm:hidden">~</span>
                           </span>
                         ) : hasEmail ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
-                            <Mail className="h-3 w-3" /><span className="hidden sm:inline">Email listo</span><span className="sm:hidden">Email</span>
+                            <Mail className="h-3 w-3" /><span className="hidden sm:inline">Email listo</span><span className="sm:hidden">@</span>
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
