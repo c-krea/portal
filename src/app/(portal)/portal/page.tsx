@@ -67,7 +67,7 @@ export default async function PortalPage() {
   const ppDiscountTotal = isPpWindow
     ? cartera.rows
         .filter(r => r.periodo === currentPeriodInt)
-        .reduce((sum, r) => sum + Math.round(r.saldo * ppPct), 0)
+        .reduce((sum, r) => sum + Math.round((r.ventas ?? 0) * ppPct), 0)
     : 0
   const saldoConPp = cartera.saldoTotal - ppDiscountTotal
 
@@ -249,7 +249,7 @@ export default async function PortalPage() {
           unidad:      row.unidad,
           saldo:       row.saldo,
           ppDiscount:  isPpWindow && row.periodo === currentPeriodInt
-                         ? Math.round(row.saldo * ppPct)
+                         ? Math.round((row.ventas ?? 0) * ppPct)
                          : 0,
           vencido:     row.vencido > 0,
           ventas:      row.ventas,
@@ -271,7 +271,7 @@ export default async function PortalPage() {
           const unitPpDiscount = isPpWindow
             ? cartera.rows
                 .filter(r => r.unidad === unitNumber && r.periodo === currentPeriodInt)
-                .reduce((sum, r) => sum + Math.round(r.saldo * ppPct), 0)
+                .reduce((sum, r) => sum + Math.round((r.ventas ?? 0) * ppPct), 0)
             : 0
           return { unitNumber, saldo: rawSaldo - unitPpDiscount }
         })}
