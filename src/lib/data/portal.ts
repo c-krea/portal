@@ -343,6 +343,7 @@ export async function getPortalCartera(nit: string): Promise<PortalCartera> {
       AND d.tipo = 'Facturas'
     WHERE c.documento = '${nit}'
       AND c.factura LIKE 'FVS-%'
+      AND c.id_zona = 'Z40'
       AND c.saldo > 0
     ORDER BY c.fecha_factura DESC, c.sucursal
   `)

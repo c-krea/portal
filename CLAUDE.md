@@ -3,7 +3,9 @@
 # C-Krea PayControl — Project CLAUDE.md
 
 ## Session start
-Read `~/.claude/memory/german-profile.md` early in every new session (behavior baseline).
+Run `/session-start` skill at the start of every session before any code, planning, or analysis.
+
+Always read `~/.claude/memory/german-profile.md` to adapt tone and depth for German.
 
 ## What this is
 Commercial rental payment control portal for ~85 units in Central Kreativa, Bogotá.

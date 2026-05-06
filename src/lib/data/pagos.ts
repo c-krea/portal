@@ -103,6 +103,7 @@ export async function getPagosKPIs(month?: string): Promise<PagosKPIs> {
       FROM siesa_raw.documentos
       WHERE periodo = ${year * 100 + monthNum}
         AND tipo = 'Facturas'
+        AND id_canal = 'R08'
     ),
     ultimo AS (
       SELECT d.fecha_recaudo, COALESCE(t.nombre_corto, t.razon_social) AS cliente, d.valor_final
