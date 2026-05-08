@@ -1,10 +1,15 @@
 "use server"
 
-import { execute, supabaseAdmin } from "@/lib/db/executor"
+import { supabaseAdmin } from "@/lib/db/executor"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { ELECTRICITY_GROUPS } from "@/lib/data/electricity"
 import { assertPeriodo, assertUuid } from "@/lib/security/validators"
 import { revalidatePath } from "next/cache"
+
+async function execDml(query: string) {
+  const { error } = await supabaseAdmin.rpc("exec_dml", { q: query })
+  if (error) throw new Error(`DML failed: ${error.message}\nQuery: ${query.slice(0, 300)}`)
+}
 
 export interface FacturaInput {
   electricity_group: string
@@ -84,7 +89,7 @@ export async function saveFacturasEnergia(
   // Propagate new tarifas to existing lecturas for this period.
   // Recompute total_energia from kwh × tarifa so portal/admin views match the saved bills.
   const filledGroups = filled.map((r) => `'${r.electricity_group}'`).join(",")
-  await execute(`
+  await execDml(`
     UPDATE v2.lecturas_medidor lm
     SET tarifa_kwh    = fe.tarifa_kwh,
         total_energia = ROUND(lm.kwh * fe.tarifa_kwh)
