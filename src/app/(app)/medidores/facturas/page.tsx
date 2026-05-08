@@ -24,11 +24,6 @@ function buildPeriodos(year: number) {
   return periodos
 }
 
-function periodoLabel(periodo: string) {
-  const [year, month] = periodo.split("-")
-  const date = new Date(Number(year), Number(month) - 1, 1)
-  return date.toLocaleDateString("es-CO", { month: "long", year: "numeric" })
-}
 
 export default async function FacturasEnergiaPage({
   searchParams,
@@ -106,13 +101,6 @@ export default async function FacturasEnergiaPage({
           <Download className="h-4 w-4" />
           Exportar Excel
         </a>
-      </div>
-
-      {/* Info banner */}
-      <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-        <strong>¿Cómo funciona?</strong> Ingresa los valores de cada factura del mes de{" "}
-        <strong>{periodoLabel(periodo)}</strong>. La tarifa se calcula automáticamente
-        (Valor ÷ kWh) y se aplica al consumo de cada unidad en ese grupo de dirección.
       </div>
 
       <InvoiceForm periodo={periodo} invoices={invoices} />
