@@ -13,8 +13,8 @@ function formatCOP(n: number) {
     : "—"
 }
 
-function formatTarifa(valor: number, kwh: number) {
-  if (valor > 0 && kwh > 0) return `$ ${(valor / kwh).toLocaleString("es-CO", { maximumFractionDigits: 2 })} / kWh`
+function formatKwh(valor: number, tarifa: number) {
+  if (valor > 0 && tarifa > 0) return `${Math.round(valor / tarifa).toLocaleString("es-CO")} kWh`
   return "—"
 }
 
@@ -27,19 +27,19 @@ export function InvoiceForm({
 }) {
   const [state, action, pending] = useActionState(saveFacturasEnergia, initial)
 
-  const [values, setValues] = useState<Record<string, { valor: string; kwh: string }>>(() =>
+  const [values, setValues] = useState<Record<string, { valor: string; tarifa: string }>>(() =>
     Object.fromEntries(
       invoices.map((inv) => [
         inv.electricity_group,
         {
-          valor: inv.valor_factura > 0 ? String(inv.valor_factura) : "",
-          kwh:   inv.kwh_factura   > 0 ? String(inv.kwh_factura)   : "",
+          valor:  inv.valor_factura > 0 ? String(inv.valor_factura) : "",
+          tarifa: inv.tarifa_kwh    > 0 ? String(inv.tarifa_kwh)    : "",
         },
       ])
     )
   )
 
-  function set(group: string, field: "valor" | "kwh", val: string) {
+  function set(group: string, field: "valor" | "tarifa", val: string) {
     setValues((prev) => ({ ...prev, [group]: { ...prev[group], [field]: val } }))
   }
 
@@ -68,15 +68,15 @@ export function InvoiceForm({
               <th className="px-4 py-3 text-left">Proveedor</th>
               <th className="px-4 py-3 text-left">Fecha factura</th>
               <th className="px-4 py-3 text-left">Valor factura (COP)</th>
-              <th className="px-4 py-3 text-left">kWh factura</th>
-              <th className="px-4 py-3 text-left">Tarifa</th>
+              <th className="px-4 py-3 text-left">Tarifa ($/kWh)</th>
+              <th className="px-4 py-3 text-left">kWh edificio</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {invoices.map((inv) => {
               const v = values[inv.electricity_group]
-              const tarifa = formatTarifa(Number(v?.valor || 0), Number(v?.kwh || 0))
-              const hasTarifa = Number(v?.valor || 0) > 0 && Number(v?.kwh || 0) > 0
+              const kwhEdificio = formatKwh(Number(v?.valor || 0), Number(v?.tarifa || 0))
+              const hasValues = Number(v?.valor || 0) > 0 && Number(v?.tarifa || 0) > 0
 
               return (
                 <tr key={inv.electricity_group} className="hover:bg-slate-50/50">
@@ -118,18 +118,18 @@ export function InvoiceForm({
                   <td className="px-4 py-3">
                     <input
                       type="number"
-                      name={`kwh_${inv.electricity_group}`}
-                      value={v?.kwh ?? ""}
-                      onChange={(e) => set(inv.electricity_group, "kwh", e.target.value)}
-                      placeholder="0"
+                      name={`tarifa_${inv.electricity_group}`}
+                      value={v?.tarifa ?? ""}
+                      onChange={(e) => set(inv.electricity_group, "tarifa", e.target.value)}
+                      placeholder="0.00"
                       min={0}
                       step={0.01}
                       className="w-32 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`font-semibold tabular-nums ${hasTarifa ? "text-slate-900" : "text-slate-300"}`}>
-                      {tarifa}
+                    <span className={`font-semibold tabular-nums ${hasValues ? "text-slate-900" : "text-slate-300"}`}>
+                      {kwhEdificio}
                     </span>
                   </td>
                 </tr>
@@ -139,7 +139,7 @@ export function InvoiceForm({
           <tfoot>
             <tr className="border-t border-slate-200 bg-slate-50">
               <td colSpan={3} className="px-4 py-3 text-xs text-slate-500">
-                Tarifa = Valor Factura ÷ kWh Factura. Se aplica a todas las unidades del grupo.
+                kWh edificio = Valor Factura ÷ Tarifa. La tarifa se aplica a cada unidad del grupo.
               </td>
               <td className="px-4 py-3">
                 <span className="text-xs font-semibold text-slate-700">

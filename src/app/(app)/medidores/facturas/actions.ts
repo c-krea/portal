@@ -15,7 +15,7 @@ export interface FacturaInput {
   electricity_group: string
   fecha_factura: string
   valor_factura: number
-  kwh_factura: number
+  tarifa_kwh: number
   notas: string
 }
 
@@ -38,18 +38,18 @@ export async function saveFacturasEnergia(
   const rows: FacturaInput[] = ELECTRICITY_GROUPS.map(({ group }) => ({
     electricity_group: group,
     fecha_factura:  String(formData.get(`fecha_${group}`) ?? ""),
-    valor_factura:  Number(formData.get(`valor_${group}`) ?? 0),
-    kwh_factura:    Number(formData.get(`kwh_${group}`)   ?? 0),
-    notas:          String(formData.get(`notas_${group}`) ?? ""),
+    valor_factura:  Number(formData.get(`valor_${group}`)  ?? 0),
+    tarifa_kwh:     Number(formData.get(`tarifa_${group}`) ?? 0),
+    notas:          String(formData.get(`notas_${group}`)  ?? ""),
   }))
 
-  const filled = rows.filter((r) => r.valor_factura > 0 && r.kwh_factura > 0)
+  const filled = rows.filter((r) => r.valor_factura > 0 && r.tarifa_kwh > 0)
   const partial = rows.filter(
-    (r) => (r.valor_factura > 0) !== (r.kwh_factura > 0),
+    (r) => (r.valor_factura > 0) !== (r.tarifa_kwh > 0),
   )
   if (partial.length > 0) {
     const meta = ELECTRICITY_GROUPS.find(g => g.group === partial[0].electricity_group)
-    return { error: `Completa valor Y kWh (o deja ambos vacíos) para ${meta?.direccion ?? partial[0].electricity_group}` }
+    return { error: `Completa valor Y tarifa (o deja ambos vacíos) para ${meta?.direccion ?? partial[0].electricity_group}` }
   }
   if (filled.length === 0) {
     return { error: "Ingresa al menos una factura para guardar" }
@@ -61,7 +61,7 @@ export async function saveFacturasEnergia(
 
   for (const r of filled) {
     const meta = groupMeta[r.electricity_group]
-    const tarifa = r.valor_factura / r.kwh_factura
+    const kwh_factura = Math.round((r.valor_factura / r.tarifa_kwh) * 100) / 100
 
     const { error } = await supabaseAdmin
       .schema("v2")
@@ -75,8 +75,8 @@ export async function saveFacturasEnergia(
           proveedor:         meta.proveedor,
           fecha_factura:     r.fecha_factura || null,
           valor_factura:     r.valor_factura,
-          kwh_factura:       r.kwh_factura,
-          tarifa_kwh:        Math.round(tarifa * 100) / 100,
+          kwh_factura:       kwh_factura,
+          tarifa_kwh:        Math.round(r.tarifa_kwh * 100) / 100,
           notas:             r.notas || null,
           updated_at:        new Date().toISOString(),
         },
