@@ -7,12 +7,12 @@ function periodoToLabel(periodo: string): string {
 }
 
 export const ELECTRICITY_GROUPS = [
-  { group: "CRA2710065", direccion: "CARRERA 27 #10-65", proveedor: "NUE",        contrato: "359580" },
-  { group: "CRA2710071", direccion: "KR 27 N°10-71",    proveedor: "ENEL",       contrato: "359581" },
-  { group: "CRA2710073", direccion: "KR 27 N°10-73",    proveedor: "ENEL",       contrato: "359583" },
-  { group: "CLL112733",  direccion: "CALLE 11 #27-33",  proveedor: "NEU",        contrato: "354985" },
-  { group: "CLL112739",  direccion: "CALLE 11 #27-39",  proveedor: "NEU REYMON", contrato: "902329" },
-  { group: "CRA2710079", direccion: "KR 27 N°10-79",    proveedor: "ENEL",       contrato: "359585" },
+  { group: "CRA2710065", direccion: "CARRERA 27 #10-65", proveedor: "NUE",        contrato: "359580", proveedorFullName: "ERCO ENERGÍA SA ESP",  proveedorNit: "900.570.286-9", contratoDisplay: "N° 359580"   },
+  { group: "CRA2710071", direccion: "KR 27 N°10-71",    proveedor: "ENEL",       contrato: "359581", proveedorFullName: "CODENSA SA ESP",         proveedorNit: "860.063.875-8", contratoDisplay: "0359581-2"   },
+  { group: "CRA2710073", direccion: "KR 27 N°10-73",    proveedor: "ENEL",       contrato: "359583", proveedorFullName: "CODENSA SA ESP",         proveedorNit: "860.063.875-8", contratoDisplay: "0359583-6"   },
+  { group: "CLL112733",  direccion: "CALLE 11 #27-33",  proveedor: "NEU",        contrato: "354985", proveedorFullName: "ERCO ENERGÍA SA ESP",  proveedorNit: "900.570.286-9", contratoDisplay: "N° 354985"   },
+  { group: "CLL112739",  direccion: "CALLE 11 #27-39",  proveedor: "NEU REYMON", contrato: "902329", proveedorFullName: "ERCO ENERGÍA SA ESP",  proveedorNit: "900.570.286-9", contratoDisplay: "N° 902329"   },
+  { group: "CRA2710079", direccion: "KR 27 N°10-79",    proveedor: "ENEL",       contrato: "359585", proveedorFullName: "CODENSA SA ESP",         proveedorNit: "860.063.875-8", contratoDisplay: "0359585-0"   },
 ] as const
 
 export type ElectricityGroup = typeof ELECTRICITY_GROUPS[number]["group"]

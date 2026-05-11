@@ -1,4 +1,6 @@
 import { execute } from "@/lib/db/executor"
+import { assertUuid, assertPeriodo } from "@/lib/security/validators"
+import { ELECTRICITY_GROUPS } from "@/lib/data/electricity"
 
 export type PortalProfile = {
   fullName: string
@@ -420,4 +422,106 @@ export async function getPortalMedidorStatus(
     exists: true,
     totalEnergia: r.total_energia != null ? Number(r.total_energia) : null,
   }
+}
+
+// ── Electricity invoice data ─────────────────────────────────────────────────
+
+export type PortalElectricityInvoiceData = {
+  unidad: string
+  proveedor: string
+  proveedorNit: string
+  contrato: string
+  periodoLabel: string  // "1 al 31 de mayo de 2026"
+  periodoKey: string    // "2026-05"
+  consumoKwh: number
+  tarifaKwh: number
+  direccion: string
+  total: number
+  invoiceNumber: string // "001", "002" — sequential per unit from 2026-03
+}
+
+function periodoToSpanish(periodo: string): string {
+  const [year, month] = periodo.split("-")
+  const date = new Date(Number(year), Number(month) - 1, 1)
+  const lastDay = new Date(Number(year), Number(month), 0).getDate()
+  const monthName = date.toLocaleDateString("es-CO", { month: "long" })
+  return `1 al ${lastDay} de ${monthName} de ${year}`
+}
+
+export async function getPortalElectricityInvoiceData(
+  unitId: string,
+  periodo: string,
+): Promise<PortalElectricityInvoiceData | null> {
+  assertUuid(unitId)
+  assertPeriodo(periodo)
+
+  const rows = await execute(`
+    SELECT
+      lm.kwh::numeric            AS kwh,
+      lm.total_energia::numeric  AS total_energia,
+      u.grupo_energia,
+      u.unidad,
+      COALESCE(fe.tarifa_kwh, lm.tarifa_kwh)::numeric AS tarifa_kwh,
+      (
+        SELECT COUNT(*)::int
+        FROM v2.lecturas_medidor seq
+        WHERE seq.local_id = lm.local_id
+          AND seq.kwh IS NOT NULL AND seq.kwh > 0
+          AND seq.periodo >= '2026-03'
+          AND seq.periodo <= lm.periodo
+      ) AS invoice_seq
+    FROM v2.lecturas_medidor lm
+    JOIN v2.locales u ON u.id = lm.local_id
+    LEFT JOIN v2.facturas_energia fe
+      ON fe.grupo_energia = u.grupo_energia AND fe.periodo = lm.periodo
+    WHERE lm.local_id = '${unitId}'::uuid AND lm.periodo = '${periodo}'
+    LIMIT 1
+  `)
+
+  const r = rows[0]
+  if (!r) return null
+
+  const grupo = String(r.grupo_energia ?? "")
+  const meta  = ELECTRICITY_GROUPS.find(g => g.group === grupo)
+  if (!meta) return null
+
+  const kwh    = Number(r.kwh)
+  const tarifa = Number(r.tarifa_kwh)
+  const total  = r.total_energia != null
+    ? Number(r.total_energia)
+    : Math.round(kwh * tarifa)
+
+  const seq = Number(r.invoice_seq ?? 1)
+
+  return {
+    unidad:        String(r.unidad),
+    proveedor:     meta.proveedorFullName,
+    proveedorNit:  meta.proveedorNit,
+    contrato:      meta.contratoDisplay,
+    periodoLabel:  periodoToSpanish(periodo),
+    periodoKey:    periodo,
+    consumoKwh:    kwh,
+    tarifaKwh:     tarifa,
+    invoiceNumber: String(seq).padStart(3, '0'),
+    direccion:    meta.direccion,
+    total,
+  }
+}
+
+export async function getPortalElectricityPeriodos(
+  unitId: string,
+): Promise<string[]> {
+  assertUuid(unitId)
+
+  const rows = await execute(`
+    SELECT periodo
+    FROM v2.lecturas_medidor
+    WHERE local_id = '${unitId}'::uuid
+      AND kwh IS NOT NULL
+      AND kwh > 0
+      AND periodo >= '2026-03'
+    ORDER BY periodo DESC
+  `)
+
+  return (rows as Record<string, unknown>[]).map(r => String(r.periodo))
 }

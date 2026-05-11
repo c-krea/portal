@@ -7,14 +7,15 @@ export interface ElectricityInvoiceProps {
   nombre: string
   nit: string
   // Utility invoice data
-  proveedor: string      // e.g. "NEU ENERGY SAS ESP"
-  proveedorNit: string   // e.g. "901.302.727"
-  contrato: string       // e.g. "NIU 902329"
-  periodo: string        // e.g. "1 al 31 de marzo 2026"
+  proveedor: string      // e.g. "ERCO ENERGÍA SA ESP"
+  proveedorNit: string   // e.g. "900.570.286-9"
+  contrato: string       // e.g. "N° 902329"
+  periodo: string        // e.g. "1 al 31 de marzo de 2026"
   consumoKwh: number     // e.g. 537.3
   tarifaKwh: number      // COP per kWh
   direccion: string      // local address
   total: number          // COP to reimburse
+  invoiceNumber?: string // sequential No. — defaults to "001"
 }
 
 const formatCOP = (v: number) =>
@@ -25,6 +26,14 @@ const formatKwh = (v: number) =>
 
 const formatTarifa = (v: number) =>
   `$ ${new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)}`
+
+function todayLabel(): string {
+  const now = new Date()
+  const day = now.getDate()
+  const month = now.toLocaleDateString('es-CO', { month: 'long' })
+  const year = now.getFullYear()
+  return `Bogotá D.C., ${day} de ${month} de ${year}`
+}
 
 const s = StyleSheet.create({
   page: {
@@ -148,18 +157,19 @@ export function ElectricityInvoicePDF({
   nombre, nit,
   proveedor, proveedorNit, contrato, periodo, consumoKwh, tarifaKwh, direccion,
   total,
+  invoiceNumber = '001',
 }: ElectricityInvoiceProps) {
   return (
     <Document>
       <Page size="A4" style={s.page}>
 
-        {/* CUENTA DE COBRO No. 001 */}
+        {/* CUENTA DE COBRO No. */}
         <View style={s.headerRow}>
-          <Text style={s.headerTitle}>CUENTA DE COBRO No. 001</Text>
+          <Text style={s.headerTitle}>CUENTA DE COBRO No. {invoiceNumber}</Text>
         </View>
 
-        {/* Date */}
-        <Text style={s.date}>Bogotá D.C., 22 abril de 2026</Text>
+        {/* Date — generated at render time */}
+        <Text style={s.date}>{todayLabel()}</Text>
 
         {/* Recipient */}
         <View style={s.recipient}>

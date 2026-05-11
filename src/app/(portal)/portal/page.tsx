@@ -7,11 +7,14 @@ import {
   getPortalPagos,
   getPortalMedidorStatus,
   getPortalCartera,
+  getPortalElectricityInvoiceData,
+  getPortalElectricityPeriodos,
 } from "@/lib/data/portal"
 import { formatCOP, formatDate } from "@/lib/formatters"
 import Link from "next/link"
 import { ProfileCard } from "./profile-card"
 import { WompiButton } from "./wompi-button"
+import { FacturasDownloadButton } from "./facturas-download-button"
 import { CarteraBreakdown, type BreakdownRow } from "./cartera-breakdown"
 import {
   CheckCircle2,
@@ -53,11 +56,21 @@ export default async function PortalPage() {
   const todayDay = now.getDate()
   const currentPeriodInt = now.getFullYear() * 100 + (now.getMonth() + 1)
 
-  const [pagos, medidor, cartera] = await Promise.all([
+  const [pagos, medidor, cartera, electricityInvoiceResults, electricityPeriodosResults] = await Promise.all([
     getPortalPagos(profile.tenantId, 5),
     getPortalMedidorStatus(profile.unitId, periodo),
     profile.nit ? getPortalCartera(profile.nit) : Promise.resolve({ saldoTotal: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }),
+    Promise.all(profile.allUnitIds.map(id => getPortalElectricityInvoiceData(id, periodo))),
+    Promise.all(profile.allUnitIds.map(id => getPortalElectricityPeriodos(id))),
   ])
+  const electricityInvoices = electricityInvoiceResults.filter((v): v is NonNullable<typeof v> => v !== null)
+  const electricityUnits = profile.allUnitIds
+    .map((id, i) => ({
+      unitId:     id,
+      unitNumber: profile.allUnits[i],
+      periodos:   electricityPeriodosResults[i],
+    }))
+    .filter(u => u.periodos.length > 0)
 
   const lastPago = pagos[0]
 
@@ -85,10 +98,9 @@ export default async function PortalPage() {
   const paymentWarning = daysToPayment > 5 && daysToPayment <= 10
   const paymentOverdue = daysToPayment < 0
 
-  // Medidor deadline
-
-  const medidorDeadlineDays = 10 - todayDay // days left in submission window
-  const medidorUrgent = !medidor.exists && todayDay <= 10 && medidorDeadlineDays <= 3
+  // Medidor: submissions only on day 9 of each month
+  const isMedidorDay = todayDay === 9
+  const medidorUrgent = !medidor.exists && isMedidorDay
 
   return (
     <div className="space-y-3">
@@ -121,40 +133,24 @@ export default async function PortalPage() {
         </div>
       )}
 
-      {/* ── Medidor deadline banner (days 7-10, not yet submitted) ── */}
+      {/* ── Medidor banner — only shown on day 9 if not yet submitted ── */}
       {medidorUrgent && (
-        <div className={`rounded-xl border p-4 ${
-          medidorDeadlineDays <= 1
-            ? "border-rose-200 bg-rose-50"
-            : "border-amber-200 bg-amber-50"
-        }`}>
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
-              <Zap className={`h-5 w-5 shrink-0 mt-0.5 ${
-                medidorDeadlineDays <= 1 ? "text-rose-500" : "text-amber-500"
-              }`} />
+              <Zap className="h-5 w-5 shrink-0 mt-0.5 text-rose-500" />
               <div>
-                <p className={`font-semibold ${
-                  medidorDeadlineDays <= 1 ? "text-rose-800" : "text-amber-800"
-                }`}>
-                  {medidorDeadlineDays <= 0
-                    ? "¡Último día! Envíe su lectura hoy"
-                    : `Quedan ${medidorDeadlineDays} día${medidorDeadlineDays !== 1 ? "s" : ""} para enviar la lectura`}
+                <p className="font-semibold text-rose-800">
+                  ¡Hoy es el día! Envíe su lectura del contador
                 </p>
-                <p className={`mt-0.5 text-sm ${
-                  medidorDeadlineDays <= 1 ? "text-rose-600" : "text-amber-700"
-                }`}>
-                  Sin lectura → se cobra 1.5× el promedio de los últimos 3 meses.
+                <p className="mt-0.5 text-sm text-rose-600">
+                  Sin lectura hoy → se cobra 1.5× el promedio de los últimos 3 meses.
                 </p>
               </div>
             </div>
             <Link
               href="/portal/medidor"
-              className={`self-start sm:self-auto shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors ${
-                medidorDeadlineDays <= 1
-                  ? "bg-rose-600 hover:bg-rose-700"
-                  : "bg-amber-600 hover:bg-amber-700"
-              }`}
+              className="self-start sm:self-auto shrink-0 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 transition-colors"
             >
               Enviar ahora
             </Link>
@@ -264,6 +260,7 @@ export default async function PortalPage() {
         tipoPersona={profile.tipoPersona}
         hasPp={isPpWindow && ppDiscountTotal > 0}
         ppPct={profile.prontoPagoPct ?? 0}
+        electricityInvoices={electricityInvoices}
         units={profile.allUnits.map(unitNumber => {
           const rawSaldo = cartera.rows
             .filter(r => r.unidad === unitNumber)
@@ -275,6 +272,13 @@ export default async function PortalPage() {
             : 0
           return { unitNumber, saldo: rawSaldo - unitPpDiscount }
         })}
+      />
+
+      {/* ── Descargar factura de energía ── */}
+      <FacturasDownloadButton
+        nombre={profile.razonSocial}
+        nit={profile.nit ?? ""}
+        units={electricityUnits}
       />
 
     </div>

@@ -26,6 +26,8 @@ export default async function MedidorPage() {
   if (!profile) redirect("/portal")
 
   const periodo = currentPeriodo()
+  const todayDay = new Date().getDate()
+  const isMedidorDay = todayDay === 9
 
   // Load ref data + history for every unit in parallel
   const [refs, histories] = await Promise.all([
@@ -62,9 +64,19 @@ export default async function MedidorPage() {
         </p>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <MedidorForm periodo={periodo} units={units} chartSeries={chartSeries} />
-      </div>
+      {isMedidorDay ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <MedidorForm periodo={periodo} units={units} chartSeries={chartSeries} />
+        </div>
+      ) : (
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm text-center">
+          <Zap className="mx-auto h-10 w-10 text-slate-300 mb-3" />
+          <p className="font-semibold text-slate-700">Envío disponible solo el día 9 de cada mes</p>
+          <p className="mt-1 text-sm text-slate-400">
+            Vuelva el día 9 para registrar la lectura de su contador.
+          </p>
+        </div>
+      )}
 
     </div>
   )
