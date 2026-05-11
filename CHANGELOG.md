@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Session 53 — 2026-05-11: Admin meter reading — unblock + photo upload
+
+#### Admin manual reading form (`/medidores`)
+- **Fixed critical save failure:** `tarifa_kwh` and `total_energia` were sent as `null` when no electricity invoice exists yet — DB NOT NULL constraint rejected every insert. Now defaults to `0`; re-register after entering the invoice to populate cost.
+- **Fixed wrong kWh calculation:** previous reading lookup was hardcoded to calendar-prior month (April — zero readings). Now falls back to the most recent available period (March 2026). Label shows the actual period used.
+- **Fixed duplicate form field:** readonly `lecturaAnterior` input had `name` attribute alongside a hidden fallback input — ambiguous FormData. Cleaned to single hidden input.
+- **Photo upload added:** admin can now attach a meter photo when registering a reading manually. Stored in R2 (`medidores/YYYY-MM/local-{unit}-{ts}.jpg`).
+- **Direct camera capture:** "Tomar foto" button opens rear camera immediately on mobile; "Adjuntar foto" opens gallery/file picker. Both feed the same upload.
+- **Audit trail:** `submitted_by` now set to the authenticated admin's user ID on every admin-entered reading.
+
 ### Session 52 — 2026-05-05: Medidores Excel export + ERP electricity auto-fill
 
 #### Medidores — Excel Export

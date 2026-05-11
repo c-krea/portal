@@ -2,6 +2,28 @@
 
 ---
 
+## Session 54 — 2026-05-11: Admin meter reading unblock + photo upload
+
+### What happened
+
+⚠️ **Gotcha — NOT NULL trap on first-ever reading day.** `tarifa_kwh` and `total_energia` are `NOT NULL` with no DB default. Admin action was sending `null` for both when no electricity invoice existed yet → every save silently rejected. Fixed: defaults to `0`, re-register once invoice is entered.
+
+⚠️ **Gotcha — April 2026 was never recorded.** Admin form looked up previous reading by calendar-prior month (April). Zero April readings → `lecturaAnterior = 0` → `kwh = entire meter value`. Fixed: falls back to most recent available period (March). Label now shows the actual source period.
+
+🎯 **Decision — `submitted_by` required on admin entries too.** Added auth check + `user.id` to admin registration action. Full audit trail: every reading in DB now knows which account entered it.
+
+💡 **Learning — R2 credentials fail silently as "Resolved credential object not valid".** The AWS SDK v3 doesn't throw at `S3Client` construction if env vars are undefined — it throws at first API call. Missing env vars in Vercel were the root cause of photo upload failures. Fix: verify `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` in Vercel production env.
+
+💡 **Learning — `capture="environment"` on `<input type="file">` opens rear camera directly on mobile.** Use two separate hidden file inputs (one with `capture`, one without) + two buttons to give the user the choice without forcing one mode.
+
+### Session-end pointers
+- ADRs: none
+- Lessons: none (learnings are transient UI/infra — not worth a standalone memory file)
+- State: project_state.md — admin reading workflow now unblocked; May 2026 readings in progress
+- Linear: none
+
+---
+
 ## Session 53 — 2026-05-05: Medidores Excel export + ERP electricity auto-fill
 
 ### What happened
