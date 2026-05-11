@@ -3,7 +3,7 @@
 import { useActionState, useRef, useState } from "react"
 import { registrarLectura, type MedidorState } from "@/app/(app)/medidores/actions"
 import type { UnitWithMeter } from "@/lib/data/medidores"
-import { Camera, X } from "lucide-react"
+import { Camera, FolderOpen, X } from "lucide-react"
 
 const initial: MedidorState = {}
 
@@ -40,6 +40,7 @@ export function LecturaForm({ units, periodo }: { units: UnitWithMeter[]; period
     MONTHS.find((m) => m.value === periodo)?.value ?? MONTHS[0].value
   )
   const fileInputRef                          = useRef<HTMLInputElement>(null)
+  const cameraInputRef                        = useRef<HTMLInputElement>(null)
   const [preview, setPreview]                 = useState<string | null>(null)
   const [fotoBase64, setFotoBase64]           = useState<string | null>(null)
   const [fotoMime, setFotoMime]               = useState("image/jpeg")
@@ -172,6 +173,17 @@ export function LecturaForm({ units, periodo }: { units: UnitWithMeter[]; period
             <label className="mb-1 block text-xs font-medium text-slate-600">
               Foto del contador <span className="font-normal text-slate-400">(opcional)</span>
             </label>
+
+            {/* Camera — opens device camera directly */}
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) applyFile(f) }}
+            />
+            {/* Gallery / file picker */}
             <input
               ref={fileInputRef}
               type="file"
@@ -179,6 +191,7 @@ export function LecturaForm({ units, periodo }: { units: UnitWithMeter[]; period
               className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) applyFile(f) }}
             />
+
             {fotoBase64 && <input type="hidden" name="fotoBase64" value={fotoBase64} />}
             {fotoBase64 && <input type="hidden" name="fotoMime"    value={fotoMime} />}
             {selectedUnit  && <input type="hidden" name="unitNumber" value={selectedUnit.unitNumber} />}
@@ -196,14 +209,24 @@ export function LecturaForm({ units, periodo }: { units: UnitWithMeter[]; period
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-500 hover:border-slate-400 hover:bg-white transition-colors"
-              >
-                <Camera className="h-4 w-4" />
-                Adjuntar foto
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-500 hover:border-slate-400 hover:bg-white transition-colors"
+                >
+                  <Camera className="h-4 w-4" />
+                  Tomar foto
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-500 hover:border-slate-400 hover:bg-white transition-colors"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  Adjuntar foto
+                </button>
+              </div>
             )}
           </div>
 
