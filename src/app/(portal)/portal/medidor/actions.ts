@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { execute, supabaseAdmin } from "@/lib/db/executor"
 import { getPortalProfile } from "@/lib/data/portal"
-import { uploadMeterPhoto } from "@/lib/google-drive"
+import { uploadMeterPhoto } from "@/lib/r2/meter-photos"
 import { isValidPeriodo } from "@/lib/security/validators"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
@@ -32,6 +32,8 @@ export async function submitLectura(
 
   const profile = await getPortalProfile(user.id)
   if (!profile) return { error: "Perfil no encontrado" }
+
+  if (new Date().getDate() !== 9) return { error: "El envío de lectura solo está habilitado el día 9 de cada mes." }
 
   const { companyId } = profile
 
@@ -110,24 +112,24 @@ export async function submitLectura(
   }
 
   let fotoUrl: string | null = null
-  let fotoDriveId: string | null = null
+  let fotoKey: string | null = null
   const fotoBase64 = formData.get("fotoBase64") as string | null
   const fotoMime = (formData.get("fotoMime") as string | null) ?? "image/jpeg"
   if (fotoBase64) {
     try {
       const base64Data = fotoBase64.includes(",") ? fotoBase64.split(",")[1] : fotoBase64
       const buffer = Buffer.from(base64Data, "base64")
-      const { fileId, url } = await uploadMeterPhoto(
+      const { key, url } = await uploadMeterPhoto(
         buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
         fotoMime,
         unitNumber,
         periodo,
       )
-      fotoDriveId = fileId
+      fotoKey = key
       fotoUrl = url
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      console.error("Drive upload error:", msg)
+      console.error("R2 upload error:", msg)
       return { error: `Error subiendo foto: ${msg}` }
     }
   }
@@ -147,7 +149,7 @@ export async function submitLectura(
         total_energia:      String(totalEnergia),
         notas:              notas ?? null,
         foto_url:           fotoUrl,
-        foto_drive_id:      fotoDriveId,
+        foto_drive_id:      fotoKey,
         submitted_by:       user.id,
         estado_validacion:  validationStatus,
       },
