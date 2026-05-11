@@ -70,7 +70,7 @@ export async function submitLectura(
   }
 
   const kwh = Math.round((lecturaActual - lecturaAnterior) * 100) / 100
-  const totalEnergia = Math.round(kwh * tarifaKwh / 250) * 250
+  const totalEnergia = Math.round(kwh * tarifaKwh / 50) * 50
 
   // Hybrid validation: same-month seasonal avg (primary) + 3m avg (fallback)
   const mes = periodo.split("-")[1]

@@ -92,7 +92,7 @@ export async function saveFacturasEnergia(
   await execDml(`
     UPDATE v2.lecturas_medidor lm
     SET tarifa_kwh    = fe.tarifa_kwh,
-        total_energia = ROUND(lm.kwh * fe.tarifa_kwh / 250.0) * 250
+        total_energia = ROUND(lm.kwh * fe.tarifa_kwh / 50.0) * 50
     FROM v2.facturas_energia fe,
          v2.locales u
     WHERE lm.empresa_id    = '${empresaId}'::uuid

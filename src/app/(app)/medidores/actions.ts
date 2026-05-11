@@ -81,7 +81,7 @@ export async function registrarLectura(
     // Auto-lookup tarifa from the entered invoice for this period + unit's building group.
     // If no invoice exists yet, tarifa=0 and total=0; re-run registration once invoice is entered.
     const tarifa = await getElectricityTarifaForUnit(empresaId, unitId, periodo)
-    const totalEnergia = tarifa > 0 ? Math.round(kwh * tarifa / 250) * 250 : 0
+    const totalEnergia = tarifa > 0 ? Math.round(kwh * tarifa / 50) * 50 : 0
 
     const { error } = await supabaseAdmin
       .schema("v2")
