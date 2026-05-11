@@ -91,6 +91,10 @@ export async function getPagosKPIs(month?: string): Promise<PagosKPIs> {
     deduped AS (
       SELECT p.inquilino_id, p.fecha_recaudo, p.valor_final, p.docto
       FROM v2.vista_pagos p
+      JOIN siesa_raw.documentos inv
+        ON inv.documento = '001-' || p.cruce
+        AND inv.tipo     = 'Facturas'
+        AND inv.periodo  = ${year * 100 + monthNum}
       WHERE date_trunc('month', p.fecha_recaudo) = ${monthExpr}
         ${EXCLUDE_ELECTRICITY}
     ),
