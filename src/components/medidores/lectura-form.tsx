@@ -1,8 +1,9 @@
 "use client"
 
-import { useActionState, useState } from "react"
+import { useActionState, useRef, useState } from "react"
 import { registrarLectura, type MedidorState } from "@/app/(app)/medidores/actions"
 import type { UnitWithMeter } from "@/lib/data/medidores"
+import { Camera, X } from "lucide-react"
 
 const initial: MedidorState = {}
 
@@ -38,6 +39,10 @@ export function LecturaForm({ units, periodo }: { units: UnitWithMeter[]; period
   const [selectedPeriodo, setSelectedPeriodo] = useState(
     MONTHS.find((m) => m.value === periodo)?.value ?? MONTHS[0].value
   )
+  const fileInputRef                          = useRef<HTMLInputElement>(null)
+  const [preview, setPreview]                 = useState<string | null>(null)
+  const [fotoBase64, setFotoBase64]           = useState<string | null>(null)
+  const [fotoMime, setFotoMime]               = useState("image/jpeg")
 
   const selectedUnit    = units.find((u) => u.unitId === selectedId) ?? null
   const calPriorPeriodo = prevPeriodo(selectedPeriodo)
@@ -55,6 +60,25 @@ export function LecturaForm({ units, periodo }: { units: UnitWithMeter[]; period
   })()
   const lecturaAnterior = selectedUnit?.readingsByPeriodo[lecturaAnteriorPeriodo] ?? null
   const alreadyExists   = selectedUnit?.existingPeriodos.includes(selectedPeriodo) ?? false
+
+  function applyFile(file: File) {
+    setPreview(URL.createObjectURL(file))
+    setFotoMime(file.type || "image/jpeg")
+    const reader = new FileReader()
+    reader.onload = (e) => setFotoBase64(e.target?.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  function clearPhoto() {
+    setPreview(null)
+    setFotoBase64(null)
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  function selectUnit(id: string) {
+    setSelectedId(id)
+    clearPhoto()
+  }
 
   return (
     <form action={action} className="space-y-4">
@@ -76,7 +100,7 @@ export function LecturaForm({ units, periodo }: { units: UnitWithMeter[]; period
             name="unitId"
             required
             value={selectedId}
-            onChange={(e) => setSelectedId(e.target.value)}
+            onChange={(e) => selectUnit(e.target.value)}
             className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Seleccionar…</option>
@@ -129,7 +153,7 @@ export function LecturaForm({ units, periodo }: { units: UnitWithMeter[]; period
             <input type="hidden" name="lecturaAnterior" value={lecturaAnterior ?? 0} />
           </div>
 
-          {/* Current reading — only field admin types */}
+          {/* Current reading */}
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Lectura actual</label>
             <input
@@ -141,6 +165,46 @@ export function LecturaForm({ units, periodo }: { units: UnitWithMeter[]; period
               placeholder="Ingresa la lectura del contador"
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+
+          {/* Photo upload */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-600">
+              Foto del contador <span className="font-normal text-slate-400">(opcional)</span>
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) applyFile(f) }}
+            />
+            {fotoBase64 && <input type="hidden" name="fotoBase64" value={fotoBase64} />}
+            {fotoBase64 && <input type="hidden" name="fotoMime"    value={fotoMime} />}
+            {selectedUnit  && <input type="hidden" name="unitNumber" value={selectedUnit.unitNumber} />}
+
+            {preview ? (
+              <div className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={preview} alt="Vista previa" className="h-16 w-16 rounded-lg object-cover border border-slate-200" />
+                <button
+                  type="button"
+                  onClick={clearPhoto}
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700"
+                >
+                  <X className="h-3.5 w-3.5" /> Quitar foto
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-2.5 text-sm text-slate-500 hover:border-slate-400 hover:bg-white transition-colors"
+              >
+                <Camera className="h-4 w-4" />
+                Adjuntar foto
+              </button>
+            )}
           </div>
 
           <div>

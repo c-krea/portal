@@ -3,6 +3,7 @@
 import { supabaseAdmin } from "@/lib/db/executor"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
+import { uploadMeterPhoto } from "@/lib/r2/meter-photos"
 import { isValidPeriodo } from "@/lib/security/validators"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
@@ -43,7 +44,31 @@ export async function registrarLectura(
     return { error: "Lectura actual debe ser mayor o igual a la anterior" }
   }
 
-  const kwh = Math.round((lecturaActual - lecturaAnterior) * 100) / 100
+  const kwh        = Math.round((lecturaActual - lecturaAnterior) * 100) / 100
+  const unitNumber = (formData.get("unitNumber") as string | null) ?? ""
+
+  // Optional photo upload
+  let fotoUrl: string | null = null
+  let fotoKey: string | null = null
+  const fotoBase64 = formData.get("fotoBase64") as string | null
+  const fotoMime   = (formData.get("fotoMime") as string | null) ?? "image/jpeg"
+  if (fotoBase64) {
+    try {
+      const base64Data = fotoBase64.includes(",") ? fotoBase64.split(",")[1] : fotoBase64
+      const buffer = Buffer.from(base64Data, "base64")
+      const { key, url } = await uploadMeterPhoto(
+        buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+        fotoMime,
+        unitNumber,
+        periodo,
+      )
+      fotoKey = key
+      fotoUrl = url
+    } catch (err) {
+      console.error("R2 upload error:", err)
+      return { error: "Error subiendo la foto. Intente de nuevo." }
+    }
+  }
 
   try {
     const empresaId = await getEmpresaCkreaId()
@@ -67,6 +92,8 @@ export async function registrarLectura(
           tarifa_kwh:       tarifa > 0 ? tarifa : 0,
           total_energia:    totalEnergia,
           notas:            notas ?? null,
+          foto_url:         fotoUrl,
+          foto_drive_id:    fotoKey,
         },
         { onConflict: "local_id,periodo" },
       )
