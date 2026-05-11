@@ -1,6 +1,7 @@
 "use server"
 
 import { supabaseAdmin } from "@/lib/db/executor"
+import { createClient } from "@/lib/supabase/server"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
 import { uploadMeterPhoto } from "@/lib/r2/meter-photos"
@@ -26,6 +27,10 @@ export async function registrarLectura(
   _prev: MedidorState,
   formData: FormData,
 ): Promise<MedidorState> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "No autorizado" }
+
   const parsed = schema.safeParse({
     unitId:          formData.get("unitId"),
     periodo:         formData.get("periodo"),
@@ -94,6 +99,7 @@ export async function registrarLectura(
           notas:            notas ?? null,
           foto_url:         fotoUrl,
           foto_drive_id:    fotoKey,
+          submitted_by:     user.id,
         },
         { onConflict: "local_id,periodo" },
       )
