@@ -8,6 +8,7 @@ import {
   Zap,
   TrendingUp,
   UserCog,
+  FolderOpen,
 } from "lucide-react"
 
 export const NAV_ITEMS = [
@@ -18,6 +19,7 @@ export const NAV_ITEMS = [
   { icon: Users,           label: "Locales",       href: "/locales" },
   { icon: Receipt,         label: "Gastos",        href: "/gastos" },
   { icon: Zap,             label: "Medidores",     href: "/medidores" },
+  { icon: FolderOpen,      label: "Archivos",      href: "/archivos" },
   { icon: UserCog,         label: "Usuarios",      href: "/usuarios" },
 ] as const
 
