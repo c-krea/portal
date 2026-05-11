@@ -211,8 +211,12 @@ export async function getPagosBuckets(month: string): Promise<PagosBuckets> {
   const rows = await execute(`
     WITH ${electricityTenantsSubquery(monthExpr, prev)},
     deduped AS (
-      SELECT p.inquilino_id, p.fecha_recaudo, p.valor_final, p.dias_mora_al_pago
+      SELECT p.inquilino_id, p.fecha_recaudo, p.valor_final, p.dias_mora_al_pago,
+             inv.periodo AS invoice_periodo
       FROM v2.vista_pagos p
+      LEFT JOIN siesa_raw.documentos inv
+        ON inv.documento = '001-' || p.cruce
+        AND inv.tipo     = 'Facturas'
       WHERE date_trunc('month', p.fecha_recaudo) = ${monthExpr}
         ${EXCLUDE_ELECTRICITY}
     ),
@@ -222,6 +226,7 @@ export async function getPagosBuckets(month: string): Promise<PagosBuckets> {
         d.fecha_recaudo,
         d.valor_final,
         CASE
+          WHEN d.invoice_periodo IS NOT NULL AND d.invoice_periodo < ${y * 100 + m} THEN 'mora'
           WHEN COALESCE(d.dias_mora_al_pago, 0) > ${grace} THEN 'mora'
           WHEN EXTRACT(DAY FROM d.fecha_recaudo) BETWEEN 1 AND 10 THEN 'temprano'
           ELSE 'tardio'
