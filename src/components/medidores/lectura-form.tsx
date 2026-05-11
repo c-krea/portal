@@ -40,8 +40,20 @@ export function LecturaForm({ units, periodo }: { units: UnitWithMeter[]; period
   )
 
   const selectedUnit    = units.find((u) => u.unitId === selectedId) ?? null
-  const anteriorPeriodo = prevPeriodo(selectedPeriodo)
-  const lecturaAnterior = selectedUnit?.readingsByPeriodo[anteriorPeriodo] ?? null
+  const calPriorPeriodo = prevPeriodo(selectedPeriodo)
+
+  // Use calendar-prior month if it has a reading; otherwise fall back to the most recent reading
+  // before the selected period (e.g. April 2026 was skipped → fall back to March 2026).
+  const lecturaAnteriorPeriodo = (() => {
+    if (!selectedUnit) return calPriorPeriodo
+    if (selectedUnit.readingsByPeriodo[calPriorPeriodo] != null) return calPriorPeriodo
+    const earlier = Object.keys(selectedUnit.readingsByPeriodo)
+      .filter((p) => p < selectedPeriodo)
+      .sort()
+      .reverse()
+    return earlier[0] ?? calPriorPeriodo
+  })()
+  const lecturaAnterior = selectedUnit?.readingsByPeriodo[lecturaAnteriorPeriodo] ?? null
   const alreadyExists   = selectedUnit?.existingPeriodos.includes(selectedPeriodo) ?? false
 
   return (
@@ -105,19 +117,16 @@ export function LecturaForm({ units, periodo }: { units: UnitWithMeter[]; period
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">
               Lectura anterior
-              <span className="ml-1.5 font-normal text-slate-400">({anteriorPeriodo})</span>
+              <span className="ml-1.5 font-normal text-slate-400">({lecturaAnteriorPeriodo})</span>
             </label>
             <input
               type="number"
-              name="lecturaAnterior"
               value={lecturaAnterior ?? ""}
               readOnly
-              placeholder={selectedId ? "Sin lectura para ese período" : "Selecciona un local primero"}
+              placeholder={selectedId ? "Sin lectura registrada" : "Selecciona un local primero"}
               className="w-full rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-500 cursor-not-allowed"
             />
-            {selectedId && lecturaAnterior === null && (
-              <input type="hidden" name="lecturaAnterior" value="0" />
-            )}
+            <input type="hidden" name="lecturaAnterior" value={lecturaAnterior ?? 0} />
           </div>
 
           {/* Current reading — only field admin types */}

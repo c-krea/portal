@@ -49,9 +49,9 @@ export async function registrarLectura(
     const empresaId = await getEmpresaCkreaId()
 
     // Auto-lookup tarifa from the entered invoice for this period + unit's building group.
-    // If no invoice exists yet, save without cost — it will be calculated when invoice arrives.
+    // If no invoice exists yet, tarifa=0 and total=0; re-run registration once invoice is entered.
     const tarifa = await getElectricityTarifaForUnit(empresaId, unitId, periodo)
-    const totalEnergia = tarifa > 0 ? Math.round(kwh * tarifa) : null
+    const totalEnergia = tarifa > 0 ? Math.round(kwh * tarifa) : 0
 
     const { error } = await supabaseAdmin
       .schema("v2")
@@ -64,7 +64,7 @@ export async function registrarLectura(
           lectura_anterior: lecturaAnterior,
           lectura_actual:   lecturaActual,
           kwh,
-          tarifa_kwh:       tarifa > 0 ? tarifa : null,
+          tarifa_kwh:       tarifa > 0 ? tarifa : 0,
           total_energia:    totalEnergia,
           notas:            notas ?? null,
         },
@@ -75,9 +75,9 @@ export async function registrarLectura(
     revalidatePath("/medidores")
     revalidatePath("/medidores/facturas")
 
-    const msg = totalEnergia
+    const msg = tarifa > 0
       ? `Lectura registrada: ${kwh} kWh · $${totalEnergia.toLocaleString("es-CO")}`
-      : `Lectura registrada: ${kwh} kWh · costo pendiente (ingresa la factura primero)`
+      : `Lectura registrada: ${kwh} kWh · costo pendiente (ingresa la factura del período primero, luego re-registra)`
 
     return { success: true, message: msg }
   } catch (e) {
