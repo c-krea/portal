@@ -2396,6 +2396,43 @@ Page-by-page audit reached `/usuarios`. Six findings, all fixed in one pass.
 
 ---
 
+## 2026-05-11 — Cloudflare R2 storage + Archivos page + Google Drive removal (Session 54)
+
+### What happened
+
+Replaced Google Drive with Cloudflare R2 as the single file storage system. Built an admin archive page at `/archivos`. Scaffolded electricity invoice PDF template (WIP, continues next session).
+
+### Decisions
+
+- 🎯 **R2 over Google Drive.** Drive OAuth token fragile (refresh rotation), no CDN, poor programmatic UX. R2 is S3-compatible, CDN-backed, simpler auth. Decision final — Drive is gone.
+- 🎯 **File browser built in portal (`/archivos`), not external.** Avoids relying on Drive UI for daily admin access. One page, filtered by type + period.
+- 🎯 **Manual PDF generation first.** Two buttons on facturas energía: "Generar Todas" + per-unit "Generar". Auto on day 9 deferred until workflow is stable.
+- 🎯 **Electricity invoices only (PDF phase 1).** Canon invoices deferred. Portal-only (no email) for now.
+
+### Gotchas
+
+- ⚠️ **R2 TLS handshake fails for ~30–60 min after first R2 activation.** Cloudflare provisions the S3 endpoint asynchronously after payment method is added. `openssl s_client` returns alert 40 / no certificate until provisioning completes. Wait it out — not a credentials issue.
+- ⚠️ **R2 free tier requires payment method on file even for $0 usage.** Without a card, the S3 API endpoint stays unprovisioned (TLS fails). Dashboard shows the bucket but the API is dark.
+- 💡 **`foto_drive_id` DB column now stores R2 object key**, not a Drive file ID. Column name is stale — rename to `foto_key` in a future migration if it causes confusion.
+
+### Files changed
+
+- `src/lib/r2/client.ts`, `files.ts`, `meter-photos.ts` — R2 client + utilities
+- `src/app/(app)/archivos/` — new archive page (page, client, actions)
+- `src/components/ui/badge.tsx`, `select.tsx` — shadcn components added
+- `src/lib/constants.ts` — Archivos nav item
+- `src/lib/pdf/electricity-invoice.tsx` — PDF scaffold (WIP)
+- `src/app/(portal)/portal/medidor/actions.ts` — Drive → R2 upload swap
+- Deleted `src/lib/google-drive.ts`, uninstalled `googleapis` + `pdf-lib`
+
+### Session-end pointers
+- ADRs: none
+- Lessons: none (R2 provisioning gotcha above is sufficient)
+- State: project_state.md needs update (storage = R2, Drive removed)
+- Linear: none
+
+---
+
 ## 2026-05-02 — Sentry rewire to new org + PostHog install + Vercel relink
 
 Setup session. Production observability stack rewired to new owner accounts after the Vercel project transfer and the Sentry workspace move.

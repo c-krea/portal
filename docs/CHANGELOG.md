@@ -6,6 +6,29 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [Unreleased] — 2026-05-11 (Cloudflare R2 storage + Archivos page — Session 54)
+
+### Added — Cloudflare R2 object storage
+- `src/lib/r2/client.ts`: S3Client pointed at `<ACCOUNT_ID>.r2.cloudflarestorage.com` (S3-compatible).
+- `src/lib/r2/files.ts`: `listFiles`, `uploadFile`, `getSignedDownloadUrl`, `deleteFile`.
+- `src/lib/r2/meter-photos.ts`: meter photo upload → `medidores/{periodo}/local-{id}-{ts}.{ext}`.
+- Env vars: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME=ckrea-portal`.
+
+### Added — /archivos admin page
+- File browser for all R2 objects. Filters: type (factura / medidor / otro) + period.
+- Signed download URL per file (1h expiry). Delete with confirmation.
+- Empty state when bucket has no files. Added to sidebar nav.
+
+### Removed — Google Drive integration
+- Deleted `src/lib/google-drive.ts`, uninstalled `googleapis` + `pdf-lib`.
+- Meter photos now upload to R2 instead of Drive.
+- Removed `GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN/DRIVE_FOLDER_ID` from env.
+
+### WIP — Electricity invoice PDF template
+- `src/lib/pdf/electricity-invoice.tsx` scaffolded (incomplete — continuing next session).
+
+---
+
 ## [Unreleased] — 2026-05-04 (Auth emails + domain launch — Session 49)
 
 ### Added — Tenant auth email system (Brevo)
