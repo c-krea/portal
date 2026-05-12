@@ -3,8 +3,6 @@
 # C-Krea PayControl — Project CLAUDE.md
 
 ## Session start
-Run `/session-start` skill at the start of every session before any code, planning, or analysis.
-
 Always read `~/.claude/memory/german-profile.md` to adapt tone and depth for German.
 
 ## What this is

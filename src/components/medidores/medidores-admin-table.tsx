@@ -5,6 +5,7 @@ import { formatCOP } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
 import type { MedidorAdminRow, UnitWithMeter } from "@/lib/data/medidores"
 import { LecturaForm } from "@/components/medidores/lectura-form"
+import { getMeterPhotoSignedUrl } from "@/app/(app)/medidores/actions"
 import { X, ImageIcon } from "lucide-react"
 
 type SortKey = "unitNumber" | "tenantName" | "kwh" | "desvPct" | "totalEnergia"
@@ -67,6 +68,7 @@ export function MedidoresAdminTable({
   const [sortDir, setSortDir] = useState<SortDir>("asc")
   const [filter, setFilter]   = useState<"all" | "registrada" | "sin_lectura">("all")
   const [showForm, setShowForm] = useState(false)
+  const [loadingPhotoId, setLoadingPhotoId] = useState<string | null>(null)
 
   function handleSort(key: SortKey) {
     if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"))
@@ -191,15 +193,23 @@ export function MedidoresAdminTable({
                 </td>
                 <td className="hidden sm:table-cell px-4 py-3">
                   {row.fotoUrl ? (
-                    <a
-                      href={row.fotoUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                    <button
+                      disabled={loadingPhotoId === row.unitId}
+                      onClick={async () => {
+                        setLoadingPhotoId(row.unitId)
+                        try {
+                          const url = await getMeterPhotoSignedUrl(row.fotoUrl!)
+                          if (url) window.open(url, "_blank", "noopener,noreferrer")
+                          else alert("No se pudo abrir la foto. Intente de nuevo.")
+                        } finally {
+                          setLoadingPhotoId(null)
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <ImageIcon className="h-3.5 w-3.5" />
-                      Ver
-                    </a>
+                      {loadingPhotoId === row.unitId ? "Cargando…" : "Ver"}
+                    </button>
                   ) : (
                     <span className="text-slate-300">—</span>
                   )}

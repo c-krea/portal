@@ -5,12 +5,12 @@ export async function uploadMeterPhoto(
   mimeType: string,
   unitNumber: string,
   periodo: string,
-): Promise<{ key: string; url: string }> {
+): Promise<{ key: string }> {
   const ext = mimeType === "image/png" ? "png" : "jpg"
   const timestamp = Date.now()
   const key = `medidores/${periodo}/local-${unitNumber}-${timestamp}.${ext}`
 
   await uploadFile(key, Buffer.from(buffer), mimeType)
 
-  return { key, url: key }
+  return { key }
 }

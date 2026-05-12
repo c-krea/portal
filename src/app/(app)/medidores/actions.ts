@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
 import { uploadMeterPhoto } from "@/lib/r2/meter-photos"
+import { getSignedDownloadUrl } from "@/lib/r2/files"
 import { isValidPeriodo } from "@/lib/security/validators"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
@@ -61,14 +62,14 @@ export async function registrarLectura(
     try {
       const base64Data = fotoBase64.includes(",") ? fotoBase64.split(",")[1] : fotoBase64
       const buffer = Buffer.from(base64Data, "base64")
-      const { key, url } = await uploadMeterPhoto(
+      const { key } = await uploadMeterPhoto(
         buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
         fotoMime,
         unitNumber,
         periodo,
       )
       fotoKey = key
-      fotoUrl = url
+      fotoUrl = key
     } catch (err) {
       console.error("R2 upload error:", err)
       return { error: "Error subiendo la foto. Intente de nuevo." }
@@ -116,5 +117,17 @@ export async function registrarLectura(
   } catch (e) {
     console.error(e)
     return { error: "Error al registrar lectura" }
+  }
+}
+
+export async function getMeterPhotoSignedUrl(key: string): Promise<string | null> {
+  if (!key || !key.startsWith("medidores/")) return null
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  try {
+    return await getSignedDownloadUrl(key)
+  } catch {
+    return null
   }
 }

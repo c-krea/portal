@@ -119,14 +119,14 @@ export async function submitLectura(
     try {
       const base64Data = fotoBase64.includes(",") ? fotoBase64.split(",")[1] : fotoBase64
       const buffer = Buffer.from(base64Data, "base64")
-      const { key, url } = await uploadMeterPhoto(
+      const { key } = await uploadMeterPhoto(
         buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
         fotoMime,
         unitNumber,
         periodo,
       )
       fotoKey = key
-      fotoUrl = url
+      fotoUrl = key
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error("R2 upload error:", msg)
