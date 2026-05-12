@@ -50,6 +50,7 @@ export type PortalMedidorStatus = {
 }
 
 export async function getPortalProfile(userId: string): Promise<PortalProfile | null> {
+  assertUuid(userId)
   const rows = await execute(`
     SELECT
       p.nombre_completo                                  AS full_name,
@@ -139,6 +140,7 @@ function mapPago(r: Record<string, unknown>): PortalPago {
 }
 
 export async function getPortalPagos(tenantId: string, limit = 5): Promise<PortalPago[]> {
+  assertUuid(tenantId)
   const rows = await execute(`
     SELECT
       ROW_NUMBER() OVER (ORDER BY fecha_recaudo DESC, docto, cruce)::text AS id,
@@ -166,6 +168,7 @@ export async function getPortalPagosPage(
   page: number,
   pageSize = 10,
 ): Promise<PortalPagosPage> {
+  assertUuid(tenantId)
   const offset = (page - 1) * pageSize
   const rows = await execute(`
     SELECT
@@ -195,6 +198,7 @@ export type PortalPagosKpis = {
 }
 
 export async function getPortalPagosKpis(tenantId: string): Promise<PortalPagosKpis> {
+  assertUuid(tenantId)
   const rows = await execute(`
     SELECT
       COUNT(*)                                                                    AS total_count,
@@ -257,6 +261,7 @@ export type PortalContrato = {
 }
 
 export async function getPortalContratos(tenantId: string): Promise<PortalContrato[]> {
+  assertUuid(tenantId)
   const rows = await execute(`
     SELECT
       l.unidad,
@@ -382,6 +387,8 @@ export async function getPortalMedidorRef(
   unitId: string,
   periodo: string,
 ): Promise<PortalMedidorRef> {
+  assertUuid(unitId)
+  assertPeriodo(periodo)
   const [prevRows, currentRows] = await Promise.all([
     execute(`
       SELECT lectura_actual::numeric AS la, tarifa_kwh::numeric AS tk
@@ -406,6 +413,8 @@ export async function getPortalMedidorStatus(
   unitId: string,
   periodo: string,
 ): Promise<PortalMedidorStatus> {
+  assertUuid(unitId)
+  assertPeriodo(periodo)
   const rows = await execute(`
     SELECT lectura_actual::numeric AS lectura_actual, periodo, foto_url, foto_drive_id, total_energia::numeric AS total_energia
     FROM v2.lecturas_medidor

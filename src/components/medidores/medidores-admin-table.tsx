@@ -196,11 +196,12 @@ export function MedidoresAdminTable({
                     <button
                       disabled={loadingPhotoId === row.unitId}
                       onClick={async () => {
+                        const win = window.open("", "_blank", "noopener,noreferrer")
                         setLoadingPhotoId(row.unitId)
                         try {
                           const url = await getMeterPhotoSignedUrl(row.fotoUrl!)
-                          if (url) window.open(url, "_blank", "noopener,noreferrer")
-                          else alert("No se pudo abrir la foto. Intente de nuevo.")
+                          if (url && win) win.location.href = url
+                          else { win?.close(); alert("No se pudo abrir la foto. Intente de nuevo.") }
                         } finally {
                           setLoadingPhotoId(null)
                         }

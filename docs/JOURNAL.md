@@ -2,6 +2,35 @@
 
 ---
 
+## Session 56 — 2026-05-12: Portal electricity payment fix + SQL injection hardening
+
+### Root cause
+
+Tenant portal showed only "Arriendo" in the Wompi payment modal — no "Energía" button. Root: `portal/page.tsx` called `getPortalElectricityInvoiceData(unitId, periodo)` with `currentPeriodo(now)` = `2026-05`. Billing model is **previous month** — May bills April consumption. `lecturas_medidor` has 84 rows for `2026-04`, zero for `2026-05` → query returned null → `hasElectricity = false` → button hidden.
+
+### Fixes shipped
+
+- **`prevPeriodo()` helper** in `portal/page.tsx`: `new Date(year, month-1, 1)` (JS month=-1 safely rolls to December prior year). `electricidadPeriodo` used only for electricity calls; rent/cartera remain on current month.
+- **`assertUuid()` guards** added to 7 portal data functions that were missing input validation before SQL string interpolation: `getPortalProfile`, `getPortalPagos`, `getPortalPagosPage`, `getPortalPagosKpis`, `getPortalMedidorRef`, `getPortalMedidorStatus`, `getPortalContratos`. Pre-existing gap caught in code review.
+- **Minor security fixes** (pre-existing): `getMeterPhotoSignedUrl` rejects keys containing `..` (path traversal); `MedidoresAdminTable` pre-opens window before async call (popup blocker fix).
+
+### Decisions
+
+- 🎯 `electricidadPeriodo = prevPeriodo(now)` is a permanent business rule: portal always shows the previous month's electricity invoice. If billing timing changes, update this call site and `isMedidorDay` check together.
+
+### Learnings
+
+- ⚠️ Two period variables in the same page component (`periodo` for rent, `electricidadPeriodo` for electricity) must be named clearly — sharing one `periodo` var was the root cause.
+- ⚠️ Code review found 7 pre-existing SQL injection vectors in portal.ts. The electricity functions already had `assertUuid()` guards — non-electricity functions were missed when initially written.
+
+### Session-end pointers
+- ADRs: none
+- Lessons: none (rule captured in Decisions above)
+- State: project_state.md updated (electricity period fix + portal security hardening)
+- Linear: none
+
+---
+
 ## Session 55 — 2026-05-12: Electricity billing overhaul — decimal precision, MROUND(50), tarifa form
 
 ### Root cause investigation

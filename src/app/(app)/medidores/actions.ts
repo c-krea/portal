@@ -121,7 +121,7 @@ export async function registrarLectura(
 }
 
 export async function getMeterPhotoSignedUrl(key: string): Promise<string | null> {
-  if (!key || !key.startsWith("medidores/")) return null
+  if (!key || !key.startsWith("medidores/") || key.includes("..")) return null
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null

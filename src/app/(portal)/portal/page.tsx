@@ -28,6 +28,11 @@ function currentPeriodo(now: Date) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
 }
 
+function prevPeriodo(now: Date) {
+  const d = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+}
+
 function daysFromNow(date: Date): number {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -53,6 +58,7 @@ export default async function PortalPage() {
 
   const now = new Date()
   const periodo = currentPeriodo(now)
+  const electricidadPeriodo = prevPeriodo(now)
   const todayDay = now.getDate()
   const currentPeriodInt = now.getFullYear() * 100 + (now.getMonth() + 1)
 
@@ -60,7 +66,7 @@ export default async function PortalPage() {
     getPortalPagos(profile.tenantId, 5),
     getPortalMedidorStatus(profile.unitId, periodo),
     profile.nit ? getPortalCartera(profile.nit) : Promise.resolve({ saldoTotal: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }),
-    Promise.all(profile.allUnitIds.map(id => getPortalElectricityInvoiceData(id, periodo))),
+    Promise.all(profile.allUnitIds.map(id => getPortalElectricityInvoiceData(id, electricidadPeriodo))),
     Promise.all(profile.allUnitIds.map(id => getPortalElectricityPeriodos(id))),
   ])
   const electricityInvoices = electricityInvoiceResults.filter((v): v is NonNullable<typeof v> => v !== null)

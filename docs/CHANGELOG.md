@@ -6,6 +6,18 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [Unreleased] — 2026-05-12 (Portal electricity payment fix + security hardening — Session 56)
+
+### Fixed — Tenant portal electricity payment button missing
+- `src/app/(portal)/portal/page.tsx`: electricity invoice queries now use `prevPeriodo(now)` (previous month). Billing model bills April consumption in May — current-month query always returned null → "Energía" button never appeared in Wompi modal.
+
+### Security — SQL injection hardening (portal data layer)
+- `src/lib/data/portal.ts`: added `assertUuid()` to 7 functions missing UUID validation before SQL interpolation: `getPortalProfile`, `getPortalPagos`, `getPortalPagosPage`, `getPortalPagosKpis`, `getPortalMedidorRef`, `getPortalMedidorStatus`, `getPortalContratos`. Also added `assertPeriodo()` to `getPortalMedidorRef` and `getPortalMedidorStatus`.
+- `src/app/(app)/medidores/actions.ts`: `getMeterPhotoSignedUrl` now rejects keys containing `..` (path traversal guard).
+- `src/components/medidores/medidores-admin-table.tsx`: pre-open popup window before async signed-URL fetch (popup blocker fix).
+
+---
+
 ## [Unreleased] — 2026-05-11 (Cloudflare R2 storage + Archivos page — Session 54)
 
 ### Added — Cloudflare R2 object storage
