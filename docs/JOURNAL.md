@@ -2,6 +2,49 @@
 
 ---
 
+## Session 55 — 2026-05-12: Electricity billing overhaul — decimal precision, MROUND(50), tarifa form
+
+### Root cause investigation
+
+Admin entered April reading for unit 101 → showed $1,426,013 instead of ~$88,000. Root: electricity invoice form had **kWh field** but admin entered the **tarifa** ($/kWh) there. System computed tarifa = $10,354,010 ÷ 805.95 = $12,847/kWh → inflated every unit in CRA2710065.
+
+### Fixes shipped
+
+- **Facturas de Energía form redesign:** replaced kWh input with tarifa ($/kWh) input. System now computes kWh edificio = valor ÷ tarifa automatically. kWh shown as read-only.
+- **MROUND(50):** changed total calculation from `Math.round(×250)` → `Math.round(×50)` to match Excel formula `=MROUND(E2*$L$2,50)`. Applied in 3 places: admin registration, portal submission, tarifa cascade.
+- **Decimal step fix:** `lectura_actual` input `step="1"` → `step="0.1"` — integer-only was silently dropping meter reading decimals (root cause of 419 vs 418.3 kWh discrepancy on unit 102).
+
+### Data corrections
+
+- **Jan/Feb/Mar readings:** all 84 units had `lectura_anterior`/`lectura_actual` stored as integers (decimals stripped). Corrected from `energia historico.xlsx` → 81/81 units clean per period.
+- **April bulk load:** 84 units loaded from `history of energy usage.xlsx` with correct decimal readings. Upsert used MROUND(50) × tarifa from `facturas_energia`.
+- **CRA2710065 tarifa:** 805.95 → 805.49 (cross-verified against `energi consumo abril.xlsx` billing reference). Cascade updated all 32 units in group.
+- **Unit 126:** `grupo_energia` was NULL → set to CRA2710065.
+
+### Cross-verification result
+
+82/84 April units match Excel billing exactly. Open items:
+- ⚠️ Unit 111: DB=88.6 kWh / $71,350 vs Excel=$0 (data dispute — pending admin confirmation)
+- ⚠️ Unit 506B: DB=100.8 kWh / $81,250 vs Excel=$0 (not included in billing Excel — pending clarification)
+
+### Decisions
+
+- 🎯 MROUND multiplier confirmed as **50** from Excel formula `=MROUND(E2*$L$2,50)`.
+- 🎯 Tarifa is the admin input; kWh edificio is derived — avoids the wrong-field entry that caused the original bug.
+- 🎯 `lectura_actual` allows 1 decimal (`step=0.1`); tarifa allows 2 decimals (`step=0.01`); valor is integer.
+
+### Learnings
+
+- 💡 Historical kWh values (Jan–Mar) had correct decimal precision but anterior/actual were integers. Storing only kwh with decimals while rounding the source readings breaks chain continuity for future months.
+- 💡 When MROUND target is unknown: reverse-engineer from 2 units with different kWh. Same tarifa, different kWh → same rounding step → 50 confirmed when 250 was inconsistent.
+- ⚠️ Always verify tarifa before bulk-loading April readings. Four buildings had wrong tarigas (admin had entered number in wrong field) — would have generated millions in incorrect charges.
+
+### Session-end pointers
+- ADRs: none
+- Lessons: electricity_billing_rules.md (tarifa=input, kWh=derived; MROUND=50)
+- State: project_state.md needs update (April readings loaded, billing verified)
+- Linear: none
+
 ## Session 54 — 2026-05-11: Admin meter reading unblock + photo upload
 
 ### What happened

@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Session 54 — 2026-05-12: Electricity billing overhaul
+
+#### Facturas de Energía form (`/medidores/facturas`)
+- **Tarifa input replaces kWh input:** admin now enters tarifa ($/kWh) directly; kWh edificio = valor ÷ tarifa computed automatically and shown read-only. Prevents the wrong-field entry that inflated charges 16×.
+- **Cascade on save:** saving a tarifa triggers `UPDATE lecturas_medidor` for all units in that building group for the same period.
+
+#### Electricity total calculation
+- **MROUND(50) everywhere:** changed from `Math.round(×250)` to `Math.round(×50)` matching Excel formula `=MROUND(kwh×tarifa,50)`. Applied in admin registration, portal submission, and tarifa cascade SQL.
+- **Decimal precision on lectura_actual:** `step="1"` → `step="0.1"` — integer-only input was silently dropping meter reading decimals, causing kWh errors up to 0.8 kWh/unit.
+
+#### Data fixes (April 2026)
+- **84 April readings bulk-loaded** from `history of energy usage.xlsx` with correct decimal anterior/actual values.
+- **Jan/Feb/Mar decimal corrections:** all 84 units corrected from `energia historico.xlsx`; 81/81 units clean per period.
+- **CRA2710065 tarifa corrected:** 805.95 → 805.49 (cross-verified vs billing Excel). Cascaded to 32 units.
+- **Unit 126 grupo_energia:** NULL → CRA2710065.
+- **Cross-verification:** 82/84 April units match billing Excel exactly. Open: unit 111 and 506B pending admin clarification.
+
 ### Session 53 — 2026-05-11: Admin meter reading — unblock + photo upload
 
 #### Admin manual reading form (`/medidores`)
