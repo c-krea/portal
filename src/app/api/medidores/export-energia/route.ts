@@ -4,6 +4,7 @@ import { execute } from "@/lib/db/executor"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { isValidPeriodo } from "@/lib/security/validators"
 import { getElectricityInvoices, ELECTRICITY_GROUPS } from "@/lib/data/electricity"
+import { createClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
 
@@ -28,6 +29,10 @@ const GRUPO_LABEL = Object.fromEntries(
 )
 
 export async function GET(req: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+
   const { searchParams } = new URL(req.url)
   const rawPeriodo = searchParams.get("periodo")
 

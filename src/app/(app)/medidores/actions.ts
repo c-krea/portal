@@ -50,14 +50,16 @@ export async function registrarLectura(
     return { error: "Lectura actual debe ser mayor o igual a la anterior" }
   }
 
-  const kwh        = Math.round((lecturaActual - lecturaAnterior) * 100) / 100
-  const unitNumber = (formData.get("unitNumber") as string | null) ?? ""
+  const kwh            = Math.round((lecturaActual - lecturaAnterior) * 100) / 100
+  const rawUnitNumber  = (formData.get("unitNumber") as string | null) ?? ""
+  const unitNumber     = rawUnitNumber.replace(/[^a-zA-Z0-9_-]/g, "")
+  const rawMime        = (formData.get("fotoMime") as string | null) ?? "image/jpeg"
+  const fotoMime       = (["image/jpeg", "image/png", "image/webp"] as string[]).includes(rawMime) ? rawMime : "image/jpeg"
 
   // Optional photo upload
   let fotoUrl: string | null = null
   let fotoKey: string | null = null
   const fotoBase64 = formData.get("fotoBase64") as string | null
-  const fotoMime   = (formData.get("fotoMime") as string | null) ?? "image/jpeg"
   if (fotoBase64) {
     try {
       const base64Data = fotoBase64.includes(",") ? fotoBase64.split(",")[1] : fotoBase64

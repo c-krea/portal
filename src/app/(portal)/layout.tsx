@@ -18,14 +18,12 @@ export default async function PortalLayout({
 
   if (!user) redirect("/login")
 
-  const { data: profile } = await supabaseAdmin
-    .schema("v2")
-    .from("perfiles")
-    .select("nombre_completo, inquilino_id, rol")
-    .eq("id", user.id)
-    .single()
+  const { data: roleRows } = await supabaseAdmin.rpc("exec_sql", {
+    q: `SELECT rol, nombre_completo FROM v2.perfiles WHERE id = '${user.id}'::uuid LIMIT 1`,
+  })
+  const perfil = Array.isArray(roleRows) && roleRows[0] ? roleRows[0] as { rol: string; nombre_completo: string } : null
 
-  if (profile?.rol !== "inquilino") redirect("/")
+  if (perfil?.rol !== "inquilino") redirect("/")
 
   return (
     <div className="w-full min-h-screen bg-slate-50">
@@ -36,7 +34,7 @@ export default async function PortalLayout({
             <span className="text-base font-semibold text-slate-900">Portal del Inquilino</span>
           </div>
           <PortalProfileDropdown
-            displayName={profile?.nombre_completo ?? "Inquilino"}
+            displayName={perfil?.nombre_completo ?? "Inquilino"}
             signOutAction={signOut}
           />
         </div>

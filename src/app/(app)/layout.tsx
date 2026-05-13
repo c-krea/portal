@@ -18,12 +18,11 @@ export default async function AppLayout({
   if (!user) redirect("/login")
 
   // Load perfil for display name
-  const { data: profileData } = await supabaseAdmin
-    .schema("v2")
-    .from("perfiles")
-    .select("nombre_completo, rol")
-    .eq("id", user.id)
-    .single()
+  const { data: roleRows } = await supabaseAdmin.rpc("exec_sql", {
+    q: `SELECT rol, nombre_completo FROM v2.perfiles WHERE id = '${user.id}'::uuid LIMIT 1`,
+  })
+  const profileData = Array.isArray(roleRows) && roleRows[0] ? roleRows[0] as { rol: string; nombre_completo: string } : null
+  if (profileData?.rol === "inquilino") redirect("/portal")
   const displayName = profileData?.nombre_completo ?? user.email ?? "Usuario"
 
   return (

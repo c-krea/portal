@@ -92,7 +92,7 @@ export async function getPortalProfile(userId: string): Promise<PortalProfile | 
     JOIN v2.inquilinos t ON t.id = p.inquilino_id
     JOIN v2.contratos  c ON c.inquilino_id = t.id AND c.estado IN ('activo','critico')
     JOIN v2.locales    u ON u.id = c.local_id
-    WHERE p.id = '${userId}'
+    WHERE p.id = '${userId}'::uuid
     ORDER BY u.unidad
     LIMIT 1
   `)
@@ -141,6 +141,8 @@ function mapPago(r: Record<string, unknown>): PortalPago {
 
 export async function getPortalPagos(tenantId: string, limit = 5): Promise<PortalPago[]> {
   assertUuid(tenantId)
+  const rawLimit = Number(limit)
+  const safeLimit = Math.max(1, Math.min(50, Number.isFinite(rawLimit) ? Math.floor(rawLimit) : 5))
   const rows = await execute(`
     SELECT
       ROW_NUMBER() OVER (ORDER BY fecha_recaudo DESC, docto, cruce)::text AS id,
@@ -153,7 +155,7 @@ export async function getPortalPagos(tenantId: string, limit = 5): Promise<Porta
     FROM v2.vista_pagos
     WHERE inquilino_id = '${tenantId}'::uuid
     ORDER BY fecha_recaudo DESC
-    LIMIT ${limit}
+    LIMIT ${safeLimit}
   `)
   return rows.map(mapPago)
 }
@@ -169,7 +171,11 @@ export async function getPortalPagosPage(
   pageSize = 10,
 ): Promise<PortalPagosPage> {
   assertUuid(tenantId)
-  const offset = (page - 1) * pageSize
+  const rawPage     = Number(page)
+  const rawPageSize = Number(pageSize)
+  const safePage     = Math.max(1, Math.min(10_000, Number.isFinite(rawPage)     ? Math.floor(rawPage)     : 1))
+  const safePageSize = Math.max(1, Math.min(100,    Number.isFinite(rawPageSize) ? Math.floor(rawPageSize) : 10))
+  const offset       = (safePage - 1) * safePageSize
   const rows = await execute(`
     SELECT
       ROW_NUMBER() OVER (ORDER BY fecha_recaudo DESC, docto, cruce)::text AS id,
@@ -183,7 +189,7 @@ export async function getPortalPagosPage(
     FROM v2.vista_pagos
     WHERE inquilino_id = '${tenantId}'::uuid
     ORDER BY fecha_recaudo DESC
-    LIMIT ${pageSize} OFFSET ${offset}
+    LIMIT ${safePageSize} OFFSET ${offset}
   `)
   const totalCount = rows[0] ? Number(rows[0].total_count) : 0
   return { pagos: rows.map(mapPago), totalCount }
@@ -230,6 +236,9 @@ export async function getPortalMedidorHistory(
   unitId: string,
   limit = 6,
 ): Promise<PortalMedidorHistoryRow[]> {
+  assertUuid(unitId)
+  const rawLimit = Number(limit)
+  const safeLimit = Math.max(1, Math.min(24, Number.isFinite(rawLimit) ? Math.floor(rawLimit) : 6))
   const rows = await execute(`
     SELECT
       periodo,
@@ -239,7 +248,7 @@ export async function getPortalMedidorHistory(
     FROM v2.lecturas_medidor
     WHERE local_id = '${unitId}'::uuid
     ORDER BY periodo DESC
-    LIMIT ${limit}
+    LIMIT ${safeLimit}
   `)
   return rows.map((r) => ({
     periodo: String(r.periodo),
@@ -282,7 +291,7 @@ export async function getPortalContratos(tenantId: string): Promise<PortalContra
         AND o.loc = l.unidad
         AND o.razon_social IS NOT NULL
         AND COALESCE(o.precio, 0) > 0
-      ORDER BY o.precio DESC
+      ORDER BY o.ingreso DESC NULLS LAST
       LIMIT 1
     ) ocu ON TRUE
     WHERE c.inquilino_id = '${tenantId}'::uuid

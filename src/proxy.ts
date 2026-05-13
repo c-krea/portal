@@ -55,34 +55,39 @@ export async function proxy(request: NextRequest) {
   if (!user) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
-    return NextResponse.redirect(url)
+    const res = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach(({ name, value }) => res.cookies.set(name, value))
+    return res
   }
 
   // Role-based routing: inquilino → /portal, admin/others → /(app)
+  // Uses exec_sql RPC (public schema) to avoid PostgREST schema-exposure dependency
   const admin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
-  const { data: profile } = await admin
-    .schema("v2")
-    .from("perfiles")
-    .select("rol")
-    .eq("id", user.id)
-    .single()
+  const { data: roleRows } = await admin.rpc("exec_sql", {
+    q: `SELECT rol FROM v2.perfiles WHERE id = '${user.id}'::uuid LIMIT 1`,
+  })
+  const rol = Array.isArray(roleRows) && roleRows[0] ? String(roleRows[0].rol) : undefined
 
-  const rol = profile?.rol
+  function redirectWithCookies(url: URL): NextResponse {
+    const res = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach(({ name, value }) => res.cookies.set(name, value))
+    return res
+  }
 
   if (rol === "inquilino") {
     if (!pathname.startsWith("/portal")) {
       const url = request.nextUrl.clone()
       url.pathname = "/portal"
-      return NextResponse.redirect(url)
+      return redirectWithCookies(url)
     }
   } else {
     if (pathname.startsWith("/portal")) {
       const url = request.nextUrl.clone()
       url.pathname = "/"
-      return NextResponse.redirect(url)
+      return redirectWithCookies(url)
     }
   }
 

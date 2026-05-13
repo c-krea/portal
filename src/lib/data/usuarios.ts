@@ -87,7 +87,7 @@ export async function getPortalTenants(): Promise<PortalTenantRow[]> {
         ) ORDER BY u.unidad
       ) AS unit_contracts
     FROM v2.inquilinos t
-    JOIN v2.contratos c ON c.inquilino_id = t.id AND c.estado = 'activo'
+    JOIN v2.contratos c ON c.inquilino_id = t.id AND c.estado IN ('activo', 'critico')
     JOIN v2.locales u ON u.id = c.local_id
     LEFT JOIN v2.perfiles p ON p.inquilino_id = t.id AND p.rol = 'inquilino'
     WHERE t.activo = true

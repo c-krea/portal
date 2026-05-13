@@ -51,12 +51,23 @@ export async function submitLectura(
   if (!profile.allUnitIds.includes(localId)) return { error: "Local no autorizado" }
 
   const unitId = localId
+
+  // Block resubmission of already-approved readings
+  const existingRows = await execute(`
+    SELECT estado_validacion FROM v2.lecturas_medidor
+    WHERE local_id = '${unitId}'::uuid AND periodo = '${periodo}'
+    LIMIT 1
+  `)
+  if (existingRows[0]?.estado_validacion === "aprobado") {
+    return { error: "Esta lectura ya fue aprobada. Contacta a la administración si necesitas corregirla." }
+  }
   const unitNumber = profile.allUnits[profile.allUnitIds.indexOf(localId)] ?? profile.unitNumber
 
   const prevRows = await execute(`
     SELECT lectura_actual::numeric AS lectura_actual, tarifa_kwh::numeric AS tarifa_kwh
     FROM v2.lecturas_medidor
     WHERE local_id = '${unitId}'::uuid
+      AND periodo < '${periodo}'
     ORDER BY periodo DESC
     LIMIT 1
   `)
@@ -114,7 +125,8 @@ export async function submitLectura(
   let fotoUrl: string | null = null
   let fotoKey: string | null = null
   const fotoBase64 = formData.get("fotoBase64") as string | null
-  const fotoMime = (formData.get("fotoMime") as string | null) ?? "image/jpeg"
+  const rawMime = (formData.get("fotoMime") as string | null) ?? "image/jpeg"
+  const fotoMime = (["image/jpeg", "image/png", "image/webp"] as string[]).includes(rawMime) ? rawMime : "image/jpeg"
   if (fotoBase64) {
     try {
       const base64Data = fotoBase64.includes(",") ? fotoBase64.split(",")[1] : fotoBase64

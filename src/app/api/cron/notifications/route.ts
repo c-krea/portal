@@ -2,6 +2,9 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin, execute } from "@/lib/db/executor"
 import { sendPushToUser } from "@/lib/push"
 
+export const dynamic = "force-dynamic"
+export const maxDuration = 60
+
 function cop(amount: number) {
   return new Intl.NumberFormat("es-CO", {
     style: "currency",
@@ -149,15 +152,13 @@ export async function GET(req: Request) {
 
     // ── Meter reading reminder — day 7, once per period ─────────────
     if (dayOfMonth === 7) {
-      const { data: reading } = await supabaseAdmin
-        .schema("v2")
-        .from("lecturas_medidor")
-        .select("id")
-        .eq("local_id", unitId)
-        .eq("periodo", currentPeriodo)
-        .maybeSingle()
+      const meterRows = await execute(`
+        SELECT id FROM v2.lecturas_medidor
+        WHERE local_id = '${unitId}'::uuid AND periodo = '${currentPeriodo}'
+        LIMIT 1
+      `)
 
-      if (!reading) {
+      if (meterRows.length === 0) {
         await notify(userId, "meter", `${userId}-${currentPeriodo}`, {
           title: "Lectura de medidor pendiente",
           body: `${nombre}, tienes 3 días para registrar tu lectura de energía de ${currentPeriodo}.`,

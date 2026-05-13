@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { Download, Trash2, FolderOpen, FileText, Camera } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -35,6 +36,7 @@ function formatSize(bytes: number): string {
 }
 
 export function ArchivosClient({ archivos }: Props) {
+  const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [loadingKey, setLoadingKey] = useState<string | null>(null)
   const [deletingKey, setDeletingKey] = useState<string | null>(null)
@@ -64,7 +66,7 @@ export function ArchivosClient({ archivos }: Props) {
     startTransition(async () => {
       await deleteArchivo(key)
       setDeletingKey(null)
-      window.location.reload()
+      router.refresh()
     })
   }
 

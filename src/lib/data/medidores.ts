@@ -78,6 +78,7 @@ export async function getMedidoresAdmin(
       ) mr2
     ) avg3 ON true
     WHERE u.empresa_id = '${empresaId}'::uuid
+      AND c.id IS NOT NULL
       AND EXISTS (
         SELECT 1 FROM v2.lecturas_medidor lm WHERE lm.local_id = u.id
       )

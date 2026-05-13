@@ -4,6 +4,8 @@ import { getEmpresaCkreaId } from "@/lib/empresa"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { runInterestAccrual, type InterestAccrualSummary } from "@/lib/interest-engine"
+import { createClient } from "@/lib/supabase/server"
+import { execute } from "@/lib/db/executor"
 
 const schema = z.object({
   accrualDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
@@ -19,6 +21,13 @@ export async function calcularIntereses(
   _prev: AccrualState,
   formData: FormData,
 ): Promise<AccrualState> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: "No autorizado" }
+  const roleRows = await execute(`SELECT rol FROM v2.perfiles WHERE id = '${user.id}'::uuid LIMIT 1`)
+  const rol = String(roleRows[0]?.rol ?? "")
+  if (!["admin", "finanzas"].includes(rol)) return { error: "Permiso denegado" }
+
   const parsed = schema.safeParse({
     accrualDate: formData.get("accrualDate"),
   })

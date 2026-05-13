@@ -57,7 +57,6 @@ export async function updateTenantInquilino(
     .update({
       telefono:       data.telefono.trim() || null,
       email_contacto: email || null,
-      portal_email:   email || null,
     })
     .eq("id", inquilinoId)
   if (inquilinoError) return { error: inquilinoError.message }
