@@ -25,7 +25,14 @@ export async function updatePassword(
   const { error } = await supabase.auth.updateUser({ password })
 
   if (error) {
-    return { error: "El enlace expiró o ya fue usado. Solicita uno nuevo." }
+    const msg = error.message.toLowerCase()
+    if (msg.includes("different from the old password") || msg.includes("same as the old"))
+      return { error: "La nueva contraseña debe ser diferente a la actual." }
+    if (msg.includes("weak") || msg.includes("too short"))
+      return { error: "La contraseña es muy débil. Usa al menos 8 caracteres." }
+    if (msg.includes("expired") || msg.includes("already") || error.status === 401)
+      return { error: "El enlace expiró o ya fue usado. Solicita uno nuevo." }
+    return { error: "No se pudo actualizar la contraseña. Intenta de nuevo." }
   }
 
   redirect("/")
