@@ -9,7 +9,8 @@ const initial: UpdatePasswordState = {}
 
 export function UpdatePasswordForm() {
   const [state, action, pending] = useActionState(updatePassword, initial)
-  const [show, setShow] = useState(false)
+  const [show, setShow]            = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   return (
     <form action={action} className="flex flex-col gap-4">
@@ -42,14 +43,24 @@ export function UpdatePasswordForm() {
         <label className="mb-1.5 block text-xs font-medium text-slate-300">
           Confirmar contraseña
         </label>
-        <input
-          type={show ? "text" : "password"}
-          name="confirm"
-          required
-          autoComplete="new-password"
-          placeholder="Repite la contraseña"
-          className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-        />
+        <div className="relative">
+          <input
+            type={showConfirm ? "text" : "password"}
+            name="confirm"
+            required
+            autoComplete="new-password"
+            placeholder="Repite la contraseña"
+            className="w-full rounded-lg border border-slate-600 bg-slate-700 px-3 py-2 pr-10 text-sm text-white placeholder-slate-500 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+          <button
+            type="button"
+            onClick={() => setShowConfirm((v) => !v)}
+            className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-200"
+            tabIndex={-1}
+          >
+            {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
 
       {state.error && (
