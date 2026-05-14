@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { getPortalProfile, getPortalMedidorHistory, getPortalMedidorRef } from "@/lib/data/portal"
 import { MedidorForm, type UnitMedidorData } from "./form"
+import { HistorialChart } from "./chart"
 import { Zap } from "lucide-react"
 
 function currentPeriodo() {
@@ -64,11 +65,13 @@ export default async function MedidorPage() {
         </p>
       </div>
 
-      {isMedidorDay ? (
+      {isMedidorDay && (
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <MedidorForm periodo={periodo} units={units} chartSeries={chartSeries} />
         </div>
-      ) : (
+      )}
+
+      {!isMedidorDay && (
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm text-center">
           <Zap className="mx-auto h-10 w-10 text-slate-300 mb-3" />
           <p className="font-semibold text-slate-700">Envío disponible solo el día 9 de cada mes</p>
@@ -77,6 +80,10 @@ export default async function MedidorPage() {
           </p>
         </div>
       )}
+
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <HistorialChart series={chartSeries} />
+      </div>
 
     </div>
   )

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { submitLectura, type MedidorPortalState } from "./actions"
 import { Camera, X, CheckCircle2 } from "lucide-react"
 import type { PortalMedidorHistoryRow } from "@/lib/data/portal"
-import { HistorialChart } from "./chart"
 
 const initial: MedidorPortalState = {}
 
@@ -144,7 +143,6 @@ export function MedidorForm({
         </div>
       )}
 
-      {/* Already submitted state */}
       {selected.alreadySubmitted ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-center">
           <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500 mb-3" />
@@ -274,8 +272,6 @@ export function MedidorForm({
           </div>
         </form>
       )}
-
-      <HistorialChart series={chartSeries} />
     </div>
   )
 }
