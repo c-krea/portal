@@ -2,6 +2,56 @@
 
 ---
 
+## Session 57 — 2026-05-14: Full security audit + PostgREST elimination + auth reset fix
+
+### What happened
+
+Deep code review across the entire app (5 parallel review agents). Found and fixed two critical security gaps and a fundamental architectural dependency on PostgREST schema exposure.
+
+### Decisions
+
+🎯 **PostgREST eliminated entirely.** All `.schema("v2")` REST calls replaced with `exec_sql` (reads) and `exec_dml` (writes) RPCs. `sqlStr()` helper in executor.ts for safe text interpolation. App no longer depends on which schemas are exposed in Supabase PostgREST config — changes to that setting can never break the app.
+
+🎯 **Public routes must bypass `getUser()` in proxy.ts.** Recovery sessions (AMR=otp) get silently refreshed into regular sessions by `@supabase/ssr` inside `getUser()`. Once degraded, `updateUser({ password })` fails because Supabase requires the otp AMR claim. Fix: public-route check now runs *before* the session client is even created.
+
+🎯 **`SITE_URL` (no NEXT_PUBLIC_ prefix) for server-side reset links.** `NEXT_PUBLIC_` vars are baked at build time — changing them in Vercel requires a redeploy. Server-side `redirectTo` in password reset now reads `SITE_URL` (runtime) first, falling back to `NEXT_PUBLIC_SITE_URL`.
+
+### Security fixes shipped
+
+- Auth guard on `/api/medidores/export-energia` and `/facturas/export` (were unauthenticated)
+- Auth guard on `archivos` server actions (delete/download/list)
+- Open redirect fixed in `/api/auth/callback` (`next` param must start with `/`)
+- Role check (admin/finanzas) on `calcularIntereses` mora action
+- MIME type allowlist on photo uploads (jpeg/png/webp only)
+- `unitNumber` sanitized to alphanumeric before use in R2 key path
+
+### Correctness fixes shipped
+
+- `submitLectura`: prevRows query now filters `AND periodo < '${periodo}'` (was fetching own row on retry)
+- `submitLectura`: blocks resubmission of already-approved readings
+- `getPortalContratos`: LATERAL now `ORDER BY ingreso DESC` (was `precio DESC` → wrong phase)
+- `getPortalTenants`: includes `critico` contracts (was `activo` only → tenants invisible)
+- `updateTenantInquilino`: `portal_email` synced alongside `email_contacto`
+- Notifications cron: `maxDuration = 60` added (was silently timing out)
+- `archivos-client`: `router.refresh()` instead of `window.location.reload()`
+- `sendSystemEmail`: stale `ckrea-portal.vercel.app` fallback replaced with `ckrea.com.co`
+
+### Learnings
+
+⚠️ **PostgREST schema exposure is a silent failure point.** Config was `public, satelites` only — every `.schema("v2")` call failed with 406. All reads worked (via exec_sql RPC) but every write was silently broken. Never detected because all data was inserted via MCP/migrations during development. Rule: never use `.schema()` calls; always use exec_sql/exec_dml.
+
+⚠️ **`@supabase/ssr` degrades recovery sessions inside `getUser()`.** If middleware calls `getUser()` on a recovery-session request, the token refresh strips the `otp` AMR claim. `updateUser({ password })` then returns 422. Fix: public auth routes must be returned before ANY session handling.
+
+💡 **`NEXT_PUBLIC_` vars are build-time only.** Changing in Vercel requires redeploy. Use private env vars (`SITE_URL`) for server-side config that changes without a rebuild.
+
+### Session-end pointers
+- ADRs: none
+- Lessons: feedback files — PostgREST elimination pattern, recovery session guard
+- State: project_state.md needs update (security hardened, PostgREST removed, auth flow fixed)
+- Linear: none
+
+---
+
 ## Session 56 — 2026-05-12: Portal electricity payment fix + SQL injection hardening
 
 ### Root cause

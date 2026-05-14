@@ -52,7 +52,8 @@ export async function updateTenantInquilino(
     await executeDml(`
       UPDATE v2.inquilinos
       SET telefono       = ${sqlStr(data.telefono.trim() || null)},
-          email_contacto = ${sqlStr(email || null)}
+          email_contacto = ${sqlStr(email || null)},
+          portal_email   = ${sqlStr(email || null)}
       WHERE id = '${inquilinoId}'::uuid
     `)
   } catch (e) {
@@ -197,7 +198,7 @@ export async function sendSystemEmail(data: {
 }): Promise<{ success?: boolean; error?: string }> {
   if (!isValidEmail(data.toEmail)) return { error: "Email inválido" }
 
-  const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ckrea-portal.vercel.app"
+  const SITE = process.env.SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://ckrea.com.co"
   const redirectTo = `${SITE}/auth/confirm`
 
   const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({

@@ -11,6 +11,7 @@ async function requireAuth() {
 }
 
 export async function getArchivosList(prefix?: string) {
+  await requireAuth()
   return listFiles(prefix)
 }
 

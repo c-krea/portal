@@ -6,6 +6,37 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [Unreleased] — 2026-05-14 (Security audit + PostgREST elimination + auth reset fix — Session 57)
+
+### Security
+- Auth guard added to `/api/medidores/export-energia` and `/facturas/export` (previously unauthenticated)
+- Auth guard added to all archivos server actions (getArchivosList, getDownloadUrl, deleteArchivo)
+- Open redirect fixed in `/api/auth/callback` — `next` param validated
+- Role check (admin/finanzas) added to `calcularIntereses` mora action
+- MIME allowlist on photo uploads: jpeg/png/webp only
+- `unitNumber` sanitized before R2 key path construction
+
+### Architecture
+- Eliminated all `.schema("v2")` PostgREST calls — converted to `exec_sql`/`exec_dml` RPCs
+- Added `executeDml()` + `sqlStr()` helpers to `executor.ts`
+- App no longer depends on Supabase PostgREST schema exposure config
+- Deleted orphaned `src/lib/db/v2.ts` helper
+
+### Auth / Password Reset
+- Fixed password reset flow: proxy now runs public-route check before `getUser()` so recovery sessions (AMR=otp) are not degraded by middleware token refresh
+- `SITE_URL` runtime env var used for reset link `redirectTo` (no rebuild needed on URL change)
+- Spanish error messages for all password update failures
+- Show/hide eye toggle added to confirm password field
+
+### Fixes
+- `submitLectura`: period filter on prevRows query; blocks resubmission of approved readings
+- `getPortalContracts`: LATERAL now orders by `ingreso DESC` (was `precio DESC`)
+- `getPortalTenants`: includes `critico` contracts
+- `updateTenantInquilino`: syncs `portal_email` alongside `email_contacto`
+- Notifications cron: `maxDuration = 60` added; meter check converted to `execute()`
+- `archivos-client`: `router.refresh()` instead of `window.location.reload()`
+- Push DELETE handler: fixed double `req.json()` call
+
 ## [Unreleased] — 2026-05-12 (Portal electricity payment fix + security hardening — Session 56)
 
 ### Fixed — Tenant portal electricity payment button missing

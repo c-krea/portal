@@ -29,11 +29,9 @@ export async function DELETE(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { endpoint } = await req.json()
-
-  const { endpoint: ep } = await req.json()
-  if (ep) {
+  if (endpoint) {
     await executeDml(
-      `DELETE FROM v2.push_subscriptions WHERE user_id = '${user.id}'::uuid AND endpoint = ${sqlStr(ep)}`
+      `DELETE FROM v2.push_subscriptions WHERE user_id = '${user.id}'::uuid AND endpoint = ${sqlStr(endpoint)}`
     )
   }
 
