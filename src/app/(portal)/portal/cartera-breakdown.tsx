@@ -68,12 +68,14 @@ function InvoiceRow({ row }: { row: BreakdownRow }) {
               <p className="text-xs text-slate-400">
                 Arrendamiento: <span className="text-slate-600">{formatCOP(row.ventas)}</span>
               </p>
-              <p className="text-xs text-slate-400">
-                IVA 19%: <span className="text-slate-600">+{formatCOP(row.impuesto!)}</span>
-              </p>
+              {row.impuesto != null && (
+                <p className="text-xs text-slate-400">
+                  IVA 19%: <span className="text-slate-600">+{formatCOP(row.impuesto)}</span>
+                </p>
+              )}
               {(row.retenciones ?? 0) > 0 && (
                 <p className="text-xs text-slate-400">
-                  Retención: <span className="text-slate-600">−{formatCOP(row.retenciones!)}</span>
+                  Retención: <span className="text-slate-600">−{formatCOP(row.retenciones ?? 0)}</span>
                 </p>
               )}
             </>

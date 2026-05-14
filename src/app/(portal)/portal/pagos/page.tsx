@@ -88,6 +88,13 @@ export default async function PagosHistorialPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
+              {pagos.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-4 py-8 text-center text-sm text-slate-400">
+                    Sin pagos registrados
+                  </td>
+                </tr>
+              )}
               {pagos.map((p) => {
                 const d = p.diasDesdeFactura
                 const enMora = d != null && d > 30

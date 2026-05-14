@@ -8,7 +8,7 @@ import { HistorialChart } from "./chart"
 import { Zap } from "lucide-react"
 
 function currentPeriodo() {
-  const now = new Date()
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }))
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
 }
 
@@ -27,7 +27,7 @@ export default async function MedidorPage() {
   if (!profile) redirect("/portal")
 
   const periodo = currentPeriodo()
-  const todayDay = new Date().getDate()
+  const todayDay = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" })).getDate()
   const isMedidorDay = todayDay === 9
 
   // Load ref data + history for every unit in parallel

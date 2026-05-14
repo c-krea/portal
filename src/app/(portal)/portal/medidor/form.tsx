@@ -229,11 +229,10 @@ export function MedidorForm({
                 </p>
               </div>
 
-              {digits.some(d => d !== "") && (() => {
-                const lecturaActual = Number(digits.join("") || "0")
+              {digits.every(d => d !== "") && (() => {
+                const lecturaActual = Number(digits.join(""))
                 const consumo = Math.max(0, lecturaActual - Math.floor(selected.lecturaAnteriorRef))
                 const total = consumo * selected.tarifaKwh
-                const allFilled = digits.every(d => d !== "")
                 return (
                   <div className="rounded-lg border border-slate-200 bg-slate-50 divide-y divide-slate-200 overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3">
@@ -248,7 +247,7 @@ export function MedidorForm({
                       <span className="text-sm text-slate-500">Diferencia</span>
                       <span className="font-semibold tabular-nums text-slate-900">{consumo.toLocaleString("es-CO")} kWh</span>
                     </div>
-                    {allFilled && selected.tarifaKwh > 0 && (
+                    {selected.tarifaKwh > 0 && (
                       <div className="flex items-center justify-between px-4 py-3 bg-emerald-50">
                         <span className="text-sm font-medium text-emerald-700">Total estimado energía</span>
                         <span className="font-bold tabular-nums text-emerald-800">$ {Math.round(total).toLocaleString("es-CO")}</span>

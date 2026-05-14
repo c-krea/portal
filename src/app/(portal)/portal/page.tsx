@@ -34,9 +34,9 @@ function prevPeriodo(now: Date) {
 }
 
 function daysFromNow(date: Date): number {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  const todayCO = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }))
+  todayCO.setHours(0, 0, 0, 0)
+  return Math.ceil((date.getTime() - todayCO.getTime()) / (1000 * 60 * 60 * 24))
 }
 
 export default async function PortalPage() {
@@ -57,10 +57,11 @@ export default async function PortalPage() {
   }
 
   const now = new Date()
-  const periodo = currentPeriodo(now)
-  const electricidadPeriodo = prevPeriodo(now)
-  const todayDay = now.getDate()
-  const currentPeriodInt = now.getFullYear() * 100 + (now.getMonth() + 1)
+  const nowCO = new Date(now.toLocaleString("en-US", { timeZone: "America/Bogota" }))
+  const periodo = currentPeriodo(nowCO)
+  const electricidadPeriodo = prevPeriodo(nowCO)
+  const todayDay = nowCO.getDate()
+  const currentPeriodInt = nowCO.getFullYear() * 100 + (nowCO.getMonth() + 1)
 
   const [pagos, medidor, cartera, electricityInvoiceResults, electricityPeriodosResults] = await Promise.all([
     getPortalPagos(profile.tenantId, 5),
@@ -98,8 +99,8 @@ export default async function PortalPage() {
   const earliestVence = cartera.rows.map((r) => r.fechaVence).filter(Boolean).sort()[0] ?? null
   const nextPaymentDate = earliestVence
     ? new Date(earliestVence + "T00:00:00")
-    : (() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 1) })()
-  const daysToPayment = daysFromNow(nextPaymentDate)
+    : new Date(nowCO.getFullYear(), nowCO.getMonth() + 1, 1)
+  const daysToPayment = (enMora && !earliestVence) ? -1 : daysFromNow(nextPaymentDate)
   const paymentUrgent = daysToPayment >= 0 && daysToPayment <= 5
   const paymentWarning = daysToPayment > 5 && daysToPayment <= 10
   const paymentOverdue = daysToPayment < 0

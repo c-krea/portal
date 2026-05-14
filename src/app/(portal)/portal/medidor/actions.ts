@@ -33,7 +33,7 @@ export async function submitLectura(
   const profile = await getPortalProfile(user.id)
   if (!profile) return { error: "Perfil no encontrado" }
 
-  if (new Date().getDate() !== 9) return { error: "El envío de lectura solo está habilitado el día 9 de cada mes." }
+  if (new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" })).getDate() !== 9) return { error: "El envío de lectura solo está habilitado el día 9 de cada mes." }
 
   const { companyId } = profile
 
