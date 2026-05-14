@@ -5,7 +5,7 @@ import { assertUuid, isValidEmail } from "@/lib/security/validators"
 import { sendWelcomeEmail, sendPasswordResetEmail } from "@/lib/email"
 import { revalidatePath } from "next/cache"
 
-const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://paycontrol.ckrea.co"
+const SITE = process.env.SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://ckrea.com.co"
 
 export async function updatePortalEmail(inquilinoId: string, email: string) {
   assertUuid(inquilinoId)

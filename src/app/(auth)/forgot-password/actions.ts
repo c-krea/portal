@@ -9,7 +9,7 @@ export type ForgotPasswordState = {
   success?: boolean
 }
 
-const SITE = process.env.NEXT_PUBLIC_SITE_URL ?? "https://paycontrol.ckrea.co"
+const SITE = process.env.SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://ckrea.com.co"
 
 export async function requestPasswordReset(
   _prev: ForgotPasswordState,
