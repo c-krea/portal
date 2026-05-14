@@ -25,7 +25,7 @@ export async function updatePassword(
   const { error } = await supabase.auth.updateUser({ password })
 
   if (error) {
-    return { error: `Auth error: ${error.message} (code: ${error.status ?? "?"})` }
+    return { error: "El enlace expiró o ya fue usado. Solicita uno nuevo." }
   }
 
   redirect("/")

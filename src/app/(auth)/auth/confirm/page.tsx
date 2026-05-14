@@ -47,7 +47,7 @@ export default function AuthConfirmPage() {
     const supabase = createClient()
     supabase.auth.setSession({ access_token, refresh_token }).then(({ error }) => {
       if (error) {
-        setError(`Error: ${error.message} (${error.status ?? "?"})`)
+        setError("El enlace expiró o ya fue usado. Solicita uno nuevo.")
         return
       }
       if (type === "recovery") {

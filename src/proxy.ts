@@ -3,6 +3,30 @@ import { createClient } from "@supabase/supabase-js"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // Public routes — skip getUser() entirely so auth-flow sessions
+  // (recovery, magic-link) are never silently refreshed by the middleware.
+  // /update-password and /auth/confirm MUST be here: getUser() would degrade
+  // a recovery session (AMR=otp) into a regular session, causing
+  // updateUser({ password }) to fail with "expired or already used."
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/forgot-password") ||
+    pathname.startsWith("/update-password") ||
+    pathname.startsWith("/auth/confirm") ||
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/favicon") ||
+    pathname.startsWith("/icons/") ||
+    pathname === "/manifest.webmanifest" ||
+    pathname === "/manifest.json" ||
+    pathname === "/sw.js" ||
+    pathname === "/offline"
+  ) {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -26,30 +50,10 @@ export async function proxy(request: NextRequest) {
     },
   )
 
-  // Refresh session — MUST call getUser() for cookie refresh to work
+  // Refresh session — only runs for authenticated routes
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  const { pathname } = request.nextUrl
-
-  // Public routes — allow through always
-  if (
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/forgot-password") ||
-    pathname.startsWith("/update-password") ||
-    pathname.startsWith("/auth/confirm") ||
-    pathname.startsWith("/api/") ||
-    pathname.startsWith("/_next/") ||
-    pathname.startsWith("/favicon") ||
-    pathname.startsWith("/icons/") ||
-    pathname === "/manifest.webmanifest" ||
-    pathname === "/manifest.json" ||
-    pathname === "/sw.js" ||
-    pathname === "/offline"
-  ) {
-    return supabaseResponse
-  }
 
   // No session → redirect to login
   if (!user) {
