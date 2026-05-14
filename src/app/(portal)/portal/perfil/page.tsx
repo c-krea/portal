@@ -38,10 +38,10 @@ function Row({
   value: React.ReactNode
 }) {
   return (
-    <div className="flex items-start gap-3 py-3 border-b border-slate-50 last:border-0">
-      <Icon className="h-4 w-4 shrink-0 mt-0.5 text-slate-400" />
-      <span className="w-28 sm:w-40 shrink-0 text-sm text-slate-400">{label}</span>
-      <span className="text-sm font-medium text-slate-800">{value ?? "—"}</span>
+    <div className="flex items-start gap-2 sm:gap-3 py-2 sm:py-3 border-b border-slate-50 last:border-0">
+      <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 mt-0.5 text-slate-400" />
+      <span className="w-24 sm:w-40 shrink-0 text-xs sm:text-sm text-slate-400">{label}</span>
+      <span className="text-xs sm:text-sm font-medium text-slate-800">{value ?? "—"}</span>
     </div>
   )
 }
@@ -69,17 +69,17 @@ export default async function PerfilPage() {
           <Building2 className="h-7 w-7 text-slate-600" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-slate-900">
+          <h1 className="text-base sm:text-xl font-bold text-slate-900">
             {profile.nombreCorto ?? profile.razonSocial}
           </h1>
-          <p className="text-sm text-slate-500">{unitsLabel}</p>
+          <p className="text-xs sm:text-sm text-slate-500">{unitsLabel}</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
+      <div className="flex flex-col gap-4">
 
         {/* Contact card */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-5 shadow-sm">
           <Section title="Información de Contacto" />
           <Row icon={Hash}      label="NIT / Cédula"  value={profile.nit} />
           <Row icon={Briefcase} label="Razón social"  value={profile.razonSocial} />
@@ -96,7 +96,7 @@ export default async function PerfilPage() {
         </div>
 
         {/* Contract card — one block per unit */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-5 shadow-sm">
           <Section title="Condiciones del Contrato" />
           {contratos.map((c, i) => (
             <div key={c.unidad}>
