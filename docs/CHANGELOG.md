@@ -6,7 +6,13 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
-## [Unreleased] — 2026-05-14 (Portal demo-readiness + Wompi UX — Session 58)
+## [Unreleased] — 2026-05-14 (Portal demo-readiness + Wompi UX + mobile layout — Session 58)
+
+### Mobile UX
+- Perfil: single column layout, text and padding scale down on mobile, desktop unchanged
+- Pagos KPI cards: stacked vertically on mobile with horizontal row layout per card; 3-column grid on desktop unchanged
+- Pagos table: tighter padding and smaller font on mobile only
+- iOS Safari font-size inflation prevented (text-[11px] instead of text-[10px])
 
 ### Portal — Tenant UX
 - Medidor history chart visible every day (was hidden on non-day-9); form submission still locked to day 9

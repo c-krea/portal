@@ -2,6 +2,24 @@
 
 ---
 
+## Session 58 — 2026-05-14: Portal demo-readiness + medidor chart + Wompi UX + mobile layout
+
+### Mobile layout (appended after ship)
+
+⚙️ **Perfil page** — switched from 2-column grid to single full-width column. All text scales down on mobile (`text-xs sm:text-sm`), card padding tighter (`p-3 sm:p-5`), Row component icon/gap reduced. Desktop unchanged.
+
+⚙️ **Pagos KPI cards** — on mobile switched from 3-column grid to 1-column stack with horizontal row layout per card (icon+label left, value right). Sub-labels use `text-[11px]` instead of `text-[10px]` to avoid iOS Safari auto-inflation. Desktop 3-column grid unchanged.
+
+⚙️ **Pagos table** — reduced cell padding and font size on mobile only (`px-2 sm:px-4`, `text-xs sm:text-sm`).
+
+### Session-end pointers (updated)
+- ADRs: none
+- Lessons: none
+- State: project_state.md updated
+- Linear: none
+
+---
+
 ## Session 58 — 2026-05-14: Portal demo-readiness + medidor chart + Wompi UX
 
 ### What happened
