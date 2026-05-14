@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { supabaseAdmin, execute } from "@/lib/db/executor"
+import { execute, executeDml } from "@/lib/db/executor"
 import { sendPushToUser } from "@/lib/push"
 
 export const dynamic = "force-dynamic"
@@ -19,11 +19,15 @@ function dateStr(d: Date) {
 
 // Returns true and logs if notification hasn't been sent yet; false if duplicate.
 async function tryLog(userId: string, type: string, refId: string): Promise<boolean> {
-  const { error } = await supabaseAdmin
-    .schema("v2")
-    .from("push_notification_log")
-    .insert({ user_id: userId, type, reference_id: refId })
-  return !error
+  try {
+    await executeDml(
+      `INSERT INTO v2.push_notification_log (user_id, type, reference_id)
+       VALUES ('${userId}'::uuid, '${type}', '${refId}')`
+    )
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function notify(

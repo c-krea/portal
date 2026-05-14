@@ -1,15 +1,11 @@
 "use server"
 
-import { supabaseAdmin } from "@/lib/db/executor"
+import { supabaseAdmin, executeDml, sqlStr } from "@/lib/db/executor"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { ELECTRICITY_GROUPS } from "@/lib/data/electricity"
 import { assertPeriodo, assertUuid } from "@/lib/security/validators"
 import { revalidatePath } from "next/cache"
 
-async function execDml(query: string) {
-  const { error } = await supabaseAdmin.rpc("exec_dml", { q: query })
-  if (error) throw new Error(`DML failed: ${error.message}\nQuery: ${query.slice(0, 300)}`)
-}
 
 export interface FacturaInput {
   electricity_group: string
@@ -63,33 +59,37 @@ export async function saveFacturasEnergia(
     const meta = groupMeta[r.electricity_group]
     const kwh_factura = Math.round((r.valor_factura / r.tarifa_kwh) * 100) / 100
 
-    const { error } = await supabaseAdmin
-      .schema("v2")
-      .from("facturas_energia")
-      .upsert(
-        {
-          empresa_id:        empresaId,
-          periodo,
-          grupo_energia:     r.electricity_group,
-          direccion:         meta.direccion,
-          proveedor:         meta.proveedor,
-          fecha_factura:     r.fecha_factura || null,
-          valor_factura:     r.valor_factura,
-          kwh_factura:       kwh_factura,
-          tarifa_kwh:        Math.round(r.tarifa_kwh * 100) / 100,
-          notas:             r.notas || null,
-          updated_at:        new Date().toISOString(),
-        },
-        { onConflict: "empresa_id,periodo,grupo_energia" },
-      )
-
-    if (error) return { error: `Error guardando ${meta.direccion}: ${error.message}` }
+    try {
+      await executeDml(`
+        INSERT INTO v2.facturas_energia
+          (empresa_id, periodo, grupo_energia, direccion, proveedor,
+           fecha_factura, valor_factura, kwh_factura, tarifa_kwh, notas, updated_at)
+        VALUES (
+          '${empresaId}'::uuid, '${periodo}', '${r.electricity_group}',
+          ${sqlStr(meta.direccion)}, ${sqlStr(meta.proveedor)},
+          ${r.fecha_factura ? sqlStr(r.fecha_factura) : "NULL"},
+          ${r.valor_factura}, ${kwh_factura}, ${Math.round(r.tarifa_kwh * 100) / 100},
+          ${sqlStr(r.notas || null)}, NOW()
+        )
+        ON CONFLICT (empresa_id, periodo, grupo_energia) DO UPDATE SET
+          direccion     = EXCLUDED.direccion,
+          proveedor     = EXCLUDED.proveedor,
+          fecha_factura = EXCLUDED.fecha_factura,
+          valor_factura = EXCLUDED.valor_factura,
+          kwh_factura   = EXCLUDED.kwh_factura,
+          tarifa_kwh    = EXCLUDED.tarifa_kwh,
+          notas         = EXCLUDED.notas,
+          updated_at    = EXCLUDED.updated_at
+      `)
+    } catch (e) {
+      return { error: `Error guardando ${meta.direccion}: ${e instanceof Error ? e.message : String(e)}` }
+    }
   }
 
   // Propagate new tarifas to existing lecturas for this period.
   // Recompute total_energia from kwh × tarifa so portal/admin views match the saved bills.
   const filledGroups = filled.map((r) => `'${r.electricity_group}'`).join(",")
-  await execDml(`
+  await executeDml(`
     UPDATE v2.lecturas_medidor lm
     SET tarifa_kwh    = fe.tarifa_kwh,
         total_energia = ROUND(lm.kwh * fe.tarifa_kwh / 50.0) * 50

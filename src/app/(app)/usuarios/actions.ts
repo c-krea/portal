@@ -1,6 +1,6 @@
 "use server"
 
-import { supabaseAdmin } from "@/lib/db/executor"
+import { supabaseAdmin, execute, executeDml, sqlStr } from "@/lib/db/executor"
 import { assertUuid, isValidEmail } from "@/lib/security/validators"
 import { sendWelcomeEmail, sendPasswordResetEmail } from "@/lib/email"
 import { revalidatePath } from "next/cache"
@@ -15,25 +15,22 @@ export async function updatePortalEmail(inquilinoId: string, email: string) {
   }
 
   // 1. Update v2.inquilinos
-  const { error: dbError } = await supabaseAdmin
-    .schema("v2")
-    .from("inquilinos")
-    .update({ portal_email: trimmed })
-    .eq("id", inquilinoId)
-  if (dbError) return { error: dbError.message }
+  try {
+    await executeDml(
+      `UPDATE v2.inquilinos SET portal_email = ${sqlStr(trimmed)} WHERE id = '${inquilinoId}'::uuid`
+    )
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 
   // 2. Sync auth.users if perfil exists
-  const { data: profile } = await supabaseAdmin
-    .schema("v2")
-    .from("perfiles")
-    .select("id")
-    .eq("inquilino_id", inquilinoId)
-    .eq("rol", "inquilino")
-    .single()
+  const rows = await execute(
+    `SELECT id FROM v2.perfiles WHERE inquilino_id = '${inquilinoId}'::uuid AND rol = 'inquilino' LIMIT 1`
+  )
 
-  if (profile?.id) {
+  if (rows[0]?.id) {
     const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
-      profile.id,
+      String(rows[0].id),
       { email: trimmed }
     )
     if (authError) return { error: `Email guardado, pero no se pudo actualizar auth: ${authError.message}` }
@@ -51,27 +48,24 @@ export async function updateTenantInquilino(
   const email = data.email.trim().toLowerCase()
   if (email && !isValidEmail(email)) return { error: "Email inválido" }
 
-  const { error: inquilinoError } = await supabaseAdmin
-    .schema("v2")
-    .from("inquilinos")
-    .update({
-      telefono:       data.telefono.trim() || null,
-      email_contacto: email || null,
-    })
-    .eq("id", inquilinoId)
-  if (inquilinoError) return { error: inquilinoError.message }
+  try {
+    await executeDml(`
+      UPDATE v2.inquilinos
+      SET telefono       = ${sqlStr(data.telefono.trim() || null)},
+          email_contacto = ${sqlStr(email || null)}
+      WHERE id = '${inquilinoId}'::uuid
+    `)
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 
   if (email) {
-    const { data: profile } = await supabaseAdmin
-      .schema("v2")
-      .from("perfiles")
-      .select("id")
-      .eq("inquilino_id", inquilinoId)
-      .eq("rol", "inquilino")
-      .single()
-    if (profile?.id) {
+    const rows = await execute(
+      `SELECT id FROM v2.perfiles WHERE inquilino_id = '${inquilinoId}'::uuid AND rol = 'inquilino' LIMIT 1`
+    )
+    if (rows[0]?.id) {
       const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
-        profile.id,
+        String(rows[0].id),
         { email }
       )
       if (authError) return { error: `Guardado, pero error en auth: ${authError.message}` }
@@ -86,18 +80,16 @@ export async function updateTenantInquilino(
 export async function createTenantAccount(inquilinoId: string) {
   assertUuid(inquilinoId)
 
-  const { data: inquilino, error: fetchError } = await supabaseAdmin
-    .schema("v2")
-    .from("inquilinos")
-    .select("portal_email, nombre_corto, razon_social, empresa_id")
-    .eq("id", inquilinoId)
-    .single()
-
-  if (fetchError || !inquilino) return { error: "Inquilino no encontrado" }
+  const rows = await execute(
+    `SELECT portal_email, nombre_corto, razon_social, empresa_id FROM v2.inquilinos WHERE id = '${inquilinoId}'::uuid LIMIT 1`
+  )
+  const inquilino = rows[0]
+  if (!inquilino) return { error: "Inquilino no encontrado" }
   if (!inquilino.portal_email) return { error: "Sin email configurado" }
 
-  const email    = inquilino.portal_email as string
-  const fullName = (inquilino.nombre_corto || inquilino.razon_social) as string
+  const email    = String(inquilino.portal_email)
+  const fullName = String(inquilino.nombre_corto ?? inquilino.razon_social)
+  const empresaId = String(inquilino.empresa_id)
 
   // Try to create; if email already exists, recover the existing auth user
   let authUserId: string
@@ -110,7 +102,8 @@ export async function createTenantAccount(inquilinoId: string) {
   if (createError) {
     const alreadyExists =
       createError.message.toLowerCase().includes("already") ||
-      createError.message.toLowerCase().includes("registered")
+      createError.message.toLowerCase().includes("registered") ||
+      createError.code === "user_already_exists"
 
     if (!alreadyExists) {
       return { error: `Error al crear la cuenta: ${createError.message}` }
@@ -126,19 +119,26 @@ export async function createTenantAccount(inquilinoId: string) {
   }
 
   // Upsert perfiles to link this auth user to the tenant
-  const { error: perfilError } = await supabaseAdmin
-    .schema("v2")
-    .from("perfiles")
-    .upsert({
-      id:              authUserId,
-      inquilino_id:    inquilinoId,
-      rol:             "inquilino",
-      nombre_completo: fullName,
-      empresa_id:      inquilino.empresa_id,
-      email,
-    }, { onConflict: "id" })
-  if (perfilError) {
-    return { error: `Cuenta lista, pero error al vincular perfil: ${perfilError.message}` }
+  try {
+    await executeDml(`
+      INSERT INTO v2.perfiles (id, inquilino_id, rol, nombre_completo, empresa_id, email)
+      VALUES (
+        '${authUserId}'::uuid,
+        '${inquilinoId}'::uuid,
+        'inquilino',
+        ${sqlStr(fullName)},
+        '${empresaId}'::uuid,
+        ${sqlStr(email)}
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        inquilino_id    = EXCLUDED.inquilino_id,
+        rol             = EXCLUDED.rol,
+        nombre_completo = EXCLUDED.nombre_completo,
+        empresa_id      = EXCLUDED.empresa_id,
+        email           = EXCLUDED.email
+    `)
+  } catch (e) {
+    return { error: `Cuenta lista, pero error al vincular perfil: ${e instanceof Error ? e.message : String(e)}` }
   }
 
   // Send welcome email with password-setup link
@@ -168,12 +168,17 @@ export async function updateAdminUser(
     return { error: "Rol inválido" }
   }
 
-  const { error: profileError } = await supabaseAdmin
-    .schema("v2")
-    .from("perfiles")
-    .update({ nombre_completo: data.fullName.trim(), email, rol: data.role as "admin" | "finanzas" | "visor" | "inquilino" })
-    .eq("id", userId)
-  if (profileError) return { error: profileError.message }
+  try {
+    await executeDml(`
+      UPDATE v2.perfiles
+      SET nombre_completo = ${sqlStr(data.fullName.trim())},
+          email           = ${sqlStr(email)},
+          rol             = '${data.role}'
+      WHERE id = '${userId}'::uuid
+    `)
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) }
+  }
 
   const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
     userId,

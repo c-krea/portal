@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { supabaseAdmin } from "@/lib/db/executor"
+import { executeDml, sqlStr } from "@/lib/db/executor"
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -12,10 +12,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid subscription" }, { status: 400 })
   }
 
-  await supabaseAdmin.schema("v2").from("push_subscriptions").upsert(
-    { user_id: user.id, endpoint, p256dh: keys.p256dh, auth: keys.auth },
-    { onConflict: "user_id,endpoint" }
-  )
+  await executeDml(`
+    INSERT INTO v2.push_subscriptions (user_id, endpoint, p256dh, auth)
+    VALUES ('${user.id}'::uuid, ${sqlStr(endpoint)}, ${sqlStr(keys.p256dh)}, ${sqlStr(keys.auth)})
+    ON CONFLICT (user_id, endpoint) DO UPDATE SET
+      p256dh = EXCLUDED.p256dh,
+      auth   = EXCLUDED.auth
+  `)
 
   return NextResponse.json({ ok: true })
 }
@@ -27,10 +30,12 @@ export async function DELETE(req: NextRequest) {
 
   const { endpoint } = await req.json()
 
-  await supabaseAdmin.schema("v2").from("push_subscriptions")
-    .delete()
-    .eq("user_id", user.id)
-    .eq("endpoint", endpoint)
+  const { endpoint: ep } = await req.json()
+  if (ep) {
+    await executeDml(
+      `DELETE FROM v2.push_subscriptions WHERE user_id = '${user.id}'::uuid AND endpoint = ${sqlStr(ep)}`
+    )
+  }
 
   return NextResponse.json({ ok: true })
 }

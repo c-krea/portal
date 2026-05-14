@@ -1,7 +1,5 @@
-"use server"
-
 import webpush from "web-push"
-import { supabaseAdmin } from "@/lib/db/executor"
+import { execute } from "@/lib/db/executor"
 
 webpush.setVapidDetails(
   process.env.VAPID_SUBJECT!,
@@ -16,18 +14,16 @@ type PushPayload = {
 }
 
 export async function sendPushToUser(userId: string, payload: PushPayload) {
-  const { data: subs } = await supabaseAdmin
-    .schema("v2")
-    .from("push_subscriptions")
-    .select("endpoint, p256dh, auth")
-    .eq("user_id", userId)
+  const subs = await execute(
+    `SELECT endpoint, p256dh, auth FROM v2.push_subscriptions WHERE user_id = '${userId}'::uuid`
+  )
 
-  if (!subs?.length) return { sent: 0 }
+  if (!subs.length) return { sent: 0 }
 
   const results = await Promise.allSettled(
     subs.map((sub) =>
       webpush.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        { endpoint: String(sub.endpoint), keys: { p256dh: String(sub.p256dh), auth: String(sub.auth) } },
         JSON.stringify(payload)
       )
     )
@@ -38,17 +34,16 @@ export async function sendPushToUser(userId: string, payload: PushPayload) {
 }
 
 export async function sendPushToAll(payload: PushPayload) {
-  const { data: subs } = await supabaseAdmin
-    .schema("v2")
-    .from("push_subscriptions")
-    .select("endpoint, p256dh, auth")
+  const subs = await execute(
+    `SELECT endpoint, p256dh, auth FROM v2.push_subscriptions`
+  )
 
-  if (!subs?.length) return { sent: 0 }
+  if (!subs.length) return { sent: 0 }
 
   const results = await Promise.allSettled(
     subs.map((sub) =>
       webpush.sendNotification(
-        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        { endpoint: String(sub.endpoint), keys: { p256dh: String(sub.p256dh), auth: String(sub.auth) } },
         JSON.stringify(payload)
       )
     )

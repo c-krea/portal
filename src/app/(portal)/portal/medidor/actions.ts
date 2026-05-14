@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
-import { execute, supabaseAdmin } from "@/lib/db/executor"
+import { execute, supabaseAdmin, executeDml, sqlStr } from "@/lib/db/executor"
 import { getPortalProfile } from "@/lib/data/portal"
 import { uploadMeterPhoto } from "@/lib/r2/meter-photos"
 import { isValidPeriodo } from "@/lib/security/validators"
@@ -146,28 +146,34 @@ export async function submitLectura(
     }
   }
 
-  const { error } = await supabaseAdmin
-    .schema("v2")
-    .from("lecturas_medidor")
-    .upsert(
-      {
-        empresa_id:         companyId,
-        local_id:           unitId,
-        periodo,
-        lectura_anterior:   String(lecturaAnterior),
-        lectura_actual:     String(lecturaActual),
-        kwh:                String(kwh),
-        tarifa_kwh:         String(tarifaKwh),
-        total_energia:      String(totalEnergia),
-        notas:              notas ?? null,
-        foto_url:           fotoUrl,
-        foto_drive_id:      fotoKey,
-        submitted_by:       user.id,
-        estado_validacion:  validationStatus,
-      },
-      { onConflict: "local_id,periodo" },
-    )
-  if (error) return { error: "Error al guardar la lectura. Intente de nuevo." }
+  try {
+    await executeDml(`
+      INSERT INTO v2.lecturas_medidor
+        (empresa_id, local_id, periodo, lectura_anterior, lectura_actual,
+         kwh, tarifa_kwh, total_energia, notas, foto_url, foto_drive_id,
+         submitted_by, estado_validacion)
+      VALUES (
+        '${companyId}'::uuid, '${unitId}'::uuid, '${periodo}',
+        ${lecturaAnterior}, ${lecturaActual}, ${kwh}, ${tarifaKwh}, ${totalEnergia},
+        ${sqlStr(notas ?? null)}, ${sqlStr(fotoUrl)}, ${sqlStr(fotoKey)},
+        '${user.id}'::uuid, '${validationStatus}'
+      )
+      ON CONFLICT (local_id, periodo) DO UPDATE SET
+        empresa_id        = EXCLUDED.empresa_id,
+        lectura_anterior  = EXCLUDED.lectura_anterior,
+        lectura_actual    = EXCLUDED.lectura_actual,
+        kwh               = EXCLUDED.kwh,
+        tarifa_kwh        = EXCLUDED.tarifa_kwh,
+        total_energia     = EXCLUDED.total_energia,
+        notas             = EXCLUDED.notas,
+        foto_url          = EXCLUDED.foto_url,
+        foto_drive_id     = EXCLUDED.foto_drive_id,
+        submitted_by      = EXCLUDED.submitted_by,
+        estado_validacion = EXCLUDED.estado_validacion
+    `)
+  } catch {
+    return { error: "Error al guardar la lectura. Intente de nuevo." }
+  }
 
   revalidatePath("/portal")
   revalidatePath("/portal/medidor")

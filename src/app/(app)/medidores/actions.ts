@@ -1,6 +1,6 @@
 "use server"
 
-import { supabaseAdmin } from "@/lib/db/executor"
+import { supabaseAdmin, executeDml, sqlStr } from "@/lib/db/executor"
 import { createClient } from "@/lib/supabase/server"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
@@ -86,27 +86,29 @@ export async function registrarLectura(
     const tarifa = await getElectricityTarifaForUnit(empresaId, unitId, periodo)
     const totalEnergia = tarifa > 0 ? Math.round(kwh * tarifa / 50) * 50 : 0
 
-    const { error } = await supabaseAdmin
-      .schema("v2")
-      .from("lecturas_medidor")
-      .upsert(
-        {
-          empresa_id:       empresaId,
-          local_id:         unitId,
-          periodo,
-          lectura_anterior: lecturaAnterior,
-          lectura_actual:   lecturaActual,
-          kwh,
-          tarifa_kwh:       tarifa > 0 ? tarifa : 0,
-          total_energia:    totalEnergia,
-          notas:            notas ?? null,
-          foto_url:         fotoUrl,
-          foto_drive_id:    fotoKey,
-          submitted_by:     user.id,
-        },
-        { onConflict: "local_id,periodo" },
+    await executeDml(`
+      INSERT INTO v2.lecturas_medidor
+        (empresa_id, local_id, periodo, lectura_anterior, lectura_actual,
+         kwh, tarifa_kwh, total_energia, notas, foto_url, foto_drive_id, submitted_by)
+      VALUES (
+        '${empresaId}'::uuid, '${unitId}'::uuid, '${periodo}',
+        ${lecturaAnterior}, ${lecturaActual}, ${kwh},
+        ${tarifa > 0 ? tarifa : 0}, ${totalEnergia},
+        ${sqlStr(notas ?? null)}, ${sqlStr(fotoUrl)}, ${sqlStr(fotoKey)},
+        '${user.id}'::uuid
       )
-    if (error) throw new Error(error.message)
+      ON CONFLICT (local_id, periodo) DO UPDATE SET
+        empresa_id       = EXCLUDED.empresa_id,
+        lectura_anterior = EXCLUDED.lectura_anterior,
+        lectura_actual   = EXCLUDED.lectura_actual,
+        kwh              = EXCLUDED.kwh,
+        tarifa_kwh       = EXCLUDED.tarifa_kwh,
+        total_energia    = EXCLUDED.total_energia,
+        notas            = EXCLUDED.notas,
+        foto_url         = EXCLUDED.foto_url,
+        foto_drive_id    = EXCLUDED.foto_drive_id,
+        submitted_by     = EXCLUDED.submitted_by
+    `)
 
     revalidatePath("/medidores")
     revalidatePath("/medidores/facturas")

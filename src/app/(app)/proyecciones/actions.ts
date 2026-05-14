@@ -1,6 +1,6 @@
 "use server"
 
-import { supabaseAdmin } from "@/lib/db/executor"
+import { execute, executeDml } from "@/lib/db/executor"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
@@ -66,11 +66,15 @@ export async function generarProyecciones(
           }
         })
 
-        const { error } = await supabaseAdmin
-          .schema("v2")
-          .from("proyecciones")
-          .upsert(rows, { ignoreDuplicates: true, onConflict: "local_id,anio,mes" })
-        if (error) throw new Error(error.message)
+        const vals = rows.map(r =>
+          `('${r.empresa_id}'::uuid,'${r.contrato_id}'::uuid,'${r.local_id}'::uuid,${r.anio},${r.mes},${r.canon_proyectado},${r.descuento_proyectado})`
+        ).join(",")
+        await executeDml(`
+          INSERT INTO v2.proyecciones
+            (empresa_id,contrato_id,local_id,anio,mes,canon_proyectado,descuento_proyectado)
+          VALUES ${vals}
+          ON CONFLICT (local_id,anio,mes) DO NOTHING
+        `)
 
         created += 12
       } catch (e) {
@@ -116,30 +120,25 @@ export async function updateContratoPhase(
   const { contractId, phasePct, hastaMes, year } = parsed.data
 
   try {
-    const { error: updErr } = await supabaseAdmin
-      .schema("v2")
-      .from("contratos")
-      .update({
-        descuento_phase_pct: phasePct,
-        descuento_hasta_mes: hastaMes,
-      })
-      .eq("id", contractId)
-    if (updErr) throw new Error(updErr.message)
+    await executeDml(`
+      UPDATE v2.contratos
+      SET descuento_phase_pct = ${phasePct ?? "NULL"},
+          descuento_hasta_mes = ${hastaMes ?? "NULL"}
+      WHERE id = '${contractId}'::uuid
+    `)
 
-    const { data: rows, error: selErr } = await supabaseAdmin
-      .schema("v2")
-      .from("proyecciones")
-      .select("canon_proyectado, local_id, empresa_id")
-      .eq("contrato_id", contractId)
-      .eq("anio", year)
-      .limit(1)
-    if (selErr) throw new Error(selErr.message)
-    if (!rows || rows.length === 0) {
+    const selRows = await execute(`
+      SELECT canon_proyectado, local_id, empresa_id
+      FROM v2.proyecciones
+      WHERE contrato_id = '${contractId}'::uuid AND anio = ${year}
+      LIMIT 1
+    `)
+    if (selRows.length === 0) {
       revalidatePath("/proyecciones")
       return { success: true }
     }
 
-    const { canon_proyectado, local_id, empresa_id } = rows[0]
+    const { canon_proyectado, local_id, empresa_id } = selRows[0]
     const canon = Number(canon_proyectado)
     const phase = phasePct ?? 0
     const hasta = hastaMes ?? 0
@@ -159,11 +158,18 @@ export async function updateContratoPhase(
       }
     })
 
-    const { error: upErr } = await supabaseAdmin
-      .schema("v2")
-      .from("proyecciones")
-      .upsert(newRows, { onConflict: "local_id,anio,mes" })
-    if (upErr) throw new Error(upErr.message)
+    const vals2 = newRows.map(r =>
+      `('${r.empresa_id}'::uuid,'${r.contrato_id}'::uuid,'${r.local_id}'::uuid,${r.anio},${r.mes},${r.canon_proyectado},${r.descuento_proyectado})`
+    ).join(",")
+    await executeDml(`
+      INSERT INTO v2.proyecciones
+        (empresa_id,contrato_id,local_id,anio,mes,canon_proyectado,descuento_proyectado)
+      VALUES ${vals2}
+      ON CONFLICT (local_id,anio,mes) DO UPDATE SET
+        contrato_id          = EXCLUDED.contrato_id,
+        canon_proyectado     = EXCLUDED.canon_proyectado,
+        descuento_proyectado = EXCLUDED.descuento_proyectado
+    `)
 
     revalidatePath("/proyecciones")
     return { success: true }

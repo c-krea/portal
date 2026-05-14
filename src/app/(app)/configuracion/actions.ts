@@ -1,6 +1,6 @@
 "use server"
 
-import { supabaseAdmin } from "@/lib/db/executor"
+import { executeDml } from "@/lib/db/executor"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
@@ -28,12 +28,9 @@ export async function updateFinancialRule(
   }
 
   try {
-    const { error } = await supabaseAdmin
-      .schema("v2")
-      .from("reglas_financieras")
-      .update({ valor: String(parsed.data.value) })
-      .eq("id", parsed.data.id)
-    if (error) throw new Error(error.message)
+    await executeDml(
+      `UPDATE v2.reglas_financieras SET valor = '${parsed.data.value}' WHERE id = '${parsed.data.id}'::uuid`
+    )
 
     revalidatePath("/configuracion")
     return { success: true }

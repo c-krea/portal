@@ -21,3 +21,16 @@ export async function execute(query: string): Promise<Row[]> {
   }
   return (data ?? []) as Row[]
 }
+
+export async function executeDml(query: string): Promise<void> {
+  const { error } = await supabaseAdmin.rpc("exec_dml", { q: query })
+  if (error) {
+    throw new Error(`DB write failed: ${error.message}\nQuery: ${query.slice(0, 300)}`)
+  }
+}
+
+/** Safely escape a string value for SQL interpolation. Returns NULL for null/undefined. */
+export function sqlStr(s: string | null | undefined): string {
+  if (s == null) return "NULL"
+  return `'${s.replace(/'/g, "''")}'`
+}

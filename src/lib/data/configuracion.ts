@@ -1,4 +1,4 @@
-import { execute, supabaseAdmin } from "@/lib/db/executor"
+import { execute } from "@/lib/db/executor"
 
 export type FinancialRule = {
   id: string
@@ -26,17 +26,16 @@ export async function getGracePeriod(): Promise<number> {
 }
 
 export async function getFinancialRules(empresaId: string): Promise<FinancialRule[]> {
-  const { data, error } = await supabaseAdmin
-    .schema("v2")
-    .from("reglas_financieras")
-    .select("id, clave, valor, descripcion")
-    .eq("empresa_id", empresaId)
-    .order("clave")
-  if (error) throw new Error(error.message)
-  return (data ?? []).map((r) => ({
-    id: r.id as string,
-    ruleKey: r.clave as string,
+  const rows = await execute(`
+    SELECT id::text, clave, valor::numeric, descripcion
+    FROM v2.reglas_financieras
+    WHERE empresa_id = '${empresaId}'::uuid
+    ORDER BY clave
+  `)
+  return (rows as Array<Record<string, unknown>>).map((r) => ({
+    id: String(r.id),
+    ruleKey: String(r.clave),
     ruleValue: Number(r.valor),
-    description: r.descripcion as string | null,
+    description: r.descripcion ? String(r.descripcion) : null,
   }))
 }
