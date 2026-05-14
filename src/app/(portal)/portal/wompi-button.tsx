@@ -74,7 +74,7 @@ export function WompiButton({
   const isSingle = units.length === 1
   const hasElectricity = electricityInvoices.length > 0
   const totalElectricity = electricityInvoices.reduce((s, inv) => s + inv.total, 0)
-  const docLabel = tipoPersona === "PJ" ? "NIT" : "Cédula"
+  const docLabel = tipoPersona === "PJ" ? "NIT" : tipoPersona === "PN" ? "Cédula" : "Documento"
 
   const selectedSaldo = selectedIdx === -1
     ? units.reduce((s, u) => s + u.saldo, 0)
@@ -183,8 +183,12 @@ export function WompiButton({
                   />
                 </div>
 
-                <div className="mt-3 space-y-1">
-                  <p className="text-xs text-slate-400">Use su {docLabel} como referencia en el formulario de pago.</p>
+                <div className="mt-3 space-y-2">
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                    <p className="text-xs text-amber-800">
+                      <span className="font-semibold">Importante:</span> en el campo <span className="font-semibold">"# Local"</span> de Wompi ingrese su {docLabel}, no el número de su local. El mes lo ingresa normalmente.
+                    </p>
+                  </div>
                   {hasPp && (() => {
                     const now = new Date()
                     const deadline = `10/${String(now.getMonth() + 1).padStart(2, "0")}`
@@ -251,14 +255,6 @@ export function WompiButton({
                   ))}
                 </div>
 
-                {/* Aggregate total */}
-                {electricityInvoices.length > 1 && (
-                  <div className="mb-4 flex items-center justify-between rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5">
-                    <span className="text-sm font-semibold text-amber-800">Total todos los locales</span>
-                    <span className="text-sm font-bold text-amber-900">{formatCOP(totalElectricity)}</span>
-                  </div>
-                )}
-
                 {/* Accounting note */}
                 <div className="mb-4 rounded-xl border border-emerald-300 bg-emerald-50 p-3">
                   <p className="text-xs text-emerald-800 leading-relaxed">
@@ -271,10 +267,16 @@ export function WompiButton({
                 <div className="space-y-3">
                   <CopyRow label={`${docLabel} (referencia de pago)`} value={nit} />
                   <CopyRow
-                    label="Total a pagar"
-                    value={String(totalElectricity)}
+                    label="Total energía a pagar"
+                    value={String(Math.round(totalElectricity))}
                     displayValue={formatCOP(totalElectricity)}
                   />
+                </div>
+
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                  <p className="text-xs text-amber-800">
+                    <span className="font-semibold">Importante:</span> en el campo <span className="font-semibold">"# Local"</span> de Wompi ingrese su {docLabel}, no el número de su local. El mes lo ingresa normalmente.
+                  </p>
                 </div>
 
                 <div className="mt-5 flex gap-3">

@@ -6,6 +6,24 @@ Format: [YYYY-MM-DD] — description
 
 ---
 
+## [Unreleased] — 2026-05-14 (Portal demo-readiness + Wompi UX — Session 58)
+
+### Portal — Tenant UX
+- Medidor history chart visible every day (was hidden on non-day-9); form submission still locked to day 9
+- Empty payments table shows "Sin pagos registrados" instead of blank white box
+- All date logic normalized to America/Bogota timezone (UTC−5) — fixes day-of-month ±5h mismatch on Vercel
+- Meter reading preview waits for all 5 digits before appearing
+- Tenant in mora with no due date now shows "VENCIDO" (was contradicting with a future date)
+
+### Wompi Payment Modal
+- Amber warning added to both Arriendo and Energía flows: use NIT/Cédula in "# Local" field, not unit number
+- `docLabel` now handles PJ → NIT, PN → Cédula, null → Documento
+- Redundant "Total todos los locales" yellow card removed from Energía step
+- Label renamed to "Total energía a pagar" for clarity
+- Total amount rounded before clipboard copy
+
+---
+
 ## [Unreleased] — 2026-05-14 (Security audit + PostgREST elimination + auth reset fix — Session 57)
 
 ### Security

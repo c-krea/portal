@@ -2,6 +2,35 @@
 
 ---
 
+## Session 58 — 2026-05-14: Portal demo-readiness + medidor chart + Wompi UX
+
+### What happened
+
+⚙️ **Medidor tab** — chart now visible every day (was hidden on non-day-9). Form still locked to day 9. `HistorialChart` ownership moved from `MedidorForm` to `page.tsx` so component is pure form only.
+
+🐛 **Portal demo fixes (7 bugs):**
+- Empty payments table showed blank white box → "Sin pagos registrados" empty state added
+- `impuesto!` / `retenciones!` non-null assertions replaced — could render "$ NaN" on screen
+- All day-of-month logic (`todayDay`, `currentPeriodo`, `daysFromNow`, fallback `nextPaymentDate`) normalized to `America/Bogota` timezone — server runs UTC, Colombia is UTC−5, mismatch was ±5h
+- Meter reading preview appeared after 1 digit → now waits for all 5
+- Tenant in mora with no `fechaVence` showed "Al Día / future date" → now shows "VENCIDO"
+- Dead `allFilled = true` constant removed from medidor form
+
+🎯 **Wompi modal UX:**
+- Amber warning added to both Arriendo and Energía steps: "en el campo '# Local' de Wompi ingrese su NIT/Cédula, no el número de su local"
+- `docLabel` handles PJ → NIT, PN → Cédula, null → Documento
+- Redundant yellow "Total todos los locales" aggregate card removed from Energía step
+- "Total a pagar" renamed to "Total energía a pagar"
+- `totalElectricity` now `Math.round`ed before copying to clipboard
+
+### Session-end pointers
+- ADRs: none
+- Lessons: none (timezone pattern self-evident; Wompi field names documented in code)
+- State: project_state.md — needs update (portal demo-ready, Wompi UX improved)
+- Linear: none
+
+---
+
 ## Session 57 — 2026-05-14: Full security audit + PostgREST elimination + auth reset fix
 
 ### What happened
