@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Session 55 — 2026-05-14: Tenant email auto-creates auth account + security hardening
+
+#### Tenant login setup (`/usuarios`)
+- **Email saves = account created:** setting a tenant's email in the edit modal now automatically creates their Supabase Auth account and links it to their unit. No separate "Create Account" step needed for new tenants.
+- **Both email paths unified:** `updatePortalEmail` and `updateTenantInquilino` now behave identically — both auto-create if no account exists, both sync `v2.perfiles.email` on update.
+- **Sync order fixed:** on email change for existing accounts, `v2.perfiles` updates before `auth.users` — prevents split-brain if the second write fails.
+- **Orphan cleanup:** if perfil insert fails after auth user creation, the orphaned auth account is deleted automatically so the tenant can be retried cleanly.
+
+#### Security
+- **Auth guard on all server actions in `/usuarios`:** all 5 actions now verify the caller's session and role before executing. An inquilino-role user can no longer escalate privileges via direct POST.
+- **`assertUuid` on `empresaId`:** DB-sourced UUID now validated before interpolation in all affected actions.
+- **`sqlStr()` on `rol` field:** was interpolated raw in `updateAdminUser`; now escaped consistently.
+
 ### Session 54 — 2026-05-12: Electricity billing overhaul
 
 #### Facturas de Energía form (`/medidores/facturas`)

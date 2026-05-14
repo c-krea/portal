@@ -2,6 +2,29 @@
 
 ---
 
+## Session 59 — 2026-05-14: Tenant email auth setup + security hardening
+
+🎯 **Manual auth account created for unit 309 (TURISMO MAGICO S&M SAS)** — `portal_email` was already set but no `auth.users` entry existed. Inserted auth user + identity + perfil directly via SQL.
+
+🎯 **Email save now auto-creates auth account** — `updateTenantInquilino` and `updatePortalEmail` both updated: if no perfil exists when an email is set, the auth account and perfil are created automatically. Previously this was a silent no-op requiring a separate "Create Account" button.
+
+⚙️ **5 security fixes applied to `actions.ts`** (all server actions in `/usuarios`):
+- Auth guard (session + rol check) on all 5 actions — previously any authenticated user could call them directly
+- Sync order: `v2.perfiles` before `auth.users` on email update (prevents split-brain)
+- Orphan auth cleanup: `deleteUser` in catch if perfil insert fails
+- `assertUuid(empresaId)` before DB interpolation
+- `sqlStr()` on `rol` field in `updateAdminUser`
+
+💡 **Code review surfaced the auth guard gap** — server actions are callable as direct POST requests; middleware only guards page navigation. The pattern from `mora/actions.ts` (`createClient` → `getUser` → `perfiles.rol` check) is the standard for all sensitive actions.
+
+⚠️ **`updatePortalEmail` was diverging** from `updateTenantInquilino` — same logical operation, different outcomes. Unified: both paths now auto-create and sync identically.
+
+### Session-end pointers
+- ADRs: none
+- Lessons: none
+- State: project_state.md unchanged
+- Linear: none
+
 ## Session 58 — 2026-05-14: Portal demo-readiness + medidor chart + Wompi UX + mobile layout
 
 ### Mobile layout (appended after ship)
