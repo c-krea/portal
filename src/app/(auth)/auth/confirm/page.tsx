@@ -29,18 +29,23 @@ export default function AuthConfirmPage() {
 
   useEffect(() => {
     const hash = window.location.hash
-    if (!hash) {
-      router.replace("/login?error=link_invalido")
+    const params = new URLSearchParams(hash.slice(1))
+
+    // GoTrue redirects back here with an error fragment when the link is
+    // expired or already used (each link works only once). Surface it clearly
+    // instead of silently bouncing to /login.
+    const errorCode = params.get("error_code") || params.get("error")
+    if (errorCode) {
+      setError("El enlace expiró o ya fue usado. Por seguridad cada enlace funciona una sola vez. Solicita uno nuevo abajo.")
       return
     }
 
-    const params = new URLSearchParams(hash.slice(1))
     const access_token = params.get("access_token")
     const refresh_token = params.get("refresh_token")
     const type = params.get("type")
 
     if (!access_token || !refresh_token) {
-      router.replace("/login?error=link_invalido")
+      setError("Este enlace no es válido. Solicita uno nuevo para continuar.")
       return
     }
 
@@ -61,10 +66,10 @@ export default function AuthConfirmPage() {
   if (error) {
     return (
       <AuthCard>
-        <p className="text-rose-400 text-sm mb-4 text-center">{error}</p>
+        <p className="text-rose-400 text-sm mb-5 text-center">{error}</p>
         <a
           href="/forgot-password"
-          className="block text-center text-sm text-blue-400 hover:text-blue-300"
+          className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 text-sm font-medium text-white transition hover:bg-blue-500"
         >
           Solicitar nuevo enlace
         </a>
