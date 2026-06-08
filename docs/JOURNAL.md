@@ -2,6 +2,81 @@
 
 ---
 
+## Session 60 — 2026-06-05: Unit 314 "password setup failing" — root cause + UX fix
+
+**Report.** Admin tried to set up portal access for unit 314's client; the "create your password" link "kept failing" — password never got created.
+
+**Investigation (systematic-debugging).**
+- Unit 314 = OKAR DISTRIBUCIONES SAS (`ventasokar1984@gmail.com`). Joined via `siesa_raw.ocupacion.local = 'E3L314'` → `documento` → `v2.inquilinos.nit`.
+- Account is **not new**: created 2026-05-21, `has_password = true`, `last_sign_in_at = 2026-06-05 16:41` (signed in fine *before* the reset was sent). So the client already had working access.
+- Reset sent 16:58 (`recovery_sent_at`), `updated_at` = same → password never changed afterward.
+- **Auth logs smoking gun:** `GET /verify` → `403 "One-time token not found — Email link is invalid or has expired"`, referer `/auth/confirm`, ~17:12. Token was dead on arrival.
+
+**Root cause (two layers).**
+1. The recovery link was already consumed / superseded. These links are single-use, and **sending a new link invalidates all older ones** — admin "trying several times" + clicking an older email = guaranteed "token not found." (Email-scanner prefetch is a secondary suspect.)
+2. **Our bug:** `/auth/confirm` only handled the success hash (`#access_token`). On the error hash (`#error=…&error_code=otp_expired`) or missing tokens it `router.replace("/login?error=link_invalido")` — silent bounce, no explanation → looked like "password creation failed."
+
+**Fix (`src/app/(auth)/auth/confirm/page.tsx`).** Detect the error/no-token hash and render the existing error card with a clear Spanish message + a full-width **"Solicitar nuevo enlace"** button (styled to match login). Success path untouched. Confirmed link flow is **implicit** (hash), per a successful tenant's `login_method: implicit` log — so the `?code=` PKCE callback was correctly left alone.
+
+### Decisions
+- 🎯 **Scope = UX/messaging fix only.** German confirmed 314 = same tenant (OKAR), who already has access. Did not send a new link or touch the deeper link-hardening.
+- 🎯 **Committed to `main` + pushed** (`ec1fb28`), single file, author `gburgos293@gmail.com`. Vercel auto-deploys.
+
+### Learnings
+- 💡 **"One-time token not found" ≠ "expired".** It means the token row is gone — already used, or **superseded by a newer generateLink for the same user**. Resending a reset kills the prior link.
+- 💡 **Each recovery/welcome link is single-use, clicked once, newest only.** Operational rule for admin: send one, tell client to open the *latest* email and click *once*.
+- ⚠️ **`git remote` still points at old repo name** (`Ckrea-Portal-1.git`); GitHub redirects the push. Update sometime.
+
+### Files changed
+- `src/app/(auth)/auth/confirm/page.tsx` — error/no-token hash now shows error card + retry button instead of silent `/login` bounce
+
+### Session-end pointers
+- ADRs: none
+- Lessons: confirm single-use/supersede behavior of Supabase recovery links (candidate memory)
+- State: no schema/state change
+- Linear: none
+
+---
+
+## Session 60 (cont.) — 2026-06-08: Cartera vencida payments — `vista_pagos` dropped real partial payments
+
+**Report.** Admin + ERP engineer found a difference in overdue-account ("cartera vencida") payments for two tenants: Renato Fajardo ($ 295.500) and Galindo Polidoro ($ 2.800.000), both labeled receipt "RK-3014". German's clue: it relates to `siesa_raw` (the real ERP data).
+
+**Investigation (systematic-debugging, all read-only first).**
+- Renato $ 295.500 = `001-RK-3014` (cruce FVS-71543, 2026-05-11, VENCIDO). Galindo $ 2.800.000 = `001-RK-3002` (cruce FVS-72723, 2026-05-04, VENCIDO) — admin mislabeled it RK-3014; real receipt is RK-3002. Both real, `Eliminado=false`.
+- **Portal (`v2.vista_pagos`) vs raw mismatch:** portal showed only ONE payment per invoice/day. Galindo's $ 2.800.000 and Renato's $ 295.500 were missing.
+- **Root cause:** view CTE used `SELECT DISTINCT ON (r.documento, r.cruce, r.fecha_recaudo) ... ORDER BY ..., r.docto` — collapsed all payments sharing tenant+invoice+day to one, dropping the rest by lowest docto. Tenants pay one invoice via several receipts (installments/abonos) → those got silently discarded.
+- **Blast radius (whole history):** 54 real payments dropped = **$ 66.137.912**. Verified **0** true duplicates, **0** negatives/reversals among them (so the de-dup had zero legitimate value). 5 recent + 49 historical, 5 tenants in the recent set.
+- **`Eliminado` discovery (and why I paused):** the view has NO `Eliminado` filter and was emitting 2.869 rows / **$ 4.6 B** vs 230 live rows / $ 403 M. Checked before any "keep all rows" fix. Found a *perfectly clean* date split (0 live rows before 2026-04-07, 0 deleted rows after 2026-04-06, **0 negatives**) → `Eliminado=true` = valid historical payments aged out of the ERP's ~2-month rolling export window (refresh-only sync, no DELETE), **not** annulments. So: keep them (pages filter by month); do NOT add an `Eliminado` filter (would erase real history).
+
+**Fix (migration `fix_vista_pagos_dedup_preserve_partial_payments`).** `recaudo.row_id_mov` is 100% unique (3405/3405). Re-keyed de-dup to `DISTINCT ON (r.row_id_mov)` — every real movement preserved, only an exact re-push could ever collapse. Everything else (4 filters, columns, joins, `Eliminado` behavior) unchanged.
+
+**Verification (after apply).** View 2.869 → **2.923 rows** (+54), $ 4.632.438.288 → **$ 4.698.576.200** (+$ 66.137.912, exactly the restored payments). Both tenants now show both payments. Duplicate-row check = **0**.
+
+### Decisions
+- 🎯 **De-dup keyed on ERP unique id, not business keys.** Business-key de-dup (tenant+invoice+day) is wrong for a tenant who pays one invoice in multiple receipts — proven common in the data (e.g. ACRIGROUP FVS-72715 paid in 4 installments).
+- 🎯 **`Eliminado=true` kept as valid aged history** — not filtered out. Confirmed via clean date boundary, not annulment.
+- 🎯 Canonical `docs/foundation/01_schema_erd/v2/02_vistas.sql` updated to match deployed view + memory `recaudo_data_model.md` corrected (old "001-RK dedup" guidance was the bug).
+
+### Learnings
+- 💡 **`DISTINCT ON (business keys)` on payments is a latent money bug** — collapses legitimate same-day partial payments. Realizes the warning in `feedback_distinct_on_deterministic.md`. Use the ERP's unique movement id.
+- 💡 **No true RK/001-RK duplicate pairs exist in `siesa_raw`** — that was an Excel-era artifact. The de-dup it was built for is obsolete; it only caused harm.
+- 💡 **`Eliminado` = rolling-window aging marker, not "deleted/annulled".** Clean date cutoff (~last 2 months = false). Likely explains part of the old Power BI gap (some hidden payments fell in benchmarked months).
+
+### Files changed
+- DB migration `fix_vista_pagos_dedup_preserve_partial_payments` (applied to prod via MCP — view only, instant, no deploy)
+- `docs/foundation/01_schema_erd/v2/02_vistas.sql` — canonical view synced + commented
+- `memory/recaudo_data_model.md` — corrected stale de-dup guidance
+- `CHANGELOG.md`, `docs/JOURNAL.md`, `memory/project_state.md`
+
+### Session-end pointers
+- ADRs: none (view fix, documented in canonical SQL)
+- Lessons: `recaudo_data_model.md` updated; candidate memory on `Eliminado` rolling-window semantics
+- State: `v2.vista_pagos` de-dup corrected (schema change — view)
+- Linear: none
+
+---
+
 ## Session 59 — 2026-05-14: Tenant email auth setup + security hardening
 
 🎯 **Manual auth account created for unit 309 (TURISMO MAGICO S&M SAS)** — `portal_email` was already set but no `auth.users` entry existed. Inserted auth user + identity + perfil directly via SQL.

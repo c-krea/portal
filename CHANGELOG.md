@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Session 60 — 2026-06-05: Clear "link expired" message on password-setup screen
+
+#### Auth (`/auth/confirm`)
+- **Expired/used links no longer fail silently:** when a password-setup or reset link is dead (already used, or superseded by a newer link), the screen now shows a clear message — *"El enlace expiró o ya fue usado. Por seguridad cada enlace funciona una sola vez. Solicita uno nuevo abajo."* — instead of silently bouncing to the login page (which looked like "password creation failed").
+- **"Solicitar nuevo enlace" button:** all error cases now show a full-width button to request a fresh link, styled to match the login screen. Working links are unaffected.
+
+#### Pagos / cartera vencida (`v2.vista_pagos`) — 2026-06-08
+- **Partial & installment payments no longer dropped:** the payments view de-duplicated on `(tenant + invoice + day)`, which silently discarded a *second* real payment made against the same invoice on the same day. Re-keyed the de-dup to the ERP's unique movement id (`row_id_mov`). Restored **54 real payments = $ 66.137.912** across all history (verified: 0 true duplicates, 0 reversals, 0 new duplicate rows).
+- **Flagged by admin** for Renato Fajardo ($ 295.500) + Galindo Polidoro ($ 2.800.000); 3 more were also being hidden (Arriero $ 2.000.000, Patarroyo $ 1.062.062, Rebelarte $ 178.800). Overdue-payment totals now match Siesa.
+
 ### Session 55 — 2026-05-14: Tenant email auto-creates auth account + security hardening
 
 #### Tenant login setup (`/usuarios`)

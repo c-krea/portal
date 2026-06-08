@@ -32,7 +32,13 @@ SET search_path TO v2, public;
 
 CREATE OR REPLACE VIEW vista_pagos AS
 WITH recaudo_dedup AS (
-    SELECT DISTINCT ON (r.documento, r.cruce, r.fecha_recaudo)
+    -- Dedup por ID único de movimiento ERP (row_id_mov es 100% único en recaudo).
+    -- NO usar DISTINCT ON (documento, cruce, fecha_recaudo): colapsaba pagos
+    -- parciales/abonos legítimos hechos a la MISMA factura el MISMO día, descartando
+    -- el segundo en silencio (bug 2026-06-08: 54 pagos reales / $66.137.912 perdidos,
+    -- 0 duplicados verdaderos). Un inquilino paga una factura en varios recibos (RK-),
+    -- cada recibo es un pago real y debe contarse. Ver JOURNAL Session 60.
+    SELECT DISTINCT ON (r.row_id_mov)
         r.docto,
         r.cruce,
         r.fecha_recaudo::date            AS fecha_recaudo,
@@ -54,7 +60,10 @@ WITH recaudo_dedup AS (
     -- Cada RPC/consumidor decide su ventana temporal vía parámetros.
     -- Default sugerido para queries operativas: fecha_recaudo >= '2025-01-01' (2024 es ruidoso).
     -- Backfills (e.g. pp_historico_pct) leen TODO para máxima señal histórica.
-    ORDER BY r.documento, r.cruce, r.fecha_recaudo, r.docto
+    -- NOTA Eliminado: la vista NO filtra "Eliminado". Eliminado=true = histórico que
+    -- salió de la ventana rodante del ERP (~2 meses), NO anulaciones. Corte limpio por
+    -- fecha (verificado 2026-06-08): pagos antes de ~abr-2026 = Eliminado=true pero válidos.
+    ORDER BY r.row_id_mov
 )
 SELECT
     rd.docto,
