@@ -12,10 +12,8 @@ export interface ElectricityInvoiceProps {
   contrato: string       // e.g. "N° 902329"
   periodo: string        // e.g. "1 al 31 de marzo de 2026"
   consumoKwh: number     // e.g. 537.3
-  tarifaKwh: number      // COP per kWh
   direccion: string      // local address
   total: number          // COP to reimburse
-  invoiceNumber?: string // sequential No. — defaults to "001"
 }
 
 const formatCOP = (v: number) =>
@@ -23,9 +21,6 @@ const formatCOP = (v: number) =>
 
 const formatKwh = (v: number) =>
   new Intl.NumberFormat('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(v)
-
-const formatTarifa = (v: number) =>
-  `$ ${new Intl.NumberFormat('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)}`
 
 function todayLabel(): string {
   const now = new Date()
@@ -155,9 +150,8 @@ function DataRow({ label, value }: { label: string; value: string }) {
 
 export function ElectricityInvoicePDF({
   nombre, nit,
-  proveedor, proveedorNit, contrato, periodo, consumoKwh, tarifaKwh, direccion,
+  proveedor, proveedorNit, contrato, periodo, consumoKwh, direccion,
   total,
-  invoiceNumber = '001',
 }: ElectricityInvoiceProps) {
   return (
     <Document>
@@ -165,7 +159,7 @@ export function ElectricityInvoicePDF({
 
         {/* CUENTA DE COBRO No. */}
         <View style={s.headerRow}>
-          <Text style={s.headerTitle}>CUENTA DE COBRO No. {invoiceNumber}</Text>
+          <Text style={s.headerTitle}>CUENTA DE COBRO</Text>
         </View>
 
         {/* Date — generated at render time */}
@@ -192,7 +186,6 @@ export function ElectricityInvoicePDF({
           <DataRow label="Número de Contrato:"   value={contrato} />
           <DataRow label="Periodo facturado:"    value={periodo} />
           <DataRow label="Consumo:"              value={`${formatKwh(consumoKwh)} Kwh`} />
-          <DataRow label="Valor del Kwh:"        value={formatTarifa(tarifaKwh)} />
           <DataRow label="Dirección del inmueble:" value={direccion} />
           <DataRow label="Valor por reintegrar:" value={formatCOP(total)} />
         </View>

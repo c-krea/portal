@@ -206,7 +206,6 @@ export function MedidorForm({
         </div>
       ) : (
         <form action={action}>
-          <input type="hidden" name="periodo" value={periodo} />
           <input type="hidden" name="localId" value={selected.unitId} />
           {fotoBase64 && <input type="hidden" name="fotoBase64" value={fotoBase64} />}
           {fotoBase64 && <input type="hidden" name="fotoMime" value={fotoMime} />}
@@ -317,7 +316,7 @@ export function MedidorForm({
                   className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
 
-              <button type="submit" disabled={pending || imgProcessing}
+              <button type="submit" disabled={pending || imgProcessing || digits.some(d => d === "")}
                 className="mt-auto w-full rounded-lg bg-slate-900 py-3 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50 transition-colors">
                 {imgProcessing ? "Procesando foto…" : pending ? "Enviando…" : `Enviar lectura Local ${selected.unitNumber}`}
               </button>

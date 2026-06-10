@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Session 61 — 2026-06-09/10: Electricity flow overhaul
+
+#### Portal del inquilino (medidor)
+- **Photo uploads no longer crash:** photos are shrunk in the browser (2400px JPEG) before upload — iPhone HEIC converted automatically, any phone photo now ~1 MB. Server limit raised 5→10 MB as safety net.
+- **Friendly error screen:** portal failures now show a Spanish "Algo salió mal / Reintentar" card (reported to Sentry) instead of the generic "Application error".
+- **Readings trusted as submitted:** no auto-classification or "se revisará con urgencia" messages; simple confirmation. Submit disabled until all 5 digits entered (prevents zero-reading lockout).
+- **"Total estimado energía" → "Valor a pagar".**
+- **Correct billing month:** the day-9 reading is stored under the month it measures (previous month), computed server-side. Pending energy charges no longer disappear from the dashboard on days 1–8.
+
+#### Admin (medidores)
+- **"Alerta" column:** only two visual tags — "Sin lectura" (gray) and "⚠ Revisar" (amber, >40% off 3-month average or 0 kWh). No more Crítico/Pendiente/Aprobado badges.
+- **Photo viewer fixed:** "Ver" now opens meter photos (was silently failing).
+- **Pages default to the measurement month** (previous month), matching where day-9 readings actually live.
+
+#### Data (May 2026 reconciliation)
+- May billing reconciled against admin Excel: 74 readings, 65 billed, $13,696,150 — verified peso-for-peso. Test/duplicate rows removed, 3 missing locals loaded, vacant locals zeroed (meter baselines kept).
+
 ### Session 60 — 2026-06-05: Clear "link expired" message on password-setup screen
 
 #### Auth (`/auth/confirm`)

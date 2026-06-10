@@ -65,12 +65,21 @@ export default async function PortalPage() {
 
   const [pagos, medidor, cartera, electricityInvoiceResults, electricityPeriodosResults] = await Promise.all([
     getPortalPagos(profile.tenantId, 5),
-    getPortalMedidorStatus(profile.unitId, periodo),
+    // Day-9 readings are stored under the previous month's periodo
+    getPortalMedidorStatus(profile.unitId, electricidadPeriodo),
     profile.nit ? getPortalCartera(profile.nit) : Promise.resolve({ saldoTotal: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }),
     Promise.all(profile.allUnitIds.map(id => getPortalElectricityInvoiceData(id, electricidadPeriodo))),
     Promise.all(profile.allUnitIds.map(id => getPortalElectricityPeriodos(id))),
   ])
-  const electricityInvoices = electricityInvoiceResults.filter((v): v is NonNullable<typeof v> => v !== null)
+  let electricityInvoices = electricityInvoiceResults.filter((v): v is NonNullable<typeof v> => v !== null)
+  // Days 1-8 the previous month has no readings yet (they arrive day 9) — keep showing
+  // the latest billed month so a pending energy charge never disappears before its due date.
+  if (electricityInvoices.length === 0) {
+    const d2 = new Date(nowCO.getFullYear(), nowCO.getMonth() - 2, 1)
+    const periodoAnterior2 = `${d2.getFullYear()}-${String(d2.getMonth() + 1).padStart(2, "0")}`
+    const fallback = await Promise.all(profile.allUnitIds.map(id => getPortalElectricityInvoiceData(id, periodoAnterior2)))
+    electricityInvoices = fallback.filter((v): v is NonNullable<typeof v> => v !== null)
+  }
   const electricityUnits = profile.allUnitIds
     .map((id, i) => ({
       unitId:     id,

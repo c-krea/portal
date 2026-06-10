@@ -9,6 +9,7 @@ import { MedidoresAdminTable } from "@/components/medidores/medidores-admin-tabl
 import Link from "next/link"
 import { isValidPeriodo, isValidYear } from "@/lib/security/validators"
 import { MedidoresFilter } from "@/components/medidores/medidores-filter"
+import { lecturaPeriodo } from "@/lib/periodo"
 
 const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
 
@@ -33,7 +34,8 @@ export default async function MedidoresPage({
   const { periodo: periodoParam, year: yearParam } = await searchParams
   const now = new Date()
   const selectedYear = isValidYear(yearParam) ? Number(yearParam) : now.getFullYear()
-  const defaultPeriodo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+  // Default to the measurement month: day-9 readings are stored under the PREVIOUS month
+  const defaultPeriodo = lecturaPeriodo()
   const periodo = isValidPeriodo(periodoParam) ? periodoParam : defaultPeriodo
   const PERIODOS = buildPeriodos(selectedYear)
 

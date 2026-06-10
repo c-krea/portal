@@ -3,15 +3,15 @@
 import { createClient } from "@/lib/supabase/server"
 import { execute, supabaseAdmin, executeDml, sqlStr } from "@/lib/db/executor"
 import { getPortalProfile } from "@/lib/data/portal"
+import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
 import { uploadMeterPhoto } from "@/lib/r2/meter-photos"
-import { isValidPeriodo } from "@/lib/security/validators"
+import { lecturaPeriodo } from "@/lib/periodo"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 
 const schema = z.object({
-  periodo:       z.string().refine(isValidPeriodo),
   localId:       z.string().uuid("Local inválido"),
-  lecturaActual: z.coerce.number().min(0, "Ingrese la lectura del contador"),
+  lecturaActual: z.coerce.number().min(1, "Ingrese la lectura del contador"),
   notas:         z.string().optional(),
 })
 
@@ -38,14 +38,14 @@ export async function submitLectura(
   const { companyId } = profile
 
   const parsed = schema.safeParse({
-    periodo:       formData.get("periodo"),
     localId:       formData.get("localId"),
     lecturaActual: formData.get("lecturaActual"),
     notas:         formData.get("notas") || undefined,
   })
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
 
-  const { periodo, localId, lecturaActual, notas } = parsed.data
+  const { localId, lecturaActual, notas } = parsed.data
+  const periodo = lecturaPeriodo()
 
   // Security: localId must belong to this tenant
   if (!profile.allUnitIds.includes(localId)) return { error: "Local no autorizado" }
@@ -72,7 +72,13 @@ export async function submitLectura(
     LIMIT 1
   `)
   const lecturaAnterior = prevRows[0] ? Number(prevRows[0].lectura_actual) : 0
-  const tarifaKwh = prevRows[0] ? Number(prevRows[0].tarifa_kwh) : 0
+  // Prefer the invoice tarifa for THIS periodo (Excel formula: valor ÷ kWh per building).
+  // If the invoice isn't entered yet, fall back to the previous reading's tarifa;
+  // saveFacturasEnergia re-propagates the real tarifa once the invoice is entered.
+  const invoiceTarifa = await getElectricityTarifaForUnit(companyId, unitId, periodo)
+  const tarifaKwh = invoiceTarifa > 0
+    ? invoiceTarifa
+    : (prevRows[0] ? Number(prevRows[0].tarifa_kwh) : 0)
 
   if (lecturaActual < lecturaAnterior) {
     return {

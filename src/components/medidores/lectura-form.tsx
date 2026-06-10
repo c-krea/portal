@@ -37,7 +37,9 @@ export function LecturaForm({ units, periodo }: { units: UnitWithMeter[]; period
   const [state, action, pending] = useActionState(registrarLectura, initial)
   const [selectedId, setSelectedId]         = useState("")
   const [selectedPeriodo, setSelectedPeriodo] = useState(
-    MONTHS.find((m) => m.value === periodo)?.value ?? MONTHS[0].value
+    // Default to the page's periodo (measurement month); fall back to the previous
+    // calendar month — day-9 readings always belong to the month that just ended.
+    MONTHS.find((m) => m.value === periodo)?.value ?? MONTHS[1]?.value ?? MONTHS[0].value
   )
   const fileInputRef                          = useRef<HTMLInputElement>(null)
   const cameraInputRef                        = useRef<HTMLInputElement>(null)

@@ -2,6 +2,39 @@
 
 ---
 
+## Session 61 — 2026-06-09/10: Electricity overhaul — photo uploads, May reconciliation, periodo convention
+
+**Reports (live, during day-9 window).** (1) Tenants hitting "Application error" when submitting meter photo; (2) unit 115 showed $0 to pay; (3) admin couldn't open meter photos; (4) request to verify the whole electricity money-path.
+
+**Root causes found.**
+1. **Photo crash:** photos sent as base64 through server action; 5 MB body limit ⇒ real photo ceiling ~3.7 MB. Modern phone photos (4–9 MB) rejected *before* code ran; no error boundary in `(portal)` → generic crash. R2 evidence: surviving June photos capped at ~3 MB.
+2. **$0 / "May ghost month":** day-9 reading measures the PREVIOUS month but portal labeled it current month. June-9 submissions stored as `2026-06` while admin's Excel called the same numbers May ⇒ duplicate/zero readings. Verified: 31/32 portal "June" kwh == Excel May consumo exactly.
+3. **Photo viewer:** `window.open("", "_blank", "noopener")` returns `null` by spec → signed URL never assigned.
+
+**Fixes shipped.**
+- Client-side shrink to 2400px JPEG q85 before upload (HEIC→JPG free, ~6 MB→~1 MB), body limit 5→10 MB, `(portal)/error.tsx` boundary reporting to Sentry (commit `a16838a`).
+- Trust-the-tenant model: drop ±20/40 auto-classification; admin "Alerta" column = visual-only tags (`Sin lectura` gray, `⚠ Revisar` amber at >40% vs 3m avg or 0 kWh, derived live from desvPct). Photo viewer fixed (commit `f99dcb7`).
+- **May reconciliation (DB, user-approved, CSV backup first):** deleted 309 test row (15,235 kWh ≈ $12M!), relabeled 31 June rows → May + recomputed with May tarifa, inserted 107/314/505 from Excel, zeroed 9 vacant locals + April-111 (kept lecturas as baseline). Final: May = 74 rows, 65 billed, $13,696,150 — matches `energia ckrea.xlsx` peso-for-peso.
+- **Periodo convention blindaje:** `src/lib/periodo.ts` = single source; `lecturaPeriodo()` = previous month (Bogotá), computed server-side (form's periodo input removed). Admin pages (`/medidores`, `/medidores/facturas`, lectura-form) default to measurement month.
+- **Code review (2 agents) caught 5 real bugs, all fixed:** empty-digits ⇒ 0-reading lock for new tenants (min(1) + button gate); admin pages defaulting to wrong month; dashboard energy charge vanishing days 1–8 (fallback to latest month with data); duplicated periodo fn; stale PDF props.
+
+### Decisions
+- 🎯 **Trust the tenant:** all readings accepted as submitted; tags are optional visual checks, never blocking. System must run itself in one day.
+- 🎯 **Day-9 reading = previous month's periodo** — permanent convention, single helper.
+- 🎯 306 April: Excel had typo (7812.6 vs 7612.6); DB correct, kept. 111 April: vacant, zeroed.
+- 🎯 Excel (`energia ckrea.xlsx`) = authoritative for April/May; live simulation of submitLectura reproduced Excel totals 64/64.
+
+### Learnings
+- 💡 The real reading cadence is offset: meters read day 9 measure the month that just closed. Any "current month" default in this domain is wrong.
+- 💡 `window.open(url-less, "_blank", "noopener")` always returns null — can't assign location afterward.
+- 💡 Reconcile BEFORE loading admin spreadsheets: Excel "Medida 31 Mayo" was computed backwards (m01 − consumo) for 30 locals; trusted consumo, derived lectura = m01 + consumo.
+- ⚠️ ~57% cost recovery vs utility invoices (Apr: tenants $15.9M vs invoices $27.9M) — flagged, pending business review.
+
+### Files changed
+`medidor/{page,form,actions}`, `(portal)/{page,error}`, `(app)/medidores/{page,facturas/page}`, `lectura-form`, `medidores-admin-table`, `lib/periodo.ts` (new), `lib/pdf/electricity-invoice`, `facturas-download-button`, `next.config.ts`.
+
+---
+
 ## Session 60 — 2026-06-05: Unit 314 "password setup failing" — root cause + UX fix
 
 **Report.** Admin tried to set up portal access for unit 314's client; the "create your password" link "kept failing" — password never got created.

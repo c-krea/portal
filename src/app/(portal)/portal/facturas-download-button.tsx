@@ -182,10 +182,8 @@ export function FacturasDownloadButton({
                         contrato={invoiceData.contrato}
                         periodo={invoiceData.periodoLabel}
                         consumoKwh={invoiceData.consumoKwh}
-                        tarifaKwh={invoiceData.tarifaKwh}
                         direccion={invoiceData.direccion}
                         total={invoiceData.total}
-                        invoiceNumber={invoiceData.invoiceNumber}
                       />
                     }
                     fileName={`cuenta-cobro-energia-local${selectedUnit.unitNumber}-${invoiceData.periodoKey}.pdf`}

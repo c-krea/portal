@@ -6,11 +6,7 @@ import { getPortalProfile, getPortalMedidorHistory, getPortalMedidorRef } from "
 import { MedidorForm, type UnitMedidorData } from "./form"
 import { HistorialChart } from "./chart"
 import { Zap } from "lucide-react"
-
-function currentPeriodo() {
-  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }))
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-}
+import { lecturaPeriodo } from "@/lib/periodo"
 
 function periodoLabel(periodo: string) {
   const [year, month] = periodo.split("-")
@@ -26,7 +22,7 @@ export default async function MedidorPage() {
   const profile = await getPortalProfile(user.id)
   if (!profile) redirect("/portal")
 
-  const periodo = currentPeriodo()
+  const periodo = lecturaPeriodo()
   const todayDay = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" })).getDate()
   const isMedidorDay = todayDay === 9
 
