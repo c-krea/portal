@@ -11,36 +11,34 @@ import { X, ImageIcon } from "lucide-react"
 type SortKey = "unitNumber" | "tenantName" | "kwh" | "desvPct" | "totalEnergia"
 type SortDir = "asc" | "desc"
 
-function ValidationBadge({ vs }: { vs: string | null }) {
-  if (vs === "aprobado")
+// Flag a reading more than this % away from the unit's 3-month average.
+const REVISAR_PCT = 40
+
+function ValidationBadge({
+  status,
+  desvPct,
+  kwh,
+}: {
+  status: string | null
+  desvPct: number | null
+  kwh: number | null
+}) {
+  // No reading yet for this period.
+  if (status === "sin_lectura")
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700">
-        ✓ Aprobado
+      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
+        Sin lectura
       </span>
     )
-  if (vs === "revision")
+  // Visual heads-up only (not mandatory): 0 kWh, or far from the unit's history.
+  const rara = kwh === 0 || (desvPct != null && Math.abs(desvPct) > REVISAR_PCT)
+  if (rara)
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-        ⚠ En Revisión
+        ⚠ Revisar
       </span>
     )
-  if (vs === "critico")
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-700">
-        🚨 Crítico
-      </span>
-    )
-  if (vs === "sin_lectura")
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-600">
-        — Sin Lectura
-      </span>
-    )
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
-      ⏳ Pendiente
-    </span>
-  )
+  return <span className="text-slate-300">—</span>
 }
 
 function DesvBadge({ pct }: { pct: number | null }) {
@@ -158,7 +156,7 @@ export function MedidoresAdminTable({
                 )
               })}
               <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-                Estado
+                Alerta
               </th>
               <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                 Foto
@@ -189,14 +187,14 @@ export function MedidoresAdminTable({
                   {row.totalEnergia != null ? formatCOP(row.totalEnergia) : <span className="text-slate-300">—</span>}
                 </td>
                 <td className="px-4 py-3">
-                  <ValidationBadge vs={row.validationStatus} />
+                  <ValidationBadge status={row.status} desvPct={row.desvPct} kwh={row.kwh} />
                 </td>
                 <td className="hidden sm:table-cell px-4 py-3">
                   {row.fotoUrl ? (
                     <button
                       disabled={loadingPhotoId === row.unitId}
                       onClick={async () => {
-                        const win = window.open("", "_blank", "noopener,noreferrer")
+                        const win = window.open("", "_blank")
                         setLoadingPhotoId(row.unitId)
                         try {
                           const url = await getMeterPhotoSignedUrl(row.fotoUrl!)

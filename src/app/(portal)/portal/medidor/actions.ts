@@ -83,44 +83,8 @@ export async function submitLectura(
   const kwh = Math.round((lecturaActual - lecturaAnterior) * 100) / 100
   const totalEnergia = Math.round(kwh * tarifaKwh / 50) * 50
 
-  // Hybrid validation: same-month seasonal avg (primary) + 3m avg (fallback)
-  const mes = periodo.split("-")[1]
-  const [seasonRows, trend3mRows] = await Promise.all([
-    execute(`
-      SELECT AVG(kwh::numeric) AS promedio, COUNT(*) AS cnt
-      FROM v2.lecturas_medidor
-      WHERE local_id = '${unitId}'::uuid
-        AND SUBSTRING(periodo, 6, 2) = '${mes}'
-        AND periodo < '${periodo}'
-    `),
-    execute(`
-      SELECT AVG(kwh::numeric) AS promedio
-      FROM v2.lecturas_medidor
-      WHERE local_id = '${unitId}'::uuid AND periodo < '${periodo}'
-    `),
-  ])
-
-  const seasonalAvg =
-    seasonRows[0]?.promedio != null && Number(seasonRows[0].cnt) >= 1 && Number(seasonRows[0].promedio) > 0
-      ? Number(seasonRows[0].promedio)
-      : null
-  const avg3m = trend3mRows[0]?.promedio != null ? Number(trend3mRows[0].promedio) : null
-  const expected = seasonalAvg ?? avg3m
-
-  let validationStatus: "aprobado" | "revision" | "critico"
-  let expectedKwh: number | null = null
-  let pctDiff: number | null = null
-
-  if (kwh === 0) {
-    validationStatus = "critico"
-  } else if (expected === null || expected === 0) {
-    validationStatus = "aprobado"
-  } else {
-    const pct = Math.abs((kwh - expected) / expected)
-    pctDiff = Math.round(pct * 100)
-    expectedKwh = Math.round(expected)
-    validationStatus = pct <= 0.20 ? "aprobado" : pct <= 0.40 ? "revision" : "critico"
-  }
+  // Trust the tenant's reading — accept as submitted, no automatic review.
+  const validationStatus = "aprobado"
 
   let fotoUrl: string | null = null
   let fotoKey: string | null = null
@@ -180,17 +144,7 @@ export async function submitLectura(
   revalidatePath("/medidores")
 
   const kwhFmt = kwh.toLocaleString("es-CO")
-  let message: string
-  if (validationStatus === "aprobado") {
-    message = `Lectura enviada y aprobada automáticamente (${kwhFmt} kWh).`
-  } else if (validationStatus === "revision") {
-    const dir = expectedKwh !== null && kwh > expectedKwh ? "por encima" : "por debajo"
-    message = `Lectura enviada (${kwhFmt} kWh). Está ${pctDiff}% ${dir} del histórico esperado (${expectedKwh?.toLocaleString("es-CO")} kWh). El administrador la revisará.`
-  } else {
-    message = kwh === 0
-      ? `Lectura enviada (0 kWh). Consumo cero requiere revisión manual.`
-      : `Lectura enviada (${kwhFmt} kWh). Difiere significativamente del histórico (${expectedKwh?.toLocaleString("es-CO")} kWh esperados, diferencia: ${pctDiff}%). Se revisará con urgencia.`
-  }
+  const message = `Lectura enviada correctamente (${kwhFmt} kWh).`
 
   return {
     success: true,
