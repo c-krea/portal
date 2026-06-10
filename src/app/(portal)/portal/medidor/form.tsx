@@ -69,6 +69,39 @@ function MeterDigitInput({
   )
 }
 
+// Shrink + re-encode photos in the browser before upload.
+// Keeps R2 storage small and converts any image format (incl. iPhone HEIC) to JPEG.
+const MAX_IMG_DIM = 2400      // longest edge in px — generous, digits stay sharp
+const JPEG_QUALITY = 0.85
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = reject
+    img.src = src
+  })
+}
+
+async function shrinkToJpeg(file: File): Promise<string> {
+  const objUrl = URL.createObjectURL(file)
+  try {
+    const img = await loadImage(objUrl)
+    const scale = Math.min(1, MAX_IMG_DIM / Math.max(img.naturalWidth, img.naturalHeight))
+    const w = Math.max(1, Math.round(img.naturalWidth * scale))
+    const h = Math.max(1, Math.round(img.naturalHeight * scale))
+    const canvas = document.createElement("canvas")
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext("2d")
+    if (!ctx) throw new Error("no canvas context")
+    ctx.drawImage(img, 0, 0, w, h)
+    return canvas.toDataURL("image/jpeg", JPEG_QUALITY)
+  } finally {
+    URL.revokeObjectURL(objUrl)
+  }
+}
+
 export type UnitMedidorData = {
   unitId: string
   unitNumber: string
@@ -96,6 +129,9 @@ export function MedidorForm({
   const [fotoBase64, setFotoBase64] = useState<string | null>(null)
   const [fotoMime, setFotoMime] = useState<string>("image/jpeg")
   const [dragging, setDragging] = useState(false)
+  const [imgProcessing, setImgProcessing] = useState(false)
+  const [imgError, setImgError] = useState<string | null>(null)
+  const fileSeqRef = useRef(0)
 
   const selected = units[selectedIdx]
 
@@ -103,7 +139,7 @@ export function MedidorForm({
   function selectUnit(idx: number) {
     setSelectedIdx(idx)
     setDigits(["", "", "", "", ""])
-    setPreview(null); setFotoBase64(null)
+    setPreview(null); setFotoBase64(null); setImgError(null)
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
@@ -111,12 +147,27 @@ export function MedidorForm({
     if (state.success) { router.refresh(); setDigits(["", "", "", "", ""]); setPreview(null); setFotoBase64(null) }
   }, [state.success, router])
 
-  function applyFile(file: File) {
-    setPreview(URL.createObjectURL(file))
-    setFotoMime(file.type || "image/jpeg")
-    const reader = new FileReader()
-    reader.onload = (e) => setFotoBase64(e.target?.result as string)
-    reader.readAsDataURL(file)
+  async function applyFile(file: File) {
+    setImgError(null)
+    if (!file.type.startsWith("image/")) {
+      setImgError("Solo se permiten imágenes (JPG o PNG).")
+      return
+    }
+    const seq = ++fileSeqRef.current   // ignore results from a superseded selection
+    setImgProcessing(true)
+    try {
+      const dataUrl = await shrinkToJpeg(file)
+      if (seq !== fileSeqRef.current) return
+      setPreview(dataUrl)
+      setFotoMime("image/jpeg")
+      setFotoBase64(dataUrl)
+    } catch {
+      if (seq !== fileSeqRef.current) return
+      setImgError("No pudimos procesar esta foto. Tómela de nuevo o pruebe con otra.")
+      setPreview(null); setFotoBase64(null)
+    } finally {
+      if (seq === fileSeqRef.current) setImgProcessing(false)
+    }
   }
 
   return (
@@ -172,7 +223,7 @@ export function MedidorForm({
             {/* Left: photo */}
             <div className="flex flex-col gap-3">
               <p className="text-sm font-medium text-slate-700">Foto del contador</p>
-              <input ref={fileInputRef} type="file" accept="image/*,application/pdf"
+              <input ref={fileInputRef} type="file" accept="image/*"
                 className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) applyFile(f) }} />
               <div
                 onClick={() => fileInputRef.current?.click()}
@@ -195,8 +246,8 @@ export function MedidorForm({
                 ) : (
                   <>
                     <Camera className="h-10 w-10 text-slate-300 mb-3" />
-                    <p className="text-sm font-medium text-slate-600">Foto o archivo del contador</p>
-                    <p className="mt-1 text-xs text-slate-400 text-center">Arrastra aquí o toque para seleccionar · JPG, PNG, PDF</p>
+                    <p className="text-sm font-medium text-slate-600">Foto del contador</p>
+                    <p className="mt-1 text-xs text-slate-400 text-center">Arrastra aquí o toque para seleccionar · JPG o PNG</p>
                   </>
                 )}
               </div>
@@ -205,6 +256,9 @@ export function MedidorForm({
                   className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 py-2 text-xs font-medium text-slate-500 hover:border-slate-300 hover:text-slate-700">
                   <X className="h-3.5 w-3.5" /> Quitar foto
                 </button>
+              )}
+              {imgError && (
+                <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-600">{imgError}</p>
               )}
               <p className="text-xs text-slate-400">Opcional. Enviar foto acelera la aprobación automática.</p>
             </div>
@@ -249,7 +303,7 @@ export function MedidorForm({
                     </div>
                     {selected.tarifaKwh > 0 && (
                       <div className="flex items-center justify-between px-4 py-3 bg-emerald-50">
-                        <span className="text-sm font-medium text-emerald-700">Total estimado energía</span>
+                        <span className="text-sm font-medium text-emerald-700">Valor a pagar</span>
                         <span className="font-bold tabular-nums text-emerald-800">$ {Math.round(total).toLocaleString("es-CO")}</span>
                       </div>
                     )}
@@ -263,9 +317,9 @@ export function MedidorForm({
                   className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
 
-              <button type="submit" disabled={pending}
+              <button type="submit" disabled={pending || imgProcessing}
                 className="mt-auto w-full rounded-lg bg-slate-900 py-3 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50 transition-colors">
-                {pending ? "Enviando…" : `Enviar lectura Local ${selected.unitNumber}`}
+                {imgProcessing ? "Procesando foto…" : pending ? "Enviando…" : `Enviar lectura Local ${selected.unitNumber}`}
               </button>
             </div>
           </div>
