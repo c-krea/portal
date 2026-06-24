@@ -1,4 +1,4 @@
-export const revalidate = 300 // 5 min — cron syncs daily 05:30 COT, page caches between visits
+export const dynamic = "force-dynamic"
 
 import { PageHeader } from "@/components/layout/page-header"
 import { RecaudoCard } from "@/components/dashboard/recaudo-card"
@@ -7,7 +7,7 @@ import { formatCOP, formatPercent } from "@/lib/formatters"
 import { AlertTriangle, TrendingUp, Clock, Flame } from "lucide-react"
 
 export default async function DashboardPage() {
-  const { portfolio, mora, totalRecaudado, chart } = await getDashboardData()
+  const { portfolio, mora, totalRecaudado, chart, computedAt } = await getDashboardData()
 
   const occupancyPercent =
     portfolio.totalUnits > 0
@@ -63,7 +63,9 @@ export default async function DashboardPage() {
     },
   ]
 
-  const lastSync = new Date().toLocaleString("es-CO", {
+  // Reflects when the cached data was actually computed (not render time), so the
+  // "Datos al …" footer never claims fresher than the 30-min cache really is.
+  const lastSync = new Date(computedAt).toLocaleString("es-CO", {
     timeZone: "America/Bogota",
     day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
   })

@@ -5,6 +5,7 @@ import { getEmpresaCkreaId } from "@/lib/empresa"
 import { ELECTRICITY_GROUPS } from "@/lib/data/electricity"
 import { assertPeriodo, assertUuid } from "@/lib/security/validators"
 import { revalidatePath } from "next/cache"
+import { bustTags } from "@/lib/cache"
 
 
 export interface FacturaInput {
@@ -106,5 +107,8 @@ export async function saveFacturasEnergia(
 
   revalidatePath("/medidores/facturas")
   revalidatePath("/medidores")
+  // Saved tarifas recompute lecturas_medidor.total_energia + the electricity
+  // invoice view — refresh pagos (dedup) and medidores caches.
+  bustTags("pagos", "medidores")
   return { success: true }
 }

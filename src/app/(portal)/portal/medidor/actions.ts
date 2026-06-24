@@ -7,6 +7,7 @@ import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
 import { uploadMeterPhoto } from "@/lib/r2/meter-photos"
 import { lecturaPeriodo } from "@/lib/periodo"
 import { revalidatePath } from "next/cache"
+import { bustTags } from "@/lib/cache"
 import { z } from "zod"
 
 const schema = z.object({
@@ -148,6 +149,8 @@ export async function submitLectura(
   revalidatePath("/portal")
   revalidatePath("/portal/medidor")
   revalidatePath("/medidores")
+  // total_energia changed → pagos electricity-dedup + medidores views recompute.
+  bustTags("pagos", "medidores")
 
   const kwhFmt = kwh.toLocaleString("es-CO")
   const message = `Lectura enviada correctamente (${kwhFmt} kWh).`

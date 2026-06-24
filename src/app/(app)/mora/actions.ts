@@ -44,6 +44,9 @@ export async function calcularIntereses(
     revalidatePath("/mora")
     revalidatePath("/facturas")
     revalidatePath("/locales")
+    // NOTE: runInterestAccrual is currently a no-op (interest-engine writes nothing),
+    // so no data actually changed — nothing to bust. When the engine persists real
+    // accruals, add: bustTags("mora", "dashboard") (+ "facturas" once it is cached).
 
     return { success: true, summary }
   } catch (e) {

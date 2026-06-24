@@ -4,6 +4,7 @@ import { supabaseAdmin, execute, executeDml, sqlStr } from "@/lib/db/executor"
 import { assertUuid, isValidEmail } from "@/lib/security/validators"
 import { sendWelcomeEmail, sendPasswordResetEmail } from "@/lib/email"
 import { revalidatePath } from "next/cache"
+import { bustAllCaches } from "@/lib/cache"
 import { createClient } from "@/lib/supabase/server"
 
 const SITE = process.env.SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://ckrea.com.co"
@@ -65,7 +66,7 @@ export async function updatePortalEmail(inquilinoId: string, email: string) {
     const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email: trimmed,
       email_confirm: true,
-      user_metadata: { full_name: fullName, role: "inquilino" },
+      user_metadata: { full_name: fullName, role: "inquilino", app: "ckrea" },
     })
     if (createError) return { error: `Email guardado, pero error al crear cuenta: ${createError.message}` }
 
@@ -95,6 +96,8 @@ export async function updatePortalEmail(inquilinoId: string, email: string) {
   }
 
   revalidatePath("/usuarios")
+  // Tenant contact (email/phone) feeds the cached factura detail — refresh it.
+  bustAllCaches()
   return { success: true }
 }
 
@@ -145,7 +148,7 @@ export async function updateTenantInquilino(
       const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
         email_confirm: true,
-        user_metadata: { full_name: fullName, role: "inquilino" },
+        user_metadata: { full_name: fullName, role: "inquilino", app: "ckrea" },
       })
       if (createError) return { error: `Guardado, pero error al crear cuenta: ${createError.message}` }
 
@@ -176,6 +179,8 @@ export async function updateTenantInquilino(
   }
 
   revalidatePath("/usuarios")
+  // Tenant contact (email/phone) feeds the cached factura detail — refresh it.
+  bustAllCaches()
   return { success: true }
 }
 
@@ -203,7 +208,7 @@ export async function createTenantAccount(inquilinoId: string) {
   const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
     email,
     email_confirm: true,
-    user_metadata: { full_name: fullName, role: "inquilino" },
+    user_metadata: { full_name: fullName, role: "inquilino", app: "ckrea" },
   })
 
   if (createError) {

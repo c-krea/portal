@@ -2,6 +2,7 @@
 
 import { executeDml } from "@/lib/db/executor"
 import { revalidatePath } from "next/cache"
+import { bustAllCaches } from "@/lib/cache"
 import { z } from "zod"
 
 const UpdateRuleSchema = z.object({
@@ -33,6 +34,8 @@ export async function updateFinancialRule(
     )
 
     revalidatePath("/configuracion")
+    // Financial rules feed mora/pagos/locales/dashboard math — refresh all caches.
+    bustAllCaches()
     return { success: true }
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : String(e) }

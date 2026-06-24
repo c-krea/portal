@@ -14,3 +14,10 @@ export function lecturaPeriodo(): string {
   const d = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
 }
+
+// Current billing month in Bogota, "YYYY-MM" (e.g. "2026-06"). Use this instead
+// of new Date() so the UTC/Bogota boundary never rolls the month early.
+export function currentPeriodo(): string {
+  const now = nowBogota()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+}

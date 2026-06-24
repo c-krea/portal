@@ -1,5 +1,6 @@
 import { execute } from "@/lib/db/executor"
 import { assertPeriodo, assertUuid } from "@/lib/security/validators"
+import { cached } from "@/lib/cache"
 
 function periodoToLabel(periodo: string): string {
   const [y, m] = periodo.split("-")
@@ -30,7 +31,7 @@ export interface ElectricityInvoice {
   from_erp: boolean
 }
 
-export async function getElectricityInvoices(
+async function getElectricityInvoices_uncached(
   empresaId: string,
   periodo: string,
 ): Promise<ElectricityInvoice[]> {
@@ -140,3 +141,12 @@ export async function getElectricityTarifaForUnit(
   `)
   return rows[0] ? Number(rows[0].tarifa_kwh) : 0
 }
+
+// ── Cached export (30-min window; busts via ERP sync + electricity/meter writes).
+// NOTE: getElectricityTarifaForUnit stays UNCACHED — it is read inside write paths
+// (meter registration) where a fresh tarifa is required.
+export const getElectricityInvoices = cached(getElectricityInvoices_uncached, ["medidores:electricity"], "medidores")
+
+// Live (uncached) variant for the energy XLSX export, which must be internally
+// consistent — it pairs these invoices with a live Sheet-2 reading query.
+export { getElectricityInvoices_uncached as getElectricityInvoicesLive }

@@ -1,5 +1,6 @@
 import { execute } from "@/lib/db/executor"
 import { assertPeriodo } from "@/lib/security/validators"
+import { cached } from "@/lib/cache"
 
 const DOC_ID_RE = /^[A-Za-z0-9 _-]{1,40}$/
 
@@ -38,7 +39,7 @@ export type FacturaSummary = {
 const PERIODO_TO_STR = `LPAD(periodo::text, 6, '0')`
 const PERIODO_FORMATTED = `SUBSTRING(${PERIODO_TO_STR}, 1, 4) || '-' || SUBSTRING(${PERIODO_TO_STR}, 5, 2)`
 
-export async function getFacturas(periodo?: string): Promise<FacturaRow[]> {
+async function getFacturas_uncached(periodo?: string): Promise<FacturaRow[]> {
   if (periodo) assertPeriodo(periodo)
   const periodoInt = periodo ? Number(periodo.replace("-", "")) : null
   const rows = await execute(`
@@ -85,7 +86,7 @@ export async function getFacturas(periodo?: string): Promise<FacturaRow[]> {
   }))
 }
 
-export async function getFacturaSummary(periodo?: string): Promise<FacturaSummary> {
+async function getFacturaSummary_uncached(periodo?: string): Promise<FacturaSummary> {
   if (periodo) assertPeriodo(periodo)
   const periodoInt = periodo ? Number(periodo.replace("-", "")) : null
   const totals = await execute(`
@@ -107,7 +108,7 @@ export async function getFacturaSummary(periodo?: string): Promise<FacturaSummar
   }
 }
 
-export async function getAvailablePeriodos(): Promise<string[]> {
+async function getAvailablePeriodos_uncached(): Promise<string[]> {
   const rows = await execute(`
     SELECT DISTINCT ${PERIODO_FORMATTED} AS p
     FROM v2.vista_facturas
@@ -140,7 +141,7 @@ export type FacturaDetalle = FacturaRow & {
   companyNit: string
 }
 
-export async function getFacturaById(id: string): Promise<FacturaDetalle | null> {
+async function getFacturaById_uncached(id: string): Promise<FacturaDetalle | null> {
   if (!DOC_ID_RE.test(id)) return null
   const rows = await execute(`
     SELECT
@@ -216,3 +217,9 @@ export async function getFacturaById(id: string): Promise<FacturaDetalle | null>
     lineItems:          [],
   }
 }
+
+// ── Cached exports (30-min window; facturas come from Siesa → busts via ERP sync) ──
+export const getFacturas          = cached(getFacturas_uncached,          ["facturas:list"],     "facturas")
+export const getFacturaSummary    = cached(getFacturaSummary_uncached,    ["facturas:summary"],  "facturas")
+export const getAvailablePeriodos = cached(getAvailablePeriodos_uncached, ["facturas:periodos"], "facturas")
+export const getFacturaById       = cached(getFacturaById_uncached,       ["facturas:byId"],     "facturas")

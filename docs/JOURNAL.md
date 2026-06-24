@@ -2,6 +2,45 @@
 
 ---
 
+## Session 63 — 2026-06-24: Data-layer caching to cut Vercel Fluid CPU
+
+**Trigger.** Vercel Fluid Active CPU at 4h3m/4h with **ckrea-portal eating 81%** (Jun 23 spike ~6× normal). Investigated why ckrea dominates and how to reduce it.
+
+**Diagnosis.**
+- Every `(app)` page is `ƒ` Dynamic — the `(app)` layout reads auth cookies, forcing the whole subtree dynamic. So page-level `revalidate`/ISR does **nothing** here (confirmed: the old dashboard `revalidate=300` was a no-op). The only lever that cuts CPU is caching the heavy `execute()` queries in the **data layer**.
+- `execute()` = Supabase service-role REST RPC → plain-JSON returns, no cookies → safe to cache, company-wide (identical for all admins).
+- Jun 23 spike = the medidores deploy + heavy manual testing, not a runaway. The notifications cron N+1 is a separate, smaller drip (noted, not fixed).
+
+**What shipped (code, NOT yet deployed).**
+- `src/lib/cache.ts`: `cached(fn,keyParts,tag)` (= `unstable_cache`, 30-min), `CACHE_TAGS`, `bustTags()`, `bustAllCaches()`. One knob for TTL + tag list.
+- Wrapped ~27 read fns across 8 domains (dashboard, pagos, gastos, locales, mora, proyecciones, facturas, medidores). SQL untouched — rename `_uncached` + wrap.
+- Invalidation wired into every writer: ERP sync cron, financial-rule edit, projection edits, electricity save, 3 meter writers, tenant-contact edits.
+
+**Next 16 gotchas.**
+- `revalidateTag` now needs a 2nd arg — `revalidateTag(tag, "max")`. The `AGENTS.md` warning was right.
+- `unstable_cache` keys on `JSON.stringify(args)` (verified in source) → per-month/year/id caching is correct; June never serves May.
+- `unstable_cache` still works under `force-dynamic` (force-dynamic only affects raw `fetch` + route render). Verified in Next source.
+- `new Date()` defaults FREEZE the month under cache → fixed the pagos page to use `currentPeriodo()` (Bogota); left `getMensual*` uncached.
+
+### Decisions
+- 🎯 Cache in the **data layer**, not page-level — the cookie-gated layout makes every page dynamic.
+- 🎯 30-min TTL: portal data changes only on the daily ERP sync or admin edits (which bust instantly) → 30 min shows nothing meaningfully stale.
+- 🎯 Rare admin writes (config, projections, tenant-contact) → `bustAllCaches()` (can't-miss); frequent writes (meter readings) → precise `bustTags()` (avoid thrashing).
+- 🎯 Energy XLSX export uses the **live** electricity read (`getElectricityInvoicesLive`) so its two sheets stay internally consistent.
+- 🎯 Deliberately uncached: write-path reads (`getContractsForProjection`, `getElectricityTarifaForUnit`), `new Date()`-default fns, unused fns.
+
+### Learnings
+- 💡 **Caching/centralizing code does NOT reduce CPU by itself** — same work runs per request. The reduction comes from the cache (compute-once-per-window). Centralizing only makes the cache easy to apply in one place.
+- 💡 **Cache invalidation completeness is the whole game.** When you cache a read fn, *every* writer to the tables it reads must bust the tag — not just the obvious one. Each review round found a different forgotten writer (config edit, ERP sync, meter readings, projections, tenant-contact→facturas). Enumerate writers per cached table; don't special-case.
+- 💡 Page-level `revalidate` is inert on a cookie-gated dynamic route. Cache the data, not the page.
+- 💡 Multi-agent review caught a real bug **every** round that a single pass missed (writers in out-of-scope files). Worth it for a live financial app.
+
+### Session-end pointers
+- ADRs: none
+- Lessons: `feedback_cache_invalidation_completeness.md` (new)
+- State: `project_state.md` updated (Session 63 added)
+- Linear: none
+
 ## Session 62 — 2026-06-24: Client comment review — local 120 mora confusion + 9 missing May energy invoices
 
 **Reports (admin/clients via German).**

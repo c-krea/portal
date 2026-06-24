@@ -2,8 +2,9 @@ import { execute } from "@/lib/db/executor"
 import { getProyectadoVsReal } from "@/lib/data/reportes"
 import { getGracePeriod } from "@/lib/data/configuracion"
 import { getEmpresaCkreaId } from "@/lib/empresa"
+import { cached } from "@/lib/cache"
 
-export async function getDashboardData() {
+async function getDashboardData_uncached() {
   const empresaId = await getEmpresaCkreaId()
   const [portfolio, mora, totalRecaudado, chart] = await Promise.all([
     getPortfolioStats(empresaId),
@@ -11,8 +12,11 @@ export async function getDashboardData() {
     getTotalRecaudado(empresaId, 2026),
     getProyectadoVsReal(2026),
   ])
-  return { portfolio, mora, totalRecaudado, chart }
+  return { portfolio, mora, totalRecaudado, chart, computedAt: new Date().toISOString() }
 }
+
+// Cached (30-min window; busts via ERP sync + financial-rule edits)
+export const getDashboardData = cached(getDashboardData_uncached, ["dashboard"], "dashboard")
 
 async function getPortfolioStats(empresaId: string) {
   const [rows1, rows2, rows3] = await Promise.all([

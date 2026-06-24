@@ -1,5 +1,6 @@
 import { execute } from "@/lib/db/executor"
 import { assertPeriodo, assertUuid } from "@/lib/security/validators"
+import { cached } from "@/lib/cache"
 
 export type UnitWithMeter = {
   unitId: string
@@ -28,7 +29,7 @@ export type MedidorAdminRow = {
   fotoUrl: string | null
 }
 
-export async function getMeterYears(): Promise<number[]> {
+async function getMeterYears_uncached(): Promise<number[]> {
   const rows = await execute(`
     SELECT DISTINCT SUBSTRING(periodo, 1, 4)::int AS y
     FROM v2.lecturas_medidor
@@ -43,7 +44,7 @@ export async function getMeterYears(): Promise<number[]> {
   return years.sort()
 }
 
-export async function getMedidoresAdmin(
+async function getMedidoresAdmin_uncached(
   empresaId: string,
   periodo: string,
 ): Promise<MedidorAdminRow[]> {
@@ -109,7 +110,7 @@ export async function getMedidoresAdmin(
   })
 }
 
-export async function getUnitsWithMeters(empresaId: string): Promise<UnitWithMeter[]> {
+async function getUnitsWithMeters_uncached(empresaId: string): Promise<UnitWithMeter[]> {
   assertUuid(empresaId)
   const rows = await execute(`
     SELECT
@@ -167,3 +168,8 @@ export async function getUnitsWithMeters(empresaId: string): Promise<UnitWithMet
     }
   })
 }
+
+// ── Cached exports (30-min window; busts via ERP sync + meter-reading writes) ──
+export const getMeterYears      = cached(getMeterYears_uncached,      ["medidores:years"], "medidores")
+export const getMedidoresAdmin  = cached(getMedidoresAdmin_uncached,  ["medidores:admin"], "medidores")
+export const getUnitsWithMeters = cached(getUnitsWithMeters_uncached, ["medidores:units"], "medidores")

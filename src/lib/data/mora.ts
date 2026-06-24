@@ -1,5 +1,6 @@
 import { execute } from "@/lib/db/executor"
 import { getGracePeriod } from "@/lib/data/configuracion"
+import { cached } from "@/lib/cache"
 
 export type MoraRow = {
   tenantId: string
@@ -19,7 +20,13 @@ export type MoraSummary = {
   lastAccrualDate: string | null
 }
 
-export async function getMoraSummary(): Promise<MoraSummary> {
+// ── Cached exports (30-min window; busts via ERP sync + financial-rule edits) ──
+// _uncached function declarations below are hoisted, so referencing them here is safe.
+export const getMoraSummary  = cached(getMoraSummary_uncached,  ["mora:summary"],  "mora")
+export const getMoraRows     = cached(getMoraRows_uncached,     ["mora:rows"],     "mora")
+export const getJuridicaRows = cached(getJuridicaRows_uncached, ["mora:juridica"], "mora")
+
+async function getMoraSummary_uncached(): Promise<MoraSummary> {
   const grace = await getGracePeriod()
 
   const res = await execute(`
@@ -49,7 +56,7 @@ export async function getMoraSummary(): Promise<MoraSummary> {
   }
 }
 
-export async function getMoraRows(): Promise<MoraRow[]> {
+async function getMoraRows_uncached(): Promise<MoraRow[]> {
   const grace = await getGracePeriod()
 
   const rows = await execute(`
@@ -94,7 +101,7 @@ export async function getMoraRows(): Promise<MoraRow[]> {
   }))
 }
 
-export async function getJuridicaRows(): Promise<MoraRow[]> {
+async function getJuridicaRows_uncached(): Promise<MoraRow[]> {
   const rows = await execute(`
     SELECT
       t.id                                         AS tenant_id,

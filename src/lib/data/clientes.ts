@@ -1,5 +1,6 @@
 import { execute } from "@/lib/db/executor"
 import { getGracePeriod } from "@/lib/data/configuracion"
+import { cached } from "@/lib/cache"
 
 const ENTRADA_RE = /^[A-Za-z0-9 ]{1,8}$/
 
@@ -28,7 +29,7 @@ export type LocalesKPIs = {
   contratosPorVencer: number
 }
 
-export async function getLocalesKPIs(entrada?: string): Promise<LocalesKPIs> {
+async function getLocalesKPIs_uncached(entrada?: string): Promise<LocalesKPIs> {
   const e = safeEntrada(entrada)
   const ef = e ? `AND l.entrada = '${e}'` : ""
   const ef2 = e ? `AND c.local_id IN (SELECT id FROM v2.locales WHERE entrada = '${e}')` : ""
@@ -66,7 +67,7 @@ export async function getLocalesKPIs(entrada?: string): Promise<LocalesKPIs> {
   }
 }
 
-export async function getClienteRows(entrada?: string): Promise<ClienteRow[]> {
+async function getClienteRows_uncached(entrada?: string): Promise<ClienteRow[]> {
   const grace = await getGracePeriod()
   const e = safeEntrada(entrada)
   const entradaExists = e
@@ -147,7 +148,7 @@ export async function getClienteRows(entrada?: string): Promise<ClienteRow[]> {
   }))
 }
 
-export async function getVacantUnitRows(entrada?: string): Promise<ClienteRow[]> {
+async function getVacantUnitRows_uncached(entrada?: string): Promise<ClienteRow[]> {
   const e = safeEntrada(entrada)
   const ef = e ? `AND u.entrada = '${e}'` : ""
 
@@ -175,3 +176,8 @@ export async function getVacantUnitRows(entrada?: string): Promise<ClienteRow[]>
     isVacant:    true,
   }))
 }
+
+// ── Cached exports (30-min window; read-only — locales is ERP-derived) ──
+export const getLocalesKPIs    = cached(getLocalesKPIs_uncached,    ["locales:kpis"],     "locales")
+export const getClienteRows    = cached(getClienteRows_uncached,    ["locales:clientes"], "locales")
+export const getVacantUnitRows = cached(getVacantUnitRows_uncached, ["locales:vacantes"], "locales")

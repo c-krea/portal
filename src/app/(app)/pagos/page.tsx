@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { TrendingUp, CreditCard, Clock, AlertCircle } from "lucide-react"
 import { isValidPeriodo } from "@/lib/security/validators"
+import { currentPeriodo } from "@/lib/periodo"
 
 export default async function PagosPage({
   searchParams,
@@ -17,9 +18,7 @@ export default async function PagosPage({
   searchParams: Promise<{ month?: string }>
 }) {
   const { month: rawMonth } = await searchParams
-  const now = new Date()
-  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
-  const month = isValidPeriodo(rawMonth) ? rawMonth : defaultMonth
+  const month = isValidPeriodo(rawMonth) ? rawMonth : currentPeriodo()
 
   const [kpis, pagos, buckets, gracePeriod] = await Promise.all([
     getPagosKPIs(month),

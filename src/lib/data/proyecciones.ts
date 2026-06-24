@@ -1,4 +1,5 @@
 import { execute } from "@/lib/db/executor"
+import { cached } from "@/lib/cache"
 
 export type ProyeccionSummary = {
   year: number
@@ -107,7 +108,7 @@ export async function getProyeccionSummaries(empresaId: string): Promise<Proyecc
   }))
 }
 
-export async function getProyeccionBreakdown(empresaId: string, year: number): Promise<ProyeccionBreakdown> {
+async function getProyeccionBreakdown_uncached(empresaId: string, year: number): Promise<ProyeccionBreakdown> {
   // LIVE source: siesa_raw.ocupacion (ERP truth).
   // Phase-discount expiry IS modeled: if c.descuento_hasta_mes ends mid-year,
   // o.descuento applies only for months 1..mes_dcto_end of YEAR, then 0%.
@@ -190,7 +191,7 @@ export async function getProyeccionBreakdown(empresaId: string, year: number): P
   }
 }
 
-export async function getProyeccionDetalle(empresaId: string, year: number): Promise<ProyeccionDetalle[]> {
+async function getProyeccionDetalle_uncached(empresaId: string, year: number): Promise<ProyeccionDetalle[]> {
   // LIVE source: siesa_raw.ocupacion. One row per occupied unit.
   // Phase-discount expiry modeled the same way as breakdown.
   // PJ → multiplier 1.155. PN → 1.19.
@@ -298,7 +299,7 @@ export async function getProyeccionDetalle(empresaId: string, year: number): Pro
   }))
 }
 
-export async function getProyeccionMensual(empresaId: string, year: number): Promise<ProyeccionMes[]> {
+async function getProyeccionMensual_uncached(empresaId: string, year: number): Promise<ProyeccionMes[]> {
   // LIVE source: siesa_raw.ocupacion. Per-month aggregation: phase-discount
   // expiry produces a step-up after the phase ends. Mid-year contract starts
   // produce zero canon for months before mes_start. IPC bumps NOT modeled.
@@ -527,3 +528,10 @@ export async function getContractsForProjection(
     lastMonth:         Number(r.last_month),
   }))
 }
+
+// ── Cached exports (30-min window; busts via ERP sync + projection/rule edits) ──
+// getProyeccionSummaries (unused), getMensual* (new Date() default), and
+// getContractsForProjection (write-path read) are intentionally left uncached.
+export const getProyeccionBreakdown = cached(getProyeccionBreakdown_uncached, ["proyecciones:breakdown"], "proyecciones")
+export const getProyeccionDetalle   = cached(getProyeccionDetalle_uncached,   ["proyecciones:detalle"],   "proyecciones")
+export const getProyeccionMensual   = cached(getProyeccionMensual_uncached,   ["proyecciones:mensual"],   "proyecciones")

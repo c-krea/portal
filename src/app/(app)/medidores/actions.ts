@@ -8,6 +8,7 @@ import { uploadMeterPhoto } from "@/lib/r2/meter-photos"
 import { getSignedDownloadUrl } from "@/lib/r2/files"
 import { isValidPeriodo } from "@/lib/security/validators"
 import { revalidatePath } from "next/cache"
+import { bustTags } from "@/lib/cache"
 import { z } from "zod"
 
 const schema = z.object({
@@ -112,6 +113,8 @@ export async function registrarLectura(
 
     revalidatePath("/medidores")
     revalidatePath("/medidores/facturas")
+    // total_energia changed → pagos electricity-dedup + medidores views recompute.
+    bustTags("pagos", "medidores")
 
     const msg = tarifa > 0
       ? `Lectura registrada: ${kwh} kWh · $${totalEnergia.toLocaleString("es-CO")}`

@@ -1,6 +1,7 @@
 import { execute } from "@/lib/db/executor"
 import { getGracePeriod } from "@/lib/data/configuracion"
 import { assertPeriodo } from "@/lib/security/validators"
+import { cached } from "@/lib/cache"
 
 export type PagoRow = {
   id: string
@@ -76,10 +77,9 @@ const EXCLUDE_ELECTRICITY = `
       AND p.inquilino_id IN (SELECT inquilino_id FROM electricity_tenants)
     )`
 
-export async function getPagosKPIs(month?: string): Promise<PagosKPIs> {
-  if (month) assertPeriodo(month)
-  const now = new Date()
-  const resolvedMonth = month ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+async function getPagosKPIs_uncached(month: string): Promise<PagosKPIs> {
+  assertPeriodo(month)
+  const resolvedMonth = month
   const [yearStr, monthStr] = resolvedMonth.split("-")
   const year = parseInt(yearStr, 10)
   const monthNum = parseInt(monthStr, 10)
@@ -135,11 +135,9 @@ export async function getPagosKPIs(month?: string): Promise<PagosKPIs> {
   }
 }
 
-export async function getPagos(month?: string): Promise<PagoRow[]> {
-  if (month) assertPeriodo(month)
-  const monthFilter = month
-    ? `AND date_trunc('month', p.fecha_recaudo) = DATE '${month}-01'`
-    : ""
+async function getPagos_uncached(month: string): Promise<PagoRow[]> {
+  assertPeriodo(month)
+  const monthFilter = `AND date_trunc('month', p.fecha_recaudo) = DATE '${month}-01'`
 
   let electricityCte = ""
   let electricityExclusion = ""
@@ -201,7 +199,7 @@ export type PagosBuckets = {
   mora:     BucketRow[]
 }
 
-export async function getPagosBuckets(month: string): Promise<PagosBuckets> {
+async function getPagosBuckets_uncached(month: string): Promise<PagosBuckets> {
   assertPeriodo(month)
   const [y, m] = month.split("-").map(Number)
   const prev = prevMonthStr(y, m)
@@ -275,3 +273,8 @@ export async function getPagosBuckets(month: string): Promise<PagosBuckets> {
     mora:     mapRows(all.filter((r) => r.bucket === 'mora')),
   }
 }
+
+// ── Cached exports (30-min window; read-only — pagos has no admin mutation) ──
+export const getPagosKPIs    = cached(getPagosKPIs_uncached,    ["pagos:kpis"],    "pagos")
+export const getPagos        = cached(getPagos_uncached,        ["pagos:list"],    "pagos")
+export const getPagosBuckets = cached(getPagosBuckets_uncached, ["pagos:buckets"], "pagos")

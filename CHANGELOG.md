@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Session 63 — 2026-06-24: Data-layer caching across all heavy pages (Vercel CPU)
+
+#### Performance / caching (built, NOT yet deployed)
+- **Vercel Fluid CPU was dominated by ckrea-portal (81% of the 4h pool).** Every admin page is server-rendered on each visit (login-gated → dynamic), recomputing heavy financial SQL from scratch every time.
+- **Added a 30-minute data-layer cache** (`src/lib/cache.ts`) wrapping the heavy read queries for dashboard, pagos, gastos, locales, mora, proyecciones, facturas, and medidores. Financial SQL/math unchanged — only wrapped. Heavy pages now compute once per 30 min instead of on every visit.
+- **Complete, centralized cache invalidation:** every write refreshes the affected caches — daily ERP sync, financial-rule edits, projection edits, electricity-bill saves, meter readings (admin + tenant), and tenant-contact edits. New cached domains are covered automatically via one central tag list.
+- **One knob:** `CACHE_TTL_SECONDS` (30 min) + `CACHE_TAGS` in a single file. Verified across 4 independent multi-agent review rounds + a green production build.
+
 ### Session 62 — 2026-06-24: 9 missing May energy invoices restored
 
 #### Data (May 2026 energy)

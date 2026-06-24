@@ -1,5 +1,6 @@
 import { execute } from "@/lib/db/executor"
 import { assertPeriodo, assertYear, isValidPeriodo } from "@/lib/security/validators"
+import { cached } from "@/lib/cache"
 
 export { isValidPeriodo }
 
@@ -88,7 +89,7 @@ const CATEGORY_CASE = `
   END
 `
 
-export async function getGastoPeriodos(): Promise<GastoPeriodo[]> {
+async function getGastoPeriodos_uncached(): Promise<GastoPeriodo[]> {
   const rows = await execute(`
     SELECT DISTINCT
       LEFT(periodo::text, 4) || '-' || RIGHT(periodo::text, 2) AS periodo
@@ -110,7 +111,7 @@ function parseDetails(raw: unknown): GastoDetail[] {
   }))
 }
 
-export async function getGastoRows(periodo?: string): Promise<GastoRow[]> {
+async function getGastoRows_uncached(periodo?: string): Promise<GastoRow[]> {
   if (periodo) {
     assertPeriodo(periodo)
     const prev = prevPeriodo(periodo)
@@ -209,7 +210,7 @@ export async function getGastoRows(periodo?: string): Promise<GastoRow[]> {
   })
 }
 
-export async function getGastoSummary(year: string): Promise<GastoSummary> {
+async function getGastoSummary_uncached(year: string): Promise<GastoSummary> {
   assertYear(year)
   const rows = await execute(`
     WITH monthly AS (
@@ -239,7 +240,7 @@ export async function getGastoSummary(year: string): Promise<GastoSummary> {
   }
 }
 
-export async function getGastosForPeriodo(periodo: string): Promise<GastoChartRow> {
+async function getGastosForPeriodo_uncached(periodo: string): Promise<GastoChartRow> {
   assertPeriodo(periodo)
   const rows = await execute(`
     WITH raw AS (
@@ -278,7 +279,7 @@ export async function getGastosForPeriodo(periodo: string): Promise<GastoChartRo
   }
 }
 
-export async function getGastosHistorico(periodo: string, nMeses = 6): Promise<GastoChartRow[]> {
+async function getGastosHistorico_uncached(periodo: string, nMeses = 6): Promise<GastoChartRow[]> {
   assertPeriodo(periodo)
   const rows = await execute(`
     WITH months AS (
@@ -325,3 +326,10 @@ export async function getGastosHistorico(periodo: string, nMeses = 6): Promise<G
     total:              Number(r.total              ?? 0),
   }))
 }
+
+// ── Cached exports (30-min window; read-only — gastos is ERP-derived) ──
+export const getGastoPeriodos    = cached(getGastoPeriodos_uncached,    ["gastos:periodos"],   "gastos")
+export const getGastoRows        = cached(getGastoRows_uncached,        ["gastos:rows"],       "gastos")
+export const getGastoSummary     = cached(getGastoSummary_uncached,     ["gastos:summary"],    "gastos")
+export const getGastosForPeriodo = cached(getGastosForPeriodo_uncached, ["gastos:forPeriodo"], "gastos")
+export const getGastosHistorico  = cached(getGastosHistorico_uncached,  ["gastos:historico"],  "gastos")

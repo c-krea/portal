@@ -3,6 +3,7 @@
 import { execute, executeDml } from "@/lib/db/executor"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { revalidatePath } from "next/cache"
+import { bustAllCaches } from "@/lib/cache"
 import { z } from "zod"
 import { getContractsForProjection } from "@/lib/data/proyecciones"
 
@@ -85,6 +86,8 @@ export async function generarProyecciones(
     }
 
     revalidatePath("/proyecciones")
+    // Projections feed the dashboard portfolio KPI + chart — refresh all caches.
+    bustAllCaches()
     return { success: true, created: created / 12, skipped: 0, errors }
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : String(e) }
@@ -135,6 +138,7 @@ export async function updateContratoPhase(
     `)
     if (selRows.length === 0) {
       revalidatePath("/proyecciones")
+      bustAllCaches()
       return { success: true }
     }
 
@@ -172,6 +176,7 @@ export async function updateContratoPhase(
     `)
 
     revalidatePath("/proyecciones")
+    bustAllCaches()
     return { success: true }
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : String(e) }

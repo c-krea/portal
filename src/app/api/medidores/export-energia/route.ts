@@ -3,7 +3,7 @@ import * as XLSX from "xlsx"
 import { execute } from "@/lib/db/executor"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { isValidPeriodo } from "@/lib/security/validators"
-import { getElectricityInvoices, ELECTRICITY_GROUPS } from "@/lib/data/electricity"
+import { getElectricityInvoicesLive, ELECTRICITY_GROUPS } from "@/lib/data/electricity"
 import { createClient } from "@/lib/supabase/server"
 
 export const dynamic = "force-dynamic"
@@ -45,8 +45,8 @@ export async function GET(req: NextRequest) {
   const label = periodoLabel(periodo)
 
   const [invoices, units] = await Promise.all([
-    // Uses ERP fallback + computed kWh from readings
-    getElectricityInvoices(empresaId, periodo),
+    // Live (uncached) so this sheet matches the live Sheet-2 query below.
+    getElectricityInvoicesLive(empresaId, periodo),
 
     execute(`
       SELECT
