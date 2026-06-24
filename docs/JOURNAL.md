@@ -2,6 +2,39 @@
 
 ---
 
+## Session 62 — 2026-06-24: Client comment review — local 120 mora confusion + 9 missing May energy invoices
+
+**Reports (admin/clients via German).**
+1. Local 120 (BECERRA MATEUS AGUSTINA): tenant says portal shows May mora but she already paid; only owes June.
+2. Local 305: tenant says no May energy invoice appears in the portal.
+
+**#1 Local 120 — no bug (explanation).**
+- Cartera: only June open (FVS-74586, $3.629.500, *corriente*, due Jun 30). `vr_vencido = 0` on every line. Tenant is right.
+- Confusion = payment-history badge. "33 días mora" sits on a payment dated **04/05**, but that payment settled the **April** invoice (issued Apr 1, paid May 4 = 33 days). Her May invoice (issued May 2) was paid May 29 = 27 days = on time. Portal computes `dias_desde_factura = fecha_recaudo − fecha_factura` — correct; the badge just describes which invoice the payment cleared, not the calendar month of the payment date.
+- "47 pagos en mora" card = her lifetime count (47 of 65 payments late since Jan 2024) — correct, not current debt.
+- Verdict: presentation confusion, not data. Offered to relabel the badge ("Factura de abril · 3 días tarde") — deferred, not applied.
+
+**#2 Local 305 — real bug, fixed (9 units).**
+- 305 submitted May reading 5908 (vs prior 5790.2 = 117.8 kWh) but `kwh` stored as **0** → hidden because `getPortalElectricityPeriodos` filters `kwh > 0`.
+- Blast radius: **9 units** across 4 groups (101, 118, 119, 210, 212, 305, 311, 503, 801), all created Jun 10 16:56–19:02, all reading-present/kwh-0, all `pendiente`, no photos.
+- Root cause: **NOT a code bug.** Both `submitLectura` (portal, sets `aprobado`, day-9-only) and `registrarLectura` (admin) compute kWh correctly. These 9 were direct manual entries during the Session 61 reconciliation that left kWh at 0. One-time data gap.
+- Fix: `UPDATE v2.lecturas_medidor` on the 9 rows — `kwh = actual − anterior`, `total = MROUND(kwh × tarifa, 50)`. Restored **$1.232.800**. CSV backup at `docs/backups/lecturas_medidor_may2026_kwh0_backup_20260624.csv`.
+
+### Decisions
+- 🎯 Local 120 = correct data; confusion is the payment-history label (payment date vs the invoice month it cleared). UX relabel offered, deferred.
+- 🎯 9 May energy rows recomputed and billed; readings trusted as entered (manual, `pendiente`, no photo).
+
+### Learnings
+- 💡 Manual reconciliation inserts bypass the form's kWh computation — **always recompute kwh/total after any direct insert.** Latent-scan: `lectura_actual > lectura_anterior AND (kwh IS NULL OR kwh = 0)`.
+- 💡 The portal month-picker hides any energy month with `kwh = 0`, so a reading-present/kwh-0 row is invisible to the tenant — silent revenue loss, not just a display glitch.
+
+### Files changed
+- DB: `UPDATE v2.lecturas_medidor` (9 rows, periodo 2026-05) — applied via MCP, view/data only, no deploy
+- `docs/backups/lecturas_medidor_may2026_kwh0_backup_20260624.csv` (new — before-state backup)
+- `CHANGELOG.md`, `docs/JOURNAL.md`, `memory/project_state.md`
+
+---
+
 ## Session 61 — 2026-06-09/10: Electricity overhaul — photo uploads, May reconciliation, periodo convention
 
 **Reports (live, during day-9 window).** (1) Tenants hitting "Application error" when submitting meter photo; (2) unit 115 showed $0 to pay; (3) admin couldn't open meter photos; (4) request to verify the whole electricity money-path.

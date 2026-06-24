@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Session 62 — 2026-06-24: 9 missing May energy invoices restored
+
+#### Data (May 2026 energy)
+- **9 units had a May meter reading but $0 energy** (101, 118, 119, 210, 212, 305, 311, 503, 801). Their consumption was never calculated during the June 10 manual reconciliation — the reading was captured but kWh and cost were left at 0. Because the portal only shows months with consumption > 0, these tenants couldn't see or pay their May energy bill (reported by local 305's tenant).
+- **Fix:** recomputed kWh (reading − previous) and cost (kWh × tarifa, rounded to 50) with the same verified formula; readings untouched. Restored **$1.232.800** of billable May energy. All 9 tenants now see and can pay their May bill. CSV backup saved to `docs/backups/`.
+- **Not a code bug:** both the tenant and admin reading forms compute kWh correctly — this was a one-time manual-entry gap. Verified: every value re-derived, tarifas match the official May utility invoices, no other month affected (the one remaining zero — April unit 111 — is the intentional vacant-unit zeroing from Session 61).
+
 ### Session 61 — 2026-06-09/10: Electricity flow overhaul
 
 #### Portal del inquilino (medidor)
