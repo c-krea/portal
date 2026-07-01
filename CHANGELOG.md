@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Session 64 — 2026-07-01: Shared `user-admin` Edge Function (multi-app login creation)
+
+#### Added (Supabase — live, not in git)
+- **`user_admin` schema** with 3 locked tables (`apps`, `leads`, `audit_log`). RLS enabled, no policies, not exposed to the API — only the function touches them (via a direct DB connection).
+- **`user-admin` Edge Function** — one shared, guarded door that lets each app's "Lead" create logins and manage their own Lead list, without any app ever holding the service_role key. Actions: `create_login`, `add_lead`, `remove_lead`, `list_leads`, `list_audit`.
+- **Auth model:** caller sends their own login token; function validates it via `getUser()`, checks the `leads` list for that `app_key`, then acts. Master key stays inside the function. Deployed `verify_jwt=false` (identity checked in-function) so browser apps' CORS preflight works and the public anon key is rejected as a badge.
+- **Red-team hardening vs the spec:** logins are app-stamped with the caller's own `app_key` (fires that app's existing profile trigger; anti-spoof strips any injected `app`); duplicate email returns the existing `user_id` instead of a dead-end error; last-Lead removal blocked atomically; password ≥8; soft 20/min create cap.
+- Seeded known apps `ckrea`, `rutas`, `ric`. Verified end-to-end against the live function (throwaway app, cleaned up). RIC first-Lead seed deferred at German's request.
+
 ### Session 63 — 2026-06-24: Data-layer caching across all heavy pages (Vercel CPU)
 
 #### Performance / caching (built, NOT yet deployed)

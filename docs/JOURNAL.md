@@ -2,6 +2,25 @@
 
 ---
 
+## Session 64 — 2026-07-01: Shared `user-admin` Edge Function
+
+**Trigger.** Someone built a new app on the shared Supabase project and wanted a "create your own logins" section. Needed a safe, reusable way for any app to mint logins without holding the service_role key or waiting on German. Picked up the approved spec (`docs/superpowers/specs/2026-07-01-...`), red-teamed it first, then built.
+
+**Red-team catches (verified against the live DB, then baked into spec §11).**
+- **Only 2 triggers on `auth.users`:** `on_auth_user_created_v2` (app='ckrea'), `on_auth_user_created_rutas` (app='rutas'). RIC has none. Confirmed: `v2.perfiles` (71) and most `rutas.perfiles` (64 vs 10 tagged) were **backfilled**, not trigger-created — so C-Krea onboarding never relied on the trigger.
+- **Spec's "keep metadata neutral" was a bug for trigger apps.** A neutral login = no profile for ckrea/rutas users. Fix: stamp `app = <validated app_key>` so each app's own trigger runs; safe because the actor is already proven a Lead for that key. Anti-spoof strips any caller-injected `app`.
+- **`verify_jwt=true` was wrong for browser apps:** it accepts the public anon key as a valid JWT and blocks the CORS preflight. Switched to `verify_jwt=false` + in-function `getUser()`. Verified: anon key as bearer → `invalid_token`.
+- **Last-Lead race:** made the safeguard atomic (`DELETE ... WHERE (SELECT count(*) ...) > 1`).
+- **Duplicate email:** returns the existing `user_id` (shared humans across apps) instead of a hard error.
+
+**Architecture decision — direct DB over PostgREST.** The function reads/writes `user_admin` through a **direct Postgres connection** (`SUPABASE_DB_URL` + `npm:postgres`), not supabase-js `.from()`. Reason: keeps `user_admin` fully unexposed to the API (supabase-js/PostgREST only reach exposed schemas) and gives real single-statement atomicity for the last-Lead guard. supabase-js is used only for `getUser()` (validate caller) and `admin.createUser()` (Admin API — correct identities/hashing, unlike the raw-SQL method used for Sergio).
+
+**Tested end-to-end** with a throwaway `test` app + a raw-inserted Lead login (password grant → real JWT): create, duplicate→exists, wrong-app→403, weak-pw, add/remove Lead, last-Lead block, scoped audit. App-stamp confirmed (`test`), zero leakage into v2/rutas/ric. Throwaway data wiped.
+
+**Deferred.** RIC first-Lead seed (Sergio) — German will decide the first Lead per app. Handoff prompt for the new app's Claude Code produced separately.
+
+---
+
 ## Session 63 — 2026-06-24: Data-layer caching to cut Vercel Fluid CPU
 
 **Trigger.** Vercel Fluid Active CPU at 4h3m/4h with **ckrea-portal eating 81%** (Jun 23 spike ~6× normal). Investigated why ckrea dominates and how to reduce it.

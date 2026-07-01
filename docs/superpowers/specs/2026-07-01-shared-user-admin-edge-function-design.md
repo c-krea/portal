@@ -165,5 +165,48 @@ only revisits to read history.
 
 ---
 
-*Design approved in conversation on 2026-07-01. Next step: implementation plan (writing-plans). No code or DB
-changes made yet.*
+## 11. Red-team resolutions (2026-07-01) — supersede conflicting text above
+
+Verified against the live DB. Only two triggers exist on `auth.users`: `on_auth_user_created_v2`
+(fires on metadata `app='ckrea'`) and `on_auth_user_created_rutas` (`app='rutas'`). RIC has no trigger
+(links by email). Email is globally unique (`users_email_partial_key`). `user_admin` schema does not exist yet.
+
+1. **App-stamp instead of neutral metadata (supersedes §6.1 "keep metadata neutral").**
+   `create_login` sets `raw_user_meta_data.app = <app_key>` — the caller's *validated* app. This lets each
+   app's existing auto-profile trigger run (C-Krea, Rutas) and is a no-op for trigger-less apps (RIC). It is
+   safe because the actor is already proven a Lead for that `app_key` (Section 5, step 3), so a caller can only
+   ever stamp their own app. **Anti-spoof:** any `app` key inside caller-supplied `user_metadata` is stripped
+   and overwritten with the validated `app_key`. `app_key` for trigger apps MUST equal the trigger's expected
+   value (`ckrea`, `rutas`). Caveat: Rutas's trigger reads `nombre/apellido/zona/username` from metadata — the
+   Rutas app must send those in `user_metadata` or its profile row lands with NULLs.
+
+2. **Email already exists → return the existing id, don't hard-fail (supersedes §6.1 409 / §7).**
+   On duplicate email the function returns `200 { exists: true, user_id, email }` and creates nothing, so a
+   Lead can grant an already-existing (possibly cross-app) person access. Logged as `create_login` with a
+   `detail.existing = true` marker. No partial writes.
+
+3. **Leads may read their own app's history.** New read action `list_audit` (gated like everything else on
+   the leads check) returns only `audit_log` rows for the caller's `app_key`. Full cross-app log stays
+   German-only via MCP.
+
+4. **Safety defaults confirmed:** password ≥ 8 chars; soft rate cap 20 `create_login` per actor per minute
+   (recent-`audit_log` count, best-effort); refuse to remove the last Lead of an app — enforced **atomically**
+   inside a single `DELETE ... WHERE (SELECT count(*) ...) > 1` so two concurrent removes can't orphan an app.
+
+5. **JWT/CORS (supersedes §4.4 `verify_jwt = true`).** Deploy with `verify_jwt = false` and validate identity
+   **inside** the function via `supabase.auth.getUser(jwt)` (rejects the anon key and expired tokens, returns
+   the real actor). This lets the function answer the browser CORS pre-flight (`OPTIONS`) and return clean
+   `401` JSON. The leads-list check remains the real gate. `service_role` stays internal only. Callers send
+   `Authorization: Bearer <user access_token>` + `apikey: <anon key>`; the function returns
+   `Access-Control-Allow-*` on every response and short-circuits `OPTIONS`.
+
+6. **Idempotency:** `add_lead` uses `INSERT ... ON CONFLICT (app_key, user_id) DO NOTHING`; `create_login`
+   logs only after the Admin API call succeeds.
+
+7. **Initial `apps` rows:** `ckrea`, `rutas`, `ric` (trigger apps use the exact tag their trigger keys on).
+   Others seeded when they onboard.
+
+---
+
+*Design approved in conversation on 2026-07-01; red-team resolutions added 2026-07-01. Next step: implementation
+plan (writing-plans). No code or DB changes made yet.*
