@@ -2888,3 +2888,12 @@ Setup session. Production observability stack rewired to new owner accounts afte
 - Lessons: erp_push_model.md (new), feedback_vercel_commit_author.md (needs update — wrong email)
 - State: project_state.md unchanged; observability stack now wired to new accounts
 - Linear: none
+
+## 2026-07-01 — Shared user-admin Edge Function (design approved, build handed off)
+
+Cross-app login provisioning for the shared Supabase project. Design approved; no code/DB changes yet beyond one manual login.
+
+- **Spec:** `docs/superpowers/specs/2026-07-01-shared-user-admin-edge-function-design.md`
+- **Decision:** one Edge Function = the only place the service_role key ever lives; it creates logins ONLY (each app keeps its own permissions). Single role "Lead" (create logins + self-manage the app's lead list), gated by the caller's own JWT checked against a `user_admin.leads` table. Dedicated `user_admin` schema, RLS-locked tables, write-once audit log. German seeds the first Lead per app by hand, then hands-off.
+- **Also this session:** manually created RIC SYSTEMS login `auxpresupuestos@reymon.com.co` (Sergio, admin, CC 126) via raw insert into `auth.users` + `auth.identities` (bcrypt) — proves the bootstrap path. Verified no leak into v2/rutas (their `on_auth_user_created_*` triggers gate on `raw_user_meta_data.app`).
+- **Next:** fresh chat red-teams the spec, then plan → build via Supabase MCP (`apply_migration` + `deploy_edge_function`, no Supabase CLI).
