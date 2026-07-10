@@ -174,16 +174,20 @@ export async function getTenantPayments(
   const offset = (page - 1) * pageSize
 
   const rows = await execute(`
-    WITH standalones AS (
+    WITH mine AS MATERIALIZED (
+      -- Scan the vista_pagos view (full recaudo scan) ONCE for this tenant, then run all the
+      -- dedup logic against this ~150-row set. Referencing v2.vista_pagos inside the correlated
+      -- NOT EXISTS below re-scanned the whole recaudo table per row (~19s → statement timeout).
+      SELECT * FROM v2.vista_pagos WHERE inquilino_id = '${tenantId}'
+    ),
+    standalones AS (
       SELECT p.docto, p.cruce, p.valor_final, p.fecha_recaudo,
              date_trunc('month', p.fecha_recaudo)::date AS m
-      FROM v2.vista_pagos p
-      WHERE p.inquilino_id = '${tenantId}'
-        AND p.docto LIKE '001-%'
+      FROM mine p
+      WHERE p.docto LIKE '001-%'
         AND NOT EXISTS (
-          SELECT 1 FROM v2.vista_pagos p2
-          WHERE p2.inquilino_id = p.inquilino_id
-            AND p2.cruce = p.cruce
+          SELECT 1 FROM mine p2
+          WHERE p2.cruce = p.cruce
             AND p2.docto = REPLACE(p.docto, '001-', '')
             AND p2.valor_final = p.valor_final
         )
@@ -220,15 +224,13 @@ export async function getTenantPayments(
       COUNT(*) OVER()                             AS total_count,
       SUM(COALESCE(valor_final, 0)) OVER()        AS grand_total_final,
       SUM(COALESCE(pronto_pago_aplicado, 0)) OVER() AS grand_total_pp
-    FROM v2.vista_pagos p
-    WHERE p.inquilino_id = '${tenantId}'
-      AND NOT (
+    FROM mine p
+    WHERE NOT (
         p.docto LIKE '001-%'
         AND date_trunc('month', p.fecha_recaudo)::date IN (SELECT m FROM months_to_drop)
         AND NOT EXISTS (
-          SELECT 1 FROM v2.vista_pagos p2
-          WHERE p2.inquilino_id = p.inquilino_id
-            AND p2.cruce = p.cruce
+          SELECT 1 FROM mine p2
+          WHERE p2.cruce = p.cruce
             AND p2.docto = REPLACE(p.docto, '001-', '')
             AND p2.valor_final = p.valor_final
         )
