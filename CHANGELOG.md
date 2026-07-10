@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Session 66 — 2026-07-10: Mora page → DIAN interest method
+
+#### Added
+- **`v2.tasa_interes_mora`** — monthly DIAN mora rate (art. 635 E.T.). Admin enters the month's rate on the Mora page; July 2026 seeded at 26,79% E.A.
+- **Local test DB** (Docker) for Ckrea — `npm run dev:test` / `db:sync`, guard script, docs in CLAUDE.md. All dev/testing now runs off prod.
+
+#### Changed (Mora page)
+- **Interest now follows the admin's DIAN method** — `vr_vencido × (tasa_mes ÷ 366) × días vencidos`, counted from the due date. Fixes three bugs: the double 30-day grace (was undercharging ~30 days), the fixed 2%/mo rate (now the monthly DIAN rate), and the hidden 1–30-day-overdue invoices (all now shown).
+- Old ERP `fecha_vence` bug auto-corrected (due date = invoice + 30 when the ERP date is wrong).
+- Page reorganized: monthly rate input, real interest KPIs (active tenants), expandable per-invoice detail per tenant, Cartera Jurídica shown separately with its own subtotal. Interest charged on FVS invoices only.
+- Result: the page now matches the admin's Excel method invoice-by-invoice (IMAGENN test client reconciled).
+
 ### Session 64 — 2026-07-01: Shared `user-admin` Edge Function (multi-app login creation)
 
 #### Added (Supabase — live, not in git)

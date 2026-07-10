@@ -2,6 +2,44 @@
 
 ---
 
+## Session 66 — 2026-07-10: Mora page → DIAN interest method + local test DB
+
+**Trigger.** Admin wants to bill late-interest (interés de mora) on overdue invoices. She ran a DIAN/art-635 Excel for ONE client (IMAGENN & PUNTO) as a test. Task: review our Mora page in depth, compare to her Excel, fix the gaps so page == her method for every client.
+
+**Review — 3 real errors in the current Mora engine** (`src/lib/data/mora.ts`, verified vs live DB):
+1. **Double grace.** Interest uses `dias_mora − 30`, but `dias_mora` already = days *past* the due date (30-day term baked in). Undercounts ~30 days per invoice.
+2. **Wrong rate.** `interes_mora_diario = 0.000667/day` (fixed 2%/mo), never updated. Admin uses the monthly **DIAN rate**: 26,79% E.A. (Jul 2026) ÷ 366 = 0,0732%/day.
+3. **Hidden invoices.** Page filters `dias_mora > 30`, so every 1–30-day-overdue invoice (all June ones) is invisible. Data is fresh (June+July synced) — the filter, not the sync, hides them.
+Plus cosmetics: per-row interest hardcoded `0`; "0–30 días" aging box always empty.
+
+**Her method decoded (reproduced to the peso):** `interés = cartera × 0,2679 × días ÷ 366`, días counted from the day after `vencimiento`. Her Excel = only IMAGENN's 3 FVS invoices ($446.968 at 8-jul); the ~$29.7M ≈ our page total is coincidence. Same invoice FVS-73662: page $86.581 vs her $361.054.
+
+**Decisions (interview w/ German):** rate = admin types monthly (stored per-month); cutoff = always today; interest starts day-after-due-date (due = invoice+30, auto-corrects the old ERP `fecha_vence` bug); page lists every past-due FVS invoice; interest for everyone (active + jurídica), but top KPI = active only; base = `vr_vencido`; export deferred; notes (NSC/RK/CN) excluded. Spec: `docs/superpowers/specs/2026-07-10-mora-dian-interest-design.md`.
+
+**Local test DB built (first time for this project).** Docker stack on **ports 546xx** (Palma=543/Paxco=544/Cartera=545). Scripts: `test-db-sync.sh` (clone), `assert-local-db.sh` (guard), `dev-local.sh`/`test-local.sh`; npm `dev:test`/`db:sync`. Validated: local reproduces prod mora exactly (vencido 29.924.473, count 9).
+
+**Local-DB gotchas (cost real time — remember):**
+- **`siesa_raw` is SHARED and huge** — holds other apps' `ventas_detalle` (3.7GB), `movimientos_inv` (1.2GB), etc. Cloning the whole schema pulled 5.5GB. Fix: clone only Ckrea's 5 tables (`cartera, documentos, ocupacion, recaudo, estado_resultados` + `sync_batches` FK). recaudo/estado_resultados load EMPTY (mora doesn't need them; big COPYs drop the pooler's SSL).
+- **pg_dump ignores `--schema` when `--table` is also given** — v2 silently dropped from the dump. Must dump v2 and siesa_raw SEPARATELY, load siesa_raw first (v2 views depend on it).
+- **Pooler drops SSL on long COPYs** (~130MB+ / several min). Keep per-table dumps small.
+- Keep prod password out of argv (`ps`): split it into `PGPASSWORD` + URL-without-pass.
+
+**Next.** Execute the spec on local: migration `v2.tasa_interes_mora`, rewrite mora engine, rate input UI, expandable per-invoice rows. Then show German the IMAGENN before/after and the exact prod diff before any deploy.
+
+---
+
+## Session 65 — 2026-07-10: Fix 506A energy baseline reading
+
+**Trigger.** Admin flagged unit **506A**'s baseline meter reading as wrong: portal showed **1.399,7**, real first reading is **1.474**.
+
+**Finding.** `v2.lecturas_medidor` has exactly **one** row for 506A (`local_id 7d46016d-782b-40f5-a939-cccf78bfade1`, `E5L506A`, grupo CLL112739): período `2026-04`, `lectura_anterior = lectura_actual = 1399.7`, kwh 0, total $0, `estado=pendiente`, `submitted_by=null` (imported baseline, never tenant-submitted). No May/June readings. The 1.399,7 came from import and was wrong.
+
+**Change (approved by German, executed rn).** Single-row `UPDATE`: both `lectura_anterior` and `lectura_actual` `1399.7 → 1474`, kwh/total stay 0. **No bill affected** (consumo 0, $0). Undo instructions written into the row's `notas` field + undo SQL handed to German. Next reading computes against 1.474.
+
+**Undo.** `UPDATE v2.lecturas_medidor SET lectura_anterior=1399.7, lectura_actual=1399.7, updated_at=now() WHERE local_id='7d46016d-782b-40f5-a939-cccf78bfade1' AND periodo='2026-04';`
+
+---
+
 ## Session 64 — 2026-07-01: Shared `user-admin` Edge Function
 
 **Trigger.** Someone built a new app on the shared Supabase project and wanted a "create your own logins" section. Needed a safe, reusable way for any app to mint logins without holding the service_role key or waiting on German. Picked up the approved spec (`docs/superpowers/specs/2026-07-01-...`), red-teamed it first, then built.
@@ -2916,3 +2954,14 @@ Cross-app login provisioning for the shared Supabase project. Design approved; n
 - **Decision:** one Edge Function = the only place the service_role key ever lives; it creates logins ONLY (each app keeps its own permissions). Single role "Lead" (create logins + self-manage the app's lead list), gated by the caller's own JWT checked against a `user_admin.leads` table. Dedicated `user_admin` schema, RLS-locked tables, write-once audit log. German seeds the first Lead per app by hand, then hands-off.
 - **Also this session:** manually created RIC SYSTEMS login `auxpresupuestos@reymon.com.co` (Sergio, admin, CC 126) via raw insert into `auth.users` + `auth.identities` (bcrypt) — proves the bootstrap path. Verified no leak into v2/rutas (their `on_auth_user_created_*` triggers gate on `raw_user_meta_data.app`).
 - **Next:** fresh chat red-teams the spec, then plan → build via Supabase MCP (`apply_migration` + `deploy_edge_function`, no Supabase CLI).
+
+## 2026-07-07 — Local 507 cédula mismatch between ocupacion and cartera (fixed by IT)
+
+Same tenant, two different `documento` (cédula) across the two Siesa mirror tables → portal couldn't join contract to invoices for local 507.
+
+- **Symptom:** local 507 (MORENO GALLO CARLOS ANDRES) had `documento = 80186910` in `siesa_raw.ocupacion` (the contract) but `documento = 1021662469` in `siesa_raw.cartera` (the invoices). Siesa Terceros master already had the correct one (`1021662469`). Amounts matched ($2.995.350, dcto 20%, PP 10%) → confirmed same person/local, just a mis-keyed cédula.
+- **Why it matters:** portal joins `ocupacion` ↔ `cartera` on `documento`. Mismatch = projections (from ocupacion) and actuals (from cartera) land under different cédulas → tenant shows split/uncrossed.
+- **How detected:** cross-checked all 85 ocupacion rows vs cartera. 81 matched, 3 vacant (312/313/806, null documento), **1 real mismatch = 507**. Only case in the whole center.
+- **Resolution:** IT-only fix (`siesa_raw` is read-only, Siesa is IT-controlled). Sent German a Spanish message for IT naming both tables + the two cédulas + which is correct. IT unified the contract to `1021662469`.
+- **Verified after next push:** `ocupacion` re-synced 19:02 UTC (≈2 pm Bogotá) now shows `1021662469`; old `80186910` = 0 rows; 65/65 occupied contracts match cartera, zero mismatches. Local 507 working.
+- **Gotcha for next time:** `siesa_raw` is NOT live — Siesa pushes every ~3h. An IT fix is invisible until the next push. Always check `max(siesa_synced_at)` before concluding "not fixed". Reusable check: same-name-different-documento across ocupacion vs cartera = data-entry cédula error; run it if any tenant shows split contract/invoices.

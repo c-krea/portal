@@ -7,7 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "sync-csf": "npx tsx scripts/sync-csf.ts"
+    "sync-csf": "npx tsx scripts/sync-csf.ts",
+    "dev:test": "bash scripts/dev-local.sh",
+    "test:local": "bash scripts/test-local.sh",
+    "db:sync": "bash scripts/test-db-sync.sh",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",

@@ -55,3 +55,9 @@ docs/audits/INSIGHTS_v1.md
 # Local-only tooling + DB backups
 .claude/
 backups/
+
+# Local Supabase test DB (Docker) — never commit dumps or local temp
+.test-data/
+supabase/.temp/
+supabase/.branches/
+supabase/.env
