@@ -337,31 +337,48 @@ const NIT_RE = /^\d{5,12}(-\d)?$/
 
 export async function getPortalCartera(nit: string): Promise<PortalCartera> {
   if (!NIT_RE.test(nit)) return { saldoTotal: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }
+  // Interest uses the SAME DIAN method as the admin Mora page (see mora.ts):
+  // vr_vencido × (tasa DIAN del mes ÷ 366) × días vencidos, counted from the
+  // effective due date (fecha_vence, or factura+30 for the old ERP fecha_vence bug).
   const rows = await execute(`
     WITH rate AS (
-      SELECT valor::numeric AS r FROM v2.reglas_financieras WHERE clave = 'interes_mora_diario' LIMIT 1
+      SELECT COALESCE(
+        (SELECT tasa_ea FROM v2.tasa_interes_mora WHERE periodo = to_char(CURRENT_DATE,'YYYY-MM') LIMIT 1),
+        0
+      ) / 366 AS r
+    ),
+    base AS (
+      SELECT
+        (EXTRACT(YEAR FROM c.fecha_factura) * 100 + EXTRACT(MONTH FROM c.fecha_factura))::int AS periodo,
+        REVERSE(SPLIT_PART(REVERSE(c.sucursal), ' ', 1))                                      AS unidad,
+        ROUND(c.saldo)::numeric                                     AS saldo,
+        ROUND(c.vr_vencido)::numeric                                AS vencido,
+        c.vr_vencido                                                AS vr_vencido_raw,
+        CASE WHEN c.fecha_vence::date >= c.fecha_factura::date + 25
+             THEN c.fecha_vence::date
+             ELSE c.fecha_factura::date + 30 END                    AS venc_efec,
+        c.fecha_vence::date                                         AS fecha_vence,
+        c.fecha_factura                                             AS fecha_factura,
+        ROUND(d.ventas)::numeric      AS ventas,
+        ROUND(d.impuesto)::numeric    AS impuesto,
+        ROUND(d.retenciones)::numeric AS retenciones
+      FROM siesa_raw.cartera c
+      LEFT JOIN siesa_raw.documentos d
+        ON d.documento = '001-' || c.factura
+        AND d.tipo = 'Facturas'
+      WHERE c.documento = '${nit}'
+        AND c.factura LIKE 'FVS-%'
+        AND c.id_zona = 'Z40'
+        AND c.saldo > 0
     )
     SELECT
-      (EXTRACT(YEAR FROM c.fecha_factura) * 100 + EXTRACT(MONTH FROM c.fecha_factura))::int AS periodo,
-      REVERSE(SPLIT_PART(REVERSE(c.sucursal), ' ', 1))                                      AS unidad,
-      ROUND(c.saldo)::numeric                                     AS saldo,
-      ROUND(c.vr_vencido)::numeric                                AS vencido,
-      GREATEST(0, CURRENT_DATE - c.fecha_vence::date)::int        AS dias_mora,
-      GREATEST(0, COALESCE(c.financia, 0) - 30)::int              AS dias_interest,
-      ROUND(c.vr_vencido * GREATEST(0, COALESCE(c.financia, 0) - 30) * (SELECT r FROM rate))::numeric AS interes_est,
-      c.fecha_vence::date                                         AS fecha_vence,
-      ROUND(d.ventas)::numeric      AS ventas,
-      ROUND(d.impuesto)::numeric    AS impuesto,
-      ROUND(d.retenciones)::numeric AS retenciones
-    FROM siesa_raw.cartera c
-    LEFT JOIN siesa_raw.documentos d
-      ON d.documento = '001-' || c.factura
-      AND d.tipo = 'Facturas'
-    WHERE c.documento = '${nit}'
-      AND c.factura LIKE 'FVS-%'
-      AND c.id_zona = 'Z40'
-      AND c.saldo > 0
-    ORDER BY c.fecha_factura DESC, c.sucursal
+      periodo, unidad, saldo, vencido,
+      GREATEST(0, CURRENT_DATE - venc_efec)::int  AS dias_mora,
+      GREATEST(0, CURRENT_DATE - venc_efec)::int  AS dias_interest,
+      ROUND(vr_vencido_raw * (SELECT r FROM rate) * GREATEST(0, CURRENT_DATE - venc_efec))::numeric AS interes_est,
+      fecha_vence, ventas, impuesto, retenciones
+    FROM base
+    ORDER BY fecha_factura DESC, unidad
   `)
   const mapped: PortalCarteraRow[] = rows.map((r) => ({
     periodo:     Number(r.periodo),

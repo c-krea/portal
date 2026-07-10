@@ -13,6 +13,8 @@
 - Old ERP `fecha_vence` bug auto-corrected (due date = invoice + 30 when the ERP date is wrong).
 - Page reorganized: monthly rate input, real interest KPIs (active tenants), expandable per-invoice detail per tenant, Cartera Jurídica shown separately with its own subtotal. Interest charged on FVS invoices only.
 - Result: the page now matches the admin's Excel method invoice-by-invoice (IMAGENN test client reconciled).
+- **Tenant portal aligned** — `getPortalCartera` interest now uses the same DIAN rate + due-date logic, so the tenant's estimate always matches the admin page (verified: IMAGENN identical per invoice).
+- **Docs reconciled** — CLAUDE.md Rule C + `financial-rules-engine-spec.md` marked: mora billing = DIAN art. 635, superseding the old 0,05%/día.
 
 ### Session 64 — 2026-07-01: Shared `user-admin` Edge Function (multi-app login creation)
 

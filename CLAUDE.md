@@ -50,7 +50,7 @@ Docker-based local twin of Ckrea's data. **All dev/testing runs here, never prod
 Four rules govern ALL money calculations:
 - **Rule A** — Early payment (pronto pago): discount if paid within 10 days of invoice (10/20/30% per contract)
 - **Rule B** — Contract phase discounts: time-based % discounts (0/10/20/30/43%), expire by month
-- **Rule C** — Late interest: 0.05%/day (1.5%/month) on overdue balance, starts day 11
+- **Rule C** — Late interest (mora): **DIAN / Superfinanciera monthly rate** (art. 635 E.T.). `interés = vr_vencido × (tasa_mes ÷ 366) × días vencidos`, counted from the due date (invoice + 30). Rate lives in `v2.tasa_interes_mora`, admin-entered each month (Jul 2026 = 26,79% E.A.). Shipped 2026-07-10 — **supersedes** the old fixed 0.05%/day. See `mora_dian_interest` memory.
 - **Rule D** — Gastos: water ($29,947/unit flat), electricity (metered), all others absorbed by C-Krea
 
 Invoice chain: `Canon → minus phase discount → IVA (19%) → minus pronto pago (if on time) → plus gastos → plus interest (if late)`

@@ -37,8 +37,8 @@ C-Krea PayControl manages billing for ~85 commercial rental units in Central Kre
 | IPC increment rate | 5.1% | Applied once per year on each tenant's IPC date |
 | IVA (VAT) rate | 19% | Colombian standard rate |
 | Pronto Pago (PP) rate | 10% (standard) | Applied on net amount (canon - descuento_fase) |
-| Late interest rate | 1.5% monthly | Standard Colombian commercial rate |
-| Daily interest rate | 0.05% | = 1.5% / 30 = 0.0005 (simple daily) |
+| Late interest rate | ⚠ DIAN art. 635 monthly (see §4) | Superseded 2026-07-10 — was 1.5%/mo; now the Superfinanciera monthly rate |
+| Daily interest rate | ⚠ tasa_ea ÷ 366 (see §4) | Superseded — was 0.05%/day; rate from `v2.tasa_interes_mora` |
 | PP payment window | 10 calendar days | From invoice date |
 | Water allocation per unit | $29,947 COP/month | Flat rate |
 | Electricity allocation | Per-meter (variable) | Individually metered per tenant |
@@ -190,6 +190,13 @@ Each tenant-contract record needs:
 ---
 
 ## 4. Rule C -- Late-Interest Accrual (Intereses de Mora)
+
+> ⚠ **SUPERSEDED (2026-07-10) — mora billing now uses the DIAN / Superfinanciera rate (art. 635 E.T.).**
+> The shipped Mora page (`src/lib/data/mora.ts`) and the tenant portal (`src/lib/data/portal.ts`) compute:
+> `interés = vr_vencido × (tasa_ea_mes ÷ 366) × días vencidos`, counted from the **due date** (invoice + 30).
+> The monthly effective-annual rate is admin-entered in `v2.tasa_interes_mora` (Jul 2026 = 26,79% E.A. ≈ 0,073%/day),
+> **not** the fixed 0.05%/day described below. The 1.5%/mo content in this section is retained for historical
+> rationale only. Canonical: memory `mora_dian_interest`. Reconciled peso-for-peso vs the admin's DIAN Excel.
 
 ### 4.1 Definition
 

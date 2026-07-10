@@ -24,7 +24,11 @@ Plus cosmetics: per-row interest hardcoded `0`; "0–30 días" aging box always 
 - **Pooler drops SSL on long COPYs** (~130MB+ / several min). Keep per-table dumps small.
 - Keep prod password out of argv (`ps`): split it into `PGPASSWORD` + URL-without-pass.
 
-**Next.** Execute the spec on local: migration `v2.tasa_interes_mora`, rewrite mora engine, rate input UI, expandable per-invoice rows. Then show German the IMAGENN before/after and the exact prod diff before any deploy.
+**Shipped (commit `0dd9362`, deployed).** Migration applied to prod, engine + UI live, IMAGENN reconciled ($502.791 to today). Local test DB used throughout — never touched prod for testing.
+
+**Follow-ups, same day (German said do both):**
+- **Tenant portal aligned** — `getPortalCartera` now uses the DIAN rate table + venc_efectivo logic; verified IMAGENN identical to the admin page per invoice. No more tenant-vs-admin interest drift.
+- **Docs reconciled** — CLAUDE.md Rule C + `financial-rules-engine-spec.md` (§4 banner + summary table) now say mora billing = DIAN art. 635, superseding the old 0,05%/día. Old rationale retained. The portal's day count was already `financia-30` (fine); only the rate was stale.
 
 ---
 
