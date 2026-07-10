@@ -22,12 +22,9 @@ export default async function MoraPage() {
 
   return (
     <>
-      <PageHeader title="Gestión de Mora" />
-
-      {/* ── Monthly DIAN rate ── */}
-      <div className="mb-4">
+      <PageHeader title="Gestión de Mora">
         <TasaMoraForm periodo={summary.periodo} tasaEa={summary.tasaEa} />
-      </div>
+      </PageHeader>
 
       {/* ── Row 1: core KPIs (active tenants) ── */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-4">
