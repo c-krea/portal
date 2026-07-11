@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Session 68 — 2026-07-11: Pronto-pago window fix (tenant portal + staff page)
+
+#### Fixed
+- **Pronto-pago discount vanished on the 10th of every month.** The tenant portal gated the discount on a fixed calendar cutoff (`todayDay <= 10`), so on the 11th it disappeared for everyone — even though a 1st-of-month invoice's 10-day window (counted from the 2nd, since invoices are cut mid-day on the 1st) runs through the 11th. Replaced with a **per-invoice** deadline: eligible while `today ≤ fecha_factura + 10 días`. Now self-adjusts for invoices billed on the 2nd (valid through the 12th). Files: `src/lib/data/portal.ts`, `src/app/(portal)/portal/page.tsx`, `cartera-breakdown.tsx`, `wompi-button.tsx`.
+- **Staff "Locales" page aligned** — same per-invoice window (was on the old `todayDay <= 10` bug + a current-month-only filter), and its pronto-pago now computes on the **net canon (`ventas`, pre-IVA)** instead of the full balance (`saldo`), which had inflated the discount by ~19% (IVA) and disagreed with the tenant portal. Files: `src/lib/data/tenant-detail.ts`, `src/app/(app)/locales/[id]/page.tsx`.
+
+#### Notes
+- Review caught two would-be bugs: (1) `siesa_raw.cartera.fecha_factura` is `timestamptz` → returned an ISO string that broke the date parse → silently zeroed the discount for all (fixed with a `::date` cast, mirrors `fecha_vence`); (2) the staff page built "today" from UTC server time, not Bogotá, so it would have expired PP a day early every evening 19:00–24:00 COT (fixed to `America/Bogota`, matching the portal).
+- Shared date rule extracted to `src/lib/pronto-pago.ts` (`isPpDateEligible`) so tenant + staff views can't drift.
+- Business rule confirmed by Esteban: 1st-of-month invoice → PP deadline the **11th** (invoice cut mid-day → the 1st is a partial day, count from the 2nd). Diverges 1 day from the ERP's own `fecha_pronto_pago` (mostly prints the 10th; inconsistent field, not used directly). Read-only — no ERP/DB writes.
+- **Known follow-up:** the tenant portal applies one `pronto_pago_pct` to all of a tenant's units; the staff page uses per-unit rates. Affects exactly 1 multi-unit tenant with mixed rates (REBELARTE). Not fixed in this drop.
+
+### Session 67 — 2026-07-10: Client detail page timeout fix (perf)
+
+#### Fixed
+- **Client detail page (`/locales/[id]`) crashed with "Error al cargar" for heavy clients.** Root cause: `getTenantPayments` referenced the `vista_pagos` view (a full 130K-row `recaudo` scan) inside a correlated `NOT EXISTS`, re-scanning the whole table once per payment row (~148× for IMAGENN) → **19 s** per page → exceeded the 8 s `statement_timeout` → the query was cancelled → the page threw. Hit every client with enough payment history (looked like "broken client links"; the URL was always valid — it was a timeout, not a 404).
+- **Fix:** materialize the tenant's payment rows once (`WITH mine AS MATERIALIZED`) and run all dedup against that ~150-row set. **19,043 ms → 124 ms (~150×).** Output verified byte-identical vs the old query for IMAGENN (147 rows), FAJARDO (82) and Tatiana Contreras (heaviest `months_to_drop` path) — no numbers change. Other 3 detail-page queries already sub-ms. One file: `src/lib/data/tenant-detail.ts`.
+
 ### Session 66 — 2026-07-10: Mora page → DIAN interest method
 
 #### Added

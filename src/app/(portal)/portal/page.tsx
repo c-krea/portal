@@ -11,6 +11,7 @@ import {
   getPortalElectricityPeriodos,
 } from "@/lib/data/portal"
 import { formatCOP, formatDate } from "@/lib/formatters"
+import { isPpDateEligible } from "@/lib/pronto-pago"
 import Link from "next/link"
 import { ProfileCard } from "./profile-card"
 import { WompiButton } from "./wompi-button"
@@ -61,7 +62,6 @@ export default async function PortalPage() {
   const periodo = currentPeriodo(nowCO)
   const electricidadPeriodo = prevPeriodo(nowCO)
   const todayDay = nowCO.getDate()
-  const currentPeriodInt = nowCO.getFullYear() * 100 + (nowCO.getMonth() + 1)
 
   const [pagos, medidor, cartera, electricityInvoiceResults, electricityPeriodosResults] = await Promise.all([
     getPortalPagos(profile.tenantId, 5),
@@ -90,14 +90,17 @@ export default async function PortalPage() {
 
   const lastPago = pagos[0]
 
-  // Pronto pago: apply per invoice, current period only, within first 10 days
+  // Pronto pago: valid within 10 calendar days of each invoice's OWN date (shared
+  // rule in src/lib/pronto-pago.ts). Invoice on the 1st → count from the 2nd → last
+  // valid day is the 11th. Per-invoice, since some invoices issue on the 2nd.
   const ppPct = (profile.prontoPagoPct ?? 0) / 100
-  const isPpWindow = todayDay <= 10 && ppPct > 0
-  const ppDiscountTotal = isPpWindow
-    ? cartera.rows
-        .filter(r => r.periodo === currentPeriodInt)
-        .reduce((sum, r) => sum + Math.round((r.ventas ?? 0) * ppPct), 0)
-    : 0
+  const todayMidnight = new Date(nowCO.getFullYear(), nowCO.getMonth(), nowCO.getDate())
+  const ppDiscountFor = (r: { fechaFactura: string | null; ventas: number | null }): number =>
+    ppPct > 0 && isPpDateEligible(r.fechaFactura, todayMidnight)
+      ? Math.round((r.ventas ?? 0) * ppPct)
+      : 0
+  const ppDiscountTotal = cartera.rows.reduce((sum, r) => sum + ppDiscountFor(r), 0)
+  const isPpWindow = ppDiscountTotal > 0
   const saldoConPp = cartera.saldoTotal - ppDiscountTotal
 
   const enMora = cartera.vencido > 0
@@ -260,9 +263,7 @@ export default async function PortalPage() {
           periodo:     row.periodo,
           unidad:      row.unidad,
           saldo:       row.saldo,
-          ppDiscount:  isPpWindow && row.periodo === currentPeriodInt
-                         ? Math.round((row.ventas ?? 0) * ppPct)
-                         : 0,
+          ppDiscount:  ppDiscountFor(row),
           vencido:     row.vencido > 0,
           ventas:      row.ventas,
           impuesto:    row.impuesto,
@@ -274,18 +275,16 @@ export default async function PortalPage() {
       <WompiButton
         nit={profile.nit ?? ""}
         tipoPersona={profile.tipoPersona}
-        hasPp={isPpWindow && ppDiscountTotal > 0}
+        hasPp={isPpWindow}
         ppPct={profile.prontoPagoPct ?? 0}
         electricityInvoices={electricityInvoices}
         units={profile.allUnits.map(unitNumber => {
           const rawSaldo = cartera.rows
             .filter(r => r.unidad === unitNumber)
             .reduce((s, r) => s + r.saldo, 0)
-          const unitPpDiscount = isPpWindow
-            ? cartera.rows
-                .filter(r => r.unidad === unitNumber && r.periodo === currentPeriodInt)
-                .reduce((sum, r) => sum + Math.round((r.ventas ?? 0) * ppPct), 0)
-            : 0
+          const unitPpDiscount = cartera.rows
+            .filter(r => r.unidad === unitNumber)
+            .reduce((sum, r) => sum + ppDiscountFor(r), 0)
           return { unitNumber, saldo: rawSaldo - unitPpDiscount }
         })}
       />

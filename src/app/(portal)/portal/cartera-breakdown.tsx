@@ -147,7 +147,7 @@ export function CarteraBreakdown({
 
           {showPp && (
             <p className="mt-2 text-xs text-slate-400">
-              Descuento válido pagando antes del día 10 del mes.
+              Descuento válido pagando dentro de los 10 días de la factura.
             </p>
           )}
         </>

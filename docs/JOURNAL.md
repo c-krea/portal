@@ -2,6 +2,38 @@
 
 ---
 
+## Session 68 — 2026-07-11: Pronto-pago window off-by-one + wrong discount base
+
+**Trigger.** Esteban relayed tenant complaints — the pronto-pago (early-payment) discount disappeared in the app.
+
+**Root cause (systematic-debugging).** `(portal)/portal/page.tsx` gated the discount on a fixed calendar cutoff `todayDay <= 10`. Today = the 11th → hidden for everyone. Two faults: off by one, and blind to each invoice's own date. Real rule = within 10 days of the invoice date, counting from the day *after* (invoices are cut mid-day on the 1st → the 1st is a partial day → count from the 2nd → deadline the 11th). Fix: per-invoice window `0 ≤ today − fecha_factura ≤ 10`, applied to the tenant portal **and** the staff Locales page so they agree. Self-adjusts for invoices billed on the 2nd (valid through the 12th).
+
+**Two review subagents (run before shipping, at German's request) caught a blocker I'd have shipped.** `siesa_raw.cartera.fecha_factura` is `timestamptz` → the `exec_sql` RPC returns `"2026-07-01T00:00:00+00:00"` → `new Date(f + "T00:00:00")` = **Invalid Date** → `NaN` → `ppEligible` always false → the discount would have rendered **$0 for every tenant, silently**. `tsc` cannot catch it. Fix: cast `fecha_factura::date` in SQL (the same pattern the already-shipped `fecha_vence` uses). The staff source `v2.vista_cartera_actual.fecha_factura` is already `date`, so no cast needed there. **Lesson:** any `+ "T..."` date surgery on a siesa_raw field must first cast `::date` in SQL — timestamptz through `exec_sql` is a recurring trap.
+
+**Second fix (discount base).** The staff Locales page computed PP off `saldo` (canon + IVA − retefuente) → ~19% too big and split-brained vs the tenant portal, which uses `ventas` (net canon, pre-IVA — the legally-correct base). Joined `siesa_raw.documentos` into `getTenantCartera` to expose `ventas`; staff page now uses it. `getTenantCartera` is consumed only by the Locales page → isolated blast radius.
+
+**Decision surfaced to German (his call, not mine).** The ERP's own `fecha_pronto_pago` mostly prints the **10th** for a 1st-of-month invoice (vs our 11th) and is inconsistent (gaps of 8/9/10 days, and ~6 invoices set it = the invoice date → no discount at all). Chose **not** to read it directly. Esteban confirmed the **11th** rule (partial-day reasoning above). The app is thus 1 day more generous than the printed factura — tenant-friendly, low risk (a tenant only ever benefits).
+
+**Second review round (simplify + logic, before ship).** Two subagents. Caught a real TZ blocker: the staff page built "today" from raw `new Date()` (Vercel = UTC, no `TZ` var) while the portal used Bogotá — so 19:00–24:00 COT the staff page thinks it's tomorrow and expires PP a day early, breaking the "both pages agree" goal. Fixed: staff page now uses the same `America/Bogota` anchor. Extracted the shared date rule to `src/lib/pronto-pago.ts` (`isPpDateEligible`) so the two views can't drift, added a `ppDiscountFor` closure in the portal (killed 3× repeated money math), dropped tautological `isPpWindow && ppDiscountTotal>0`. Verified: join can't fan out (`siesa_raw.documentos.documento` is PK), whole diff read-only. **Flagged, not fixed (follow-up):** the tenant portal applies one `profile.prontoPagoPct` to all of a tenant's units; the staff page uses per-unit rates. Only **1** tenant (REBELARTE, units at 10/10/15%) of 13 multi-unit tenants has mixed rates, so the portal shows the wrong PP% on one unit for that single account. Pre-existing; tracked for a fast follow-up.
+
+**Verified.** Build clean (exit 0). Against live data (read-only): all 57 open current-month invoices eligible today — 52 day-1 @ 10 days out, 5 day-2 @ 9 days out; day-1 correctly expires the 12th. Whole diff scanned — **zero writes**, ERP data read + displayed only.
+
+---
+
+## Session 67 — 2026-07-10: "Broken client link" was a 19-second query timeout
+
+**Trigger.** German: clicking a client name on the Mora page "directs to a broken page." Reported as a broken link / 404.
+
+**Long dead-end (worth remembering).** I chased it as a **404 / missing route** for a long time: verified `/locales/[id]` exists, is `force-dynamic`, middleware doesn't 404, all 15 mora tenants' `tenantId` are valid UUIDs that resolve in `getTenantDetail`, the `?unit=` param is harmless, prod is on the latest deploy aliased to ckrea.com.co. Everything said the link *could not* 404. Concluded (wrongly) it was a stale browser cache. **The screenshot flipped it:** the screen said **"Error al cargar"** (the `(app)/error.tsx` boundary), NOT "Página no encontrada". It's a *thrown render error*, not a missing page. Lesson: **get the actual screenshot/symptom early** — "broken page" ≠ 404.
+
+**Root cause (found via local repro + `EXPLAIN ANALYZE` on prod).** The page crashes only with real payment data (local `recaudo` is empty, which is why local always rendered fine). `getTenantPayments` referenced `v2.vista_pagos` (a view that full-scans `siesa_raw.recaudo`, ~130K rows) inside a **correlated `NOT EXISTS`** → the whole table was re-scanned **once per payment row** (`loops=148` for IMAGENN) → **19,043 ms**. The app runs queries via the **`authenticator` role with `statement_timeout = 8 s`**, so Postgres cancelled the query → `execute()` threw → error boundary. Any client with enough payments tripped it → "each client's link is broken." (MCP `execute_sql` has no timeout, so the slow query *completed* there — it never showed up in direct SQL testing.)
+
+**Fix (shipped, commit `ca550d1`).** Materialize the tenant's payments once: `WITH mine AS MATERIALIZED (SELECT * FROM v2.vista_pagos WHERE inquilino_id = '<id>')`, then dedup against that ~150-row set. **19,043 ms → 124 ms.** Verified byte-identical output vs the old query for IMAGENN (147), FAJARDO (82) and Tatiana Contreras (5 dropped months — heaviest `months_to_drop` path). Other 3 detail-page queries measured sub-ms (indexed). See memory `query_statement_timeout_8s`.
+
+**Process notes.** `vercel logs` only streams *new* logs (5-min cap) and reset()/soft-nav don't re-hit the server, so log capture never caught it — local dev (full stack traces) + `EXPLAIN ANALYZE` did. Copying client payment PII to a local CSV was (correctly) blocked; reproduced with synthetic payments + real cartera/contracts instead.
+
+---
+
 ## Session 66 — 2026-07-10: Mora page → DIAN interest method + local test DB
 
 **Trigger.** Admin wants to bill late-interest (interés de mora) on overdue invoices. She ran a DIAN/art-635 Excel for ONE client (IMAGENN & PUNTO) as a test. Task: review our Mora page in depth, compare to her Excel, fix the gaps so page == her method for every client.

@@ -189,15 +189,11 @@ export function WompiButton({
                       <span className="font-semibold">Importante:</span> en el campo <span className="font-semibold">"# Local"</span> de Wompi ingrese su {docLabel}, no el número de su local. El mes lo ingresa normalmente.
                     </p>
                   </div>
-                  {hasPp && (() => {
-                    const now = new Date()
-                    const deadline = `10/${String(now.getMonth() + 1).padStart(2, "0")}`
-                    return (
-                      <p className="text-xs font-medium text-emerald-600">
-                        Incluye PP {ppPct}% · Válido hasta {deadline}
-                      </p>
-                    )
-                  })()}
+                  {hasPp && (
+                    <p className="text-xs font-medium text-emerald-600">
+                      Incluye PP {ppPct}% · Válido dentro de los 10 días de la factura
+                    </p>
+                  )}
                 </div>
 
                 <div className="mt-5 flex gap-3">

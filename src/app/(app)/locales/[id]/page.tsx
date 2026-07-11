@@ -12,6 +12,7 @@ import {
 import { PageHeader } from "@/components/layout/page-header"
 import { CarteraTable } from "@/components/clientes/cartera-table"
 import { formatCOP, formatDate, formatDateShort } from "@/lib/formatters"
+import { isPpDateEligible } from "@/lib/pronto-pago"
 import { cn } from "@/lib/utils"
 import { isValidUuid } from "@/lib/security/validators"
 import { BadgePercent } from "lucide-react"
@@ -78,23 +79,24 @@ export default async function ClienteDetailPage({
   const interesTotal = cartera.reduce((s, c) => s + c.interesAcumulado, 0)
   const maxDias = cartera.length ? Math.max(...cartera.map((c) => c.diasInterest)) : 0
 
-  // Pronto pago: per-unit rate, current month invoices only, first 10 days
-  const now = new Date()
-  const todayDay = now.getDate()
-  const currentYYYYMM = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+  // Pronto pago: per-unit rate, valid within 10 calendar days of each invoice's OWN
+  // date (invoice on the 1st → last valid day is the 11th). Shared date rule in
+  // src/lib/pronto-pago.ts; Bogotá time so this matches the tenant portal exactly.
+  const nowCO = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }))
+  const todayDay = nowCO.getDate()
+  const todayMidnight = new Date(nowCO.getFullYear(), nowCO.getMonth(), nowCO.getDate())
   const ppByUnit: Record<string, number> = {}
   for (const c of contracts) {
     if (c.unitNumber && c.prontoPagoPct > 0) ppByUnit[c.unitNumber] = c.prontoPagoPct
   }
-  const isPpWindow = todayDay <= 10
-  const ppDiscountTotal = isPpWindow
-    ? cartera
-        .filter(item => item.fechaFactura?.startsWith(currentYYYYMM))
-        .reduce((sum, item) => {
-          const ppPct = item.unidad ? (ppByUnit[item.unidad] ?? 0) : 0
-          return sum + (ppPct > 0 ? Math.round(item.saldo * ppPct / 100) : 0)
-        }, 0)
-    : 0
+  const ppDiscountTotal = cartera
+    .filter(item => isPpDateEligible(item.fechaFactura, todayMidnight))
+    .reduce((sum, item) => {
+      const ppPct = item.unidad ? (ppByUnit[item.unidad] ?? 0) : 0
+      // PP applies to the net canon (ventas, pre-IVA), never the full balance
+      return sum + (ppPct > 0 ? Math.round(item.ventas * ppPct / 100) : 0)
+    }, 0)
+  const isPpWindow = ppDiscountTotal > 0
   const saldoConPP = saldoTotal - ppDiscountTotal
 
   return (
@@ -195,7 +197,7 @@ export default async function ClienteDetailPage({
         {/* Cartera KPIs */}
         {cartera.length > 0 ? (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {isPpWindow && ppDiscountTotal > 0 ? (
+            {isPpWindow ? (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-emerald-700">Saldo Total</p>

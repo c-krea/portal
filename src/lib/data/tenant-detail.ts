@@ -20,6 +20,7 @@ export type CarteraItem = {
   diasMora: number
   diasInterest: number
   saldo: number
+  ventas: number
   valorVencido: number
   interesAcumulado: number
 }
@@ -135,19 +136,22 @@ export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]>
       SELECT valor::numeric AS rate FROM v2.reglas_financieras WHERE clave = 'interes_mora_diario' LIMIT 1
     )
     SELECT
-      row_id::text                                              AS id,
-      factura                                                   AS siesa_factura,
-      fecha_factura,
-      fecha_vencimiento                                         AS fecha_vence,
-      REVERSE(SPLIT_PART(REVERSE(sucursal), ' ', 1))              AS unidad,
-      COALESCE(dias_mora, 0)                                              AS dias_mora,
-      GREATEST(0, COALESCE(dias_financia, 0) - 30)                       AS dias_interest,
-      COALESCE(saldo, 0)::numeric                                        AS saldo,
-      COALESCE(vr_vencido, 0)::numeric                                   AS valor_vencido,
-      (COALESCE(saldo, 0) * GREATEST(0, COALESCE(dias_financia, 0) - 30) * (SELECT rate FROM r))::numeric AS interes
-    FROM v2.vista_cartera_actual
-    WHERE inquilino_id = '${tenantId}'
-    ORDER BY fecha_vencimiento DESC NULLS LAST
+      v.row_id::text                                              AS id,
+      v.factura                                                   AS siesa_factura,
+      v.fecha_factura,
+      v.fecha_vencimiento                                         AS fecha_vence,
+      REVERSE(SPLIT_PART(REVERSE(v.sucursal), ' ', 1))            AS unidad,
+      COALESCE(v.dias_mora, 0)                                    AS dias_mora,
+      GREATEST(0, COALESCE(v.dias_financia, 0) - 30)             AS dias_interest,
+      COALESCE(v.saldo, 0)::numeric                              AS saldo,
+      ROUND(d.ventas)::numeric                                   AS ventas,
+      COALESCE(v.vr_vencido, 0)::numeric                         AS valor_vencido,
+      (COALESCE(v.saldo, 0) * GREATEST(0, COALESCE(v.dias_financia, 0) - 30) * (SELECT rate FROM r))::numeric AS interes
+    FROM v2.vista_cartera_actual v
+    LEFT JOIN siesa_raw.documentos d
+      ON d.documento = '001-' || v.factura AND d.tipo = 'Facturas'
+    WHERE v.inquilino_id = '${tenantId}'
+    ORDER BY v.fecha_vencimiento DESC NULLS LAST
   `)
   return rows.map((r) => ({
     id: String(r.id),
@@ -158,6 +162,7 @@ export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]>
     diasMora: Number(r.dias_mora ?? 0),
     diasInterest: Number(r.dias_interest ?? 0),
     saldo: Number(r.saldo ?? 0),
+    ventas: Number(r.ventas ?? 0),
     valorVencido: Number(r.valor_vencido ?? 0),
     interesAcumulado: Number(r.interes ?? 0),
   }))

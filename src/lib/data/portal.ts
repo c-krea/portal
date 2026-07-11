@@ -317,6 +317,7 @@ export type PortalCarteraRow = {
   vencido: number
   diasMora: number
   diasInterest: number
+  fechaFactura: string | null
   fechaVence: string | null
   ventas: number | null
   impuesto: number | null
@@ -358,7 +359,7 @@ export async function getPortalCartera(nit: string): Promise<PortalCartera> {
              THEN c.fecha_vence::date
              ELSE c.fecha_factura::date + 30 END                    AS venc_efec,
         c.fecha_vence::date                                         AS fecha_vence,
-        c.fecha_factura                                             AS fecha_factura,
+        c.fecha_factura::date                                       AS fecha_factura,
         ROUND(d.ventas)::numeric      AS ventas,
         ROUND(d.impuesto)::numeric    AS impuesto,
         ROUND(d.retenciones)::numeric AS retenciones
@@ -376,7 +377,7 @@ export async function getPortalCartera(nit: string): Promise<PortalCartera> {
       GREATEST(0, CURRENT_DATE - venc_efec)::int  AS dias_mora,
       GREATEST(0, CURRENT_DATE - venc_efec)::int  AS dias_interest,
       ROUND(vr_vencido_raw * (SELECT r FROM rate) * GREATEST(0, CURRENT_DATE - venc_efec))::numeric AS interes_est,
-      fecha_vence, ventas, impuesto, retenciones
+      fecha_factura, fecha_vence, ventas, impuesto, retenciones
     FROM base
     ORDER BY fecha_factura DESC, unidad
   `)
@@ -387,6 +388,7 @@ export async function getPortalCartera(nit: string): Promise<PortalCartera> {
     vencido:     Number(r.vencido ?? 0),
     diasMora:    Number(r.dias_mora ?? 0),
     diasInterest: Number(r.dias_interest ?? 0),
+    fechaFactura: r.fecha_factura ? String(r.fecha_factura) : null,
     fechaVence:  r.fecha_vence ? String(r.fecha_vence) : null,
     ventas:      r.ventas != null ? Number(r.ventas) : null,
     impuesto:    r.impuesto != null ? Number(r.impuesto) : null,
