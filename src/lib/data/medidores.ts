@@ -1,6 +1,7 @@
 import { execute } from "@/lib/db/executor"
 import { assertPeriodo, assertUuid } from "@/lib/security/validators"
 import { cached } from "@/lib/cache"
+import { mesAnterior } from "@/lib/periodo"
 
 export type UnitWithMeter = {
   unitId: string
@@ -27,6 +28,10 @@ export type MedidorAdminRow = {
   readingId: string | null
   validationStatus: "pendiente" | "aprobado" | "revision" | "critico" | "sin_lectura" | null
   fotoUrl: string | null
+  // Period of the reading this one was measured against. When it isn't the
+  // immediately-previous month, the kWh span more than one month.
+  prevPeriodo: string | null
+  saltoPeriodo: boolean
 }
 
 async function getMeterYears_uncached(): Promise<number[]> {
@@ -60,7 +65,8 @@ async function getMedidoresAdmin_uncached(
       mr.total_energia::numeric                          AS total_energia,
       mr.estado_validacion                               AS validation_status,
       mr.foto_url,
-      avg3.promedio_3m
+      avg3.promedio_3m,
+      prev.periodo                                       AS prev_periodo
     FROM v2.locales u
     LEFT JOIN v2.contratos c
            ON c.local_id = u.id
@@ -78,6 +84,12 @@ async function getMedidoresAdmin_uncached(
         ORDER BY periodo DESC LIMIT 3
       ) mr2
     ) avg3 ON true
+    LEFT JOIN LATERAL (
+      SELECT periodo
+      FROM v2.lecturas_medidor
+      WHERE local_id = u.id AND periodo < '${periodo}'
+      ORDER BY periodo DESC LIMIT 1
+    ) prev ON true
     WHERE u.empresa_id = '${empresaId}'::uuid
       AND c.id IS NOT NULL
       AND EXISTS (
@@ -86,12 +98,15 @@ async function getMedidoresAdmin_uncached(
     ORDER BY u.unidad
   `)
 
+  const esperado = mesAnterior(periodo)
+
   return (rows as Array<Record<string, unknown>>).map((r) => {
     const kwh = r.kwh != null ? Number(r.kwh) : null
     const p3m = r.promedio_3m != null ? Number(r.promedio_3m) : null
     const desv = kwh != null && p3m != null && p3m > 0
       ? Math.round(((kwh - p3m) / p3m) * 100)
       : null
+    const prevPeriodo = r.prev_periodo ? String(r.prev_periodo) : null
     return {
       unitId:      String(r.unit_id),
       unitNumber:  String(r.unit_number),
@@ -106,6 +121,8 @@ async function getMedidoresAdmin_uncached(
         ? ((r.validation_status as string | null) ?? "pendiente") as MedidorAdminRow["validationStatus"]
         : "sin_lectura",
       fotoUrl: r.foto_url ? String(r.foto_url) : null,
+      prevPeriodo,
+      saltoPeriodo: r.reading_id != null && prevPeriodo != null && prevPeriodo !== esperado,
     }
   })
 }

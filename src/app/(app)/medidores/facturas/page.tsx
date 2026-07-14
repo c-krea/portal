@@ -13,10 +13,12 @@ import { lecturaPeriodo } from "@/lib/periodo"
 const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
 
 function buildPeriodos(year: number) {
-  const now = new Date()
-  const maxMonth = year === now.getFullYear() ? now.getMonth() + 1 : 12
+  // Invoices arrive ~day 10 for the month that just closed, so the current month
+  // is never a valid period.
+  const [maxYear, maxMonth] = lecturaPeriodo().split("-").map(Number)
+  const lastMonth = year < maxYear ? 12 : year === maxYear ? maxMonth : 0
   const periodos = []
-  for (let m = 1; m <= maxMonth; m++) {
+  for (let m = 1; m <= lastMonth; m++) {
     periodos.push({
       label: MONTH_LABELS[m - 1],
       value: `${year}-${String(m).padStart(2, "0")}`,

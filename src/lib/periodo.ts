@@ -15,6 +15,13 @@ export function lecturaPeriodo(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
 }
 
+// "2026-06" → "2026-05". The month a reading's lectura_anterior must come from.
+export function mesAnterior(periodo: string): string {
+  const [y, m] = periodo.split("-").map(Number)
+  const d = new Date(y, m - 2, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+}
+
 // Current billing month in Bogota, "YYYY-MM" (e.g. "2026-06"). Use this instead
 // of new Date() so the UTC/Bogota boundary never rolls the month early.
 export function currentPeriodo(): string {

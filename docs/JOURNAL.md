@@ -2,6 +2,40 @@
 
 ---
 
+## Session 69 — 2026-07-14: Medidores "otros valores" — a missing May row, not a periodo bug
+
+**Trigger.** CKREA (admin) sent a June Excel: locals 502/307/309 showing consumo 239 / 336 / 51 kWh, but the portal showed roughly double. German's read was "we fixed this in Session 61, why is it back?"
+
+**It was not back.** Session 61's periodo convention (day-9 reading = previous month) held perfectly. Audited every reading since April: chain intact, kWh math exact, all 157 May+June rows had `tarifa` matching the group invoice and `total = MROUND(kwh × tarifa, 50)` to the peso. Same symptom, different root cause.
+
+**Root cause.** 502/307/309 never sent a reading in the 1–9 June window → no `2026-05` row. When they submitted on 9 July, both write paths derive `lectura_anterior` with `WHERE periodo < '2026-06' ORDER BY periodo DESC LIMIT 1` — which landed on **April**. June's consumo silently absorbed May. The kWh weren't lost, they were in the wrong month, and the tenant saw a double bill.
+
+**Why it can't just be blocked.** 506A and 507 have the *same* gap and are **correct** — both tenants moved in 29-May, so their April row is a handover baseline. The gap is legitimate for a new tenant and a bug for an old one. Code can't tell them apart; a human can. So: **flag, never block.**
+
+**Fixes shipped.**
+- DB (approved, backup first): 3 May rows loaded from the admin's Excel; 3 June rows recomputed → $194.750 / $282.150 / $42.800, matching the Excel to the peso. 2 orphan `2026-07` rows deleted (locals 510/520 — admin picked "Jul" in the month selector on 9 Jul, redid it as "Jun" 37 s later, the wrong row stayed).
+- Code: month picker now caps at `lecturaPeriodo()` (the current month is never a valid period, and offering it is what created the orphans); new **`⚠ Salto de período`** badge on the admin table whenever a reading's previous reading isn't last month.
+
+### Decisions
+- 🎯 **Flag gaps, don't block them.** A new tenant's first reading legitimately spans months. Blocking would lock out exactly the people who just moved in.
+- 🎯 **309 recorded but not charged** — its 38,5 kWh of May consumption predates the current tenant (took over 15-May). Reading stored, `total_energia = 0`, reason in `notas`. Billing decision deferred to German. Same pattern as Session 61's vacant locals.
+- 🎯 Shipped straight to `main` (Ckrea has no PR flow) so the fix goes live and clears the 30-min medidores cache immediately.
+
+### Learnings
+- 💡 **"The old fix broke" is usually a new bug wearing the old bug's clothes.** The Session 61 periodo convention was correct and intact. Re-auditing it first was cheap and ruled it out in one query — worth doing before touching anything.
+- 💡 **A missing row is more dangerous than a wrong row.** Nothing errored, nothing looked off in the data, the math was internally perfect. The bill was just double. Any "last record, any period" lookup is a silent multi-month accumulator waiting to happen.
+- 💡 **A dropdown built from `new Date()` is a write-path bug.** The month picker offering the current month let an admin file a reading under a period with no invoice → tarifa 0 → $0 rows.
+- ⚠️ A direct psql write does **not** bust the app's 30-min `unstable_cache`. Prod kept serving the old numbers until the deploy reset it. Any DB fix applied outside the app needs a deploy or an in-app save to show up.
+- ⚠️ **506B (CICLO CREATIVO)** — active contract, one reading ever (April), never billed May or June. Not fixed; needs the admin to chase the readings.
+
+### Session-end pointers
+- ADRs: none
+- Lessons: `electricity_periodo_convention.md` updated (gap rule added)
+- State: `project_state.md` updated (Session 69)
+- Linear: none
+
+---
+
 ## Session 68 — 2026-07-11: Pronto-pago window off-by-one + wrong discount base
 
 **Trigger.** Esteban relayed tenant complaints — the pronto-pago (early-payment) discount disappeared in the app.

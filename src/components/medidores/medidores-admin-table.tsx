@@ -18,16 +18,31 @@ function ValidationBadge({
   status,
   desvPct,
   kwh,
+  saltoPeriodo,
+  prevPeriodo,
 }: {
   status: string | null
   desvPct: number | null
   kwh: number | null
+  saltoPeriodo: boolean
+  prevPeriodo: string | null
 }) {
   // No reading yet for this period.
   if (status === "sin_lectura")
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
         Sin lectura
+      </span>
+    )
+  // The reading before this one isn't last month's: the kWh cover more than one
+  // month. Legitimate for a new tenant's first reading, a bug otherwise.
+  if (saltoPeriodo)
+    return (
+      <span
+        title={`Se comparó contra la lectura de ${prevPeriodo}, no contra el mes anterior. El consumo abarca más de un mes.`}
+        className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-700"
+      >
+        ⚠ Salto de período
       </span>
     )
   // Visual heads-up only (not mandatory): 0 kWh, or far from the unit's history.
@@ -187,7 +202,13 @@ export function MedidoresAdminTable({
                   {row.totalEnergia != null ? formatCOP(row.totalEnergia) : <span className="text-slate-300">—</span>}
                 </td>
                 <td className="px-4 py-3">
-                  <ValidationBadge status={row.status} desvPct={row.desvPct} kwh={row.kwh} />
+                  <ValidationBadge
+                    status={row.status}
+                    desvPct={row.desvPct}
+                    kwh={row.kwh}
+                    saltoPeriodo={row.saltoPeriodo}
+                    prevPeriodo={row.prevPeriodo}
+                  />
                 </td>
                 <td className="hidden sm:table-cell px-4 py-3">
                   {row.fotoUrl ? (

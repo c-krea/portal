@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Session 69 — 2026-07-14: Medidores — month-gap double-billing + two code holes
+
+#### Fixed
+- **Locals 502, 307 and 309 were billed ~2× for June energy.** None of the three sent a reading in the 1–9 June window, so no May row existed. When they submitted on 9 July, both `submitLectura` and `registrarLectura` fell back to "last reading, any period" — which was **April** — so June's consumo silently spanned May+June. Portal showed 489,1 / 705,6 / 89,5 kWh against the admin's 239 / 336 / 51. Fixed in DB: the 3 missing May readings loaded from the admin's Excel, the 3 June rows recomputed. June now lands on the admin's Excel to the peso: **$194.750 / $282.150 / $42.800**.
+- **Month picker offered the current month.** `/medidores` and `/medidores/facturas` built their month tabs from `new Date()`, so in July "Jul" was selectable — but a reading always belongs to the *previous* month. An admin picked it by mistake on 9 July and created two orphan rows (locals 510, 520; tarifa 0, total $0, duplicating June). Picker now caps at `lecturaPeriodo()`; the two orphan rows deleted.
+
+#### Added
+- **`⚠ Salto de período` badge** on the admin medidores table — fires whenever a reading's previous reading isn't the immediately-prior month, i.e. the kWh cover more than one month. Non-blocking (a new tenant's first reading legitimately spans), but the gap can never pass silently again. Backed by `prevPeriodo` / `saltoPeriodo` on `MedidorAdminRow` and `mesAnterior()` in `src/lib/periodo.ts`.
+
+#### Notes
+- Full read-only audit of every reading since April: chain, kWh math and money were otherwise **exact** — all 157 May+June rows had `tarifa` matching the group invoice and `total = MROUND(kwh × tarifa, 50)` to the peso. Only the 5 gap rows and the 2 orphans were wrong.
+- Locals **506A** and **507** also show a gap, but correctly — both tenants moved in 29-May, so their April row is a handover baseline. Confirmed by admin. Left as-is.
+- **309 recorded, not charged**: its 38,5 kWh of May consumption predates the current tenant (took over 15-May). Reading stored, `total_energia = 0`, reason in `notas`. Billing decision deferred.
+- **506B (CICLO CREATIVO)** has an active contract and only one reading ever (April) — no May, no June, never billed. Open follow-up.
+- Nothing was double-charged: verified in `siesa_raw` that no energy invoice exists for any of these locals, any month. Backup of the 8 touched rows: `docs/backups/lecturas_medidor_fix_20260714_backup.csv`.
+
 ### Session 68 — 2026-07-11: Pronto-pago window fix (tenant portal + staff page)
 
 #### Fixed
