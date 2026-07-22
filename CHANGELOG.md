@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Session 70 — 2026-07-22: Stale-sync notice in the tenant portal
+
+#### Fixed
+- **Tenants were shown late-interest that grew every day on invoices they had already paid.** `getPortalCartera` computes interest as `vr_vencido × tasa/366 × (CURRENT_DATE − vencimiento)` — a live date against frozen balances. With the Siesa push dead since **11-Jul**, any tenant who paid after that still sat in `cartera` as overdue while their estimated interest climbed daily. 15 tenants, $99.4M in frozen balances. While data is stale the portal now **hides** the "Cuenta en mora" banner and the interest figure, and the Estado de Cuenta card goes neutral **"Sin confirmar"** — never a false "Al Día" either.
+
+#### Added
+- **"Información de pagos desactualizada" notice** on the tenant dashboard. Fires only when the last Siesa push is over 24 h old (`getSyncFreshness()` over `siesa_raw.cartera.siesa_synced_at`) and clears itself when the ERP resumes — no code edit, no redeploy. The "last data" date is read from the DB; only the expected recovery date (`NORMALIZACION_ESPERADA`) is hand-written.
+
+#### Notes
+- The pagos page showing **$0 for "11 al 30"** in July was **not** a filter bug — verified day by day that `v2.vista_pagos` drops no Z40 FVS payment (raw count == view count every day). Totals reconcile exactly: temprano $54.291.090 (19 pagos), mora $11.561.606 (6). There simply is no payment after 9-Jul in the DB.
+- `formatDate()` parses `"2026-07-11"` as UTC midnight → would print a day early on any server behind UTC. Used `formatDateShort()` (local midnight) instead.
+- **"Próximo Pago" can still read "vencido"** for a paid invoice while the ERP is frozen. Left as-is on purpose — it shows a due date, not a growing charge.
+- Root cause is outside the portal: `siesa_raw` is read-only and the push is IT-controlled (Reymon). Escalation pending.
+
 ### Session 69 — 2026-07-14: Medidores — month-gap double-billing + two code holes
 
 #### Fixed

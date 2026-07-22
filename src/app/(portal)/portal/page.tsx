@@ -9,8 +9,9 @@ import {
   getPortalCartera,
   getPortalElectricityInvoiceData,
   getPortalElectricityPeriodos,
+  getSyncFreshness,
 } from "@/lib/data/portal"
-import { formatCOP, formatDate } from "@/lib/formatters"
+import { formatCOP, formatDate, formatDateShort } from "@/lib/formatters"
 import { isPpDateEligible } from "@/lib/pronto-pago"
 import Link from "next/link"
 import { ProfileCard } from "./profile-card"
@@ -24,6 +25,11 @@ import {
   TrendingUp,
   TriangleAlert,
 } from "lucide-react"
+
+// Shown in the stale-data banner as the expected recovery date. The banner itself
+// is driven by real sync freshness, not this string — if the date slips, the banner
+// stays up regardless. Edit this line when IT gives a new estimate.
+const NORMALIZACION_ESPERADA = "viernes 24 de julio"
 
 function currentPeriodo(now: Date) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
@@ -63,13 +69,14 @@ export default async function PortalPage() {
   const electricidadPeriodo = prevPeriodo(nowCO)
   const todayDay = nowCO.getDate()
 
-  const [pagos, medidor, cartera, electricityInvoiceResults, electricityPeriodosResults] = await Promise.all([
+  const [pagos, medidor, cartera, electricityInvoiceResults, electricityPeriodosResults, sync] = await Promise.all([
     getPortalPagos(profile.tenantId, 5),
     // Day-9 readings are stored under the previous month's periodo
     getPortalMedidorStatus(profile.unitId, electricidadPeriodo),
     profile.nit ? getPortalCartera(profile.nit) : Promise.resolve({ saldoTotal: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }),
     Promise.all(profile.allUnitIds.map(id => getPortalElectricityInvoiceData(id, electricidadPeriodo))),
     Promise.all(profile.allUnitIds.map(id => getPortalElectricityPeriodos(id))),
+    getSyncFreshness(),
   ])
   let electricityInvoices = electricityInvoiceResults.filter((v): v is NonNullable<typeof v> => v !== null)
   // Days 1-8 the previous month has no readings yet (they arrive day 9) — keep showing
@@ -103,9 +110,14 @@ export default async function PortalPage() {
   const isPpWindow = ppDiscountTotal > 0
   const saldoConPp = cartera.saldoTotal - ppDiscountTotal
 
+  // ERP feed frozen → cartera is a stale snapshot while interest is still counted
+  // against CURRENT_DATE, so a tenant who paid after the freeze would be shown as
+  // overdue with a charge growing daily. Withhold mora figures until data is fresh.
+  const dataStale = sync.isStale
   const enMora = cartera.vencido > 0
+  const showMora = enMora && !dataStale
   const maxDiasMora = cartera.maxDiasMora
-  const interesEstimado = enMora ? cartera.interesEstimado : 0
+  const interesEstimado = showMora ? cartera.interesEstimado : 0
 
   // Next payment: earliest due date from open invoices, else 1st of next month
   const earliestVence = cartera.rows.map((r) => r.fechaVence).filter(Boolean).sort()[0] ?? null
@@ -124,8 +136,32 @@ export default async function PortalPage() {
   return (
     <div className="space-y-3">
 
-      {/* ── Mora alert banner ── */}
-      {enMora && (
+      {/* ── Stale ERP data banner — auto-clears when Siesa resumes pushing ── */}
+      {dataStale && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex items-start gap-3">
+            <TriangleAlert className="h-5 w-5 shrink-0 text-amber-500 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-semibold text-amber-800">
+                Información de pagos desactualizada
+              </p>
+              <p className="mt-1 text-sm text-amber-700">
+                Por una falla en la sincronización con nuestro sistema contable, los
+                pagos posteriores al{" "}
+                <strong>{formatDateShort(sync.lastPush!)}</strong> aún no se reflejan
+                en este portal. Si ya efectuó su pago, su saldo se actualizará
+                automáticamente al restablecerse el servicio.
+              </p>
+              <p className="mt-1 text-xs text-amber-600">
+                Normalización estimada: {NORMALIZACION_ESPERADA}.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Mora alert banner — suppressed while ERP data is stale ── */}
+      {showMora && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
           <div className="flex items-start gap-3">
             <TriangleAlert className="h-5 w-5 shrink-0 text-rose-500 mt-0.5" />
@@ -182,26 +218,34 @@ export default async function PortalPage() {
 
       {/* ── Estado de Cuenta ── */}
       <div className={`rounded-xl border p-4 shadow-sm ${
-        enMora ? "border-rose-200 bg-rose-50" : "border-emerald-100 bg-emerald-50"
+        dataStale ? "border-slate-200 bg-slate-50"
+        : enMora  ? "border-rose-200 bg-rose-50"
+        :           "border-emerald-100 bg-emerald-50"
       }`}>
         <div className="flex items-center gap-2 mb-2">
-          {enMora
-            ? <AlertCircle className="h-4 w-4 text-rose-400" />
-            : <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          {dataStale
+            ? <TriangleAlert className="h-4 w-4 text-slate-400" />
+            : enMora
+              ? <AlertCircle className="h-4 w-4 text-rose-400" />
+              : <CheckCircle2 className="h-4 w-4 text-emerald-500" />
           }
           <p className="text-sm font-semibold text-slate-500">
             Estado de Cuenta
           </p>
         </div>
-        <p className={`text-4xl font-black leading-none ${
-          enMora ? "text-rose-600" : "text-emerald-600"
+        <p className={`font-black leading-none ${
+          dataStale ? "text-3xl text-slate-500"
+          : enMora  ? "text-4xl text-rose-600"
+          :           "text-4xl text-emerald-600"
         }`}>
-          {enMora ? "En Mora" : "Al Día"}
+          {dataStale ? "Sin confirmar" : enMora ? "En Mora" : "Al Día"}
         </p>
         <p className="mt-1 text-xs text-slate-400">
-          {enMora
-            ? `${maxDiasMora} días vencido`
-            : `${pagos.length} pago${pagos.length !== 1 ? "s" : ""} registrados`}
+          {dataStale
+            ? "Pendiente de actualización"
+            : enMora
+              ? `${maxDiasMora} días vencido`
+              : `${pagos.length} pago${pagos.length !== 1 ? "s" : ""} registrados`}
         </p>
       </div>
 

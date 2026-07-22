@@ -405,6 +405,37 @@ export async function getPortalCartera(nit: string): Promise<PortalCartera> {
   }
 }
 
+export type SyncFreshness = {
+  lastPush: string | null
+  hoursStale: number
+  isStale: boolean
+}
+
+// Siesa pushes into siesa_raw every ~3h. When the newest push is over a day old
+// the ERP feed is stuck: cartera/recaudo are frozen while interest above is still
+// counted against CURRENT_DATE, so a tenant who paid after the freeze is shown as
+// overdue with a charge that grows daily. The portal hides mora/interés while true.
+const SYNC_STALE_HOURS = 24
+
+export async function getSyncFreshness(): Promise<SyncFreshness> {
+  const rows = await execute(`
+    SELECT
+      (MAX(siesa_synced_at) AT TIME ZONE 'America/Bogota')::date::text AS last_push,
+      EXTRACT(EPOCH FROM (now() - MAX(siesa_synced_at))) / 3600        AS hours
+    FROM siesa_raw.cartera
+    WHERE id_zona = 'Z40'
+  `)
+  const r = rows[0] as Record<string, unknown> | undefined
+  const lastPush = r?.last_push ? String(r.last_push) : null
+  const hoursStale = r?.hours != null ? Number(r.hours) : 0
+  return {
+    lastPush,
+    hoursStale,
+    // No rows → no claim. Only flag stale on a real timestamp we can point at.
+    isStale: lastPush !== null && hoursStale > SYNC_STALE_HOURS,
+  }
+}
+
 export type PortalMedidorRef = {
   lecturaAnteriorRef: number
   tarifaKwh: number
