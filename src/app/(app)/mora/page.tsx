@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic"
-
 import { PageHeader } from "@/components/layout/page-header"
 import { MoraTable } from "@/components/mora/mora-table"
 import { TasaMoraForm } from "@/components/mora/tasa-mora-form"

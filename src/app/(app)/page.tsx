@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic"
-
 import { PageHeader } from "@/components/layout/page-header"
 import { RecaudoCard } from "@/components/dashboard/recaudo-card"
 import { getDashboardData } from "@/lib/data/dashboard"

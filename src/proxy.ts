@@ -1,15 +1,18 @@
+import { ROLE_COOKIE } from "@/lib/auth/session-cookie"
 import { createServerClient } from "@supabase/ssr"
-import { createClient } from "@supabase/supabase-js"
 import { NextResponse, type NextRequest } from "next/server"
 
+/**
+ * Gatekeeper:
+ * - getUser() once → refreshes session cookies (required; Server Components can't always write cookies)
+ * - NO database / service-role / role SQL here
+ * - Role routing uses login-stamped ckrea-rol cookie only
+ * - Passes x-user-id / x-user-email so layouts skip a second Auth round-trip
+ */
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Public routes — skip getUser() entirely so auth-flow sessions
-  // (recovery, magic-link) are never silently refreshed by the middleware.
-  // /update-password and /auth/confirm MUST be here: getUser() would degrade
-  // a recovery session (AMR=otp) into a regular session, causing
-  // updateUser({ password }) to fail with "expired or already used."
+  // Public routes — no auth (recovery/magic-link must not touch session)
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/forgot-password") ||
@@ -38,9 +41,7 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value),
-          )
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
@@ -50,52 +51,54 @@ export async function proxy(request: NextRequest) {
     },
   )
 
-  // Refresh session — only runs for authenticated routes
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // No session → redirect to login
   if (!user) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     const res = NextResponse.redirect(url)
-    supabaseResponse.cookies.getAll().forEach(({ name, value }) => res.cookies.set(name, value))
+    supabaseResponse.cookies.getAll().forEach(({ name, value, ...opts }) =>
+      res.cookies.set(name, value, opts),
+    )
     return res
   }
 
-  // Role-based routing: inquilino → /portal, admin/others → /(app)
-  // Uses exec_sql RPC (public schema) to avoid PostgREST schema-exposure dependency
-  const admin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  )
-  const { data: roleRows } = await admin.rpc("exec_sql", {
-    q: `SELECT rol FROM v2.perfiles WHERE id = '${user.id}'::uuid LIMIT 1`,
-  })
-  const rol = Array.isArray(roleRows) && roleRows[0] ? String(roleRows[0].rol) : undefined
-
-  function redirectWithCookies(url: URL): NextResponse {
+  // Fast role lane from login cookie (layouts still re-check from DB cache)
+  const rol = request.cookies.get(ROLE_COOKIE)?.value
+  if (rol === "inquilino" && !pathname.startsWith("/portal")) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/portal"
     const res = NextResponse.redirect(url)
-    supabaseResponse.cookies.getAll().forEach(({ name, value }) => res.cookies.set(name, value))
+    supabaseResponse.cookies.getAll().forEach(({ name, value, ...opts }) =>
+      res.cookies.set(name, value, opts),
+    )
+    return res
+  }
+  if (rol && rol !== "inquilino" && pathname.startsWith("/portal")) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/"
+    const res = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach(({ name, value, ...opts }) =>
+      res.cookies.set(name, value, opts),
+    )
     return res
   }
 
-  if (rol === "inquilino") {
-    if (!pathname.startsWith("/portal")) {
-      const url = request.nextUrl.clone()
-      url.pathname = "/portal"
-      return redirectWithCookies(url)
-    }
-  } else {
-    if (pathname.startsWith("/portal")) {
-      const url = request.nextUrl.clone()
-      url.pathname = "/"
-      return redirectWithCookies(url)
-    }
-  }
+  // Strip any client-supplied identity headers, then stamp verified values
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.delete("x-user-id")
+  requestHeaders.delete("x-user-email")
+  requestHeaders.set("x-user-id", user.id)
+  requestHeaders.set("x-user-email", user.email ?? "")
 
-  return supabaseResponse
+  const authCookies = supabaseResponse.cookies.getAll()
+  const response = NextResponse.next({
+    request: { headers: requestHeaders },
+  })
+  authCookies.forEach((cookie) => response.cookies.set(cookie))
+  return response
 }
 
 export const config = {

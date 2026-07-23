@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic"
-
 import { PageHeader } from "@/components/layout/page-header"
 import { getPortalTenants, getUsuarios } from "@/lib/data/usuarios"
 import { TabSwitcher } from "./tab-switcher"

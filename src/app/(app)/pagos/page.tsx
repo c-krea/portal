@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic"
-
 import { PageHeader } from "@/components/layout/page-header"
 import { getPagos, getPagosKPIs, getPagosBuckets } from "@/lib/data/pagos"
 import { getGracePeriod } from "@/lib/data/configuracion"

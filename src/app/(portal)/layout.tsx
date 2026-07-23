@@ -1,6 +1,4 @@
-import { createClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
-import { supabaseAdmin } from "@/lib/db/executor"
+import { requireInquilino } from "@/lib/auth/session"
 import { signOut } from "@/app/(auth)/login/actions"
 import Image from "next/image"
 import { PortalBottomNav } from "@/components/layout/portal-bottom-nav"
@@ -11,19 +9,7 @@ export default async function PortalLayout({
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect("/login")
-
-  const { data: roleRows } = await supabaseAdmin.rpc("exec_sql", {
-    q: `SELECT rol, nombre_completo FROM v2.perfiles WHERE id = '${user.id}'::uuid LIMIT 1`,
-  })
-  const perfil = Array.isArray(roleRows) && roleRows[0] ? roleRows[0] as { rol: string; nombre_completo: string } : null
-
-  if (perfil?.rol !== "inquilino") redirect("/")
+  const profile = await requireInquilino()
 
   return (
     <div className="w-full min-h-screen bg-slate-50">
@@ -34,7 +20,7 @@ export default async function PortalLayout({
             <span className="text-base font-semibold text-slate-900">Portal del Inquilino</span>
           </div>
           <PortalProfileDropdown
-            displayName={perfil?.nombre_completo ?? "Inquilino"}
+            displayName={profile.nombreCompleto || "Inquilino"}
             signOutAction={signOut}
           />
         </div>

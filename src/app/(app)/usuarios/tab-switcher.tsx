@@ -15,7 +15,7 @@ function CreateAccountButton({ tenantId }: { tenantId: string }) {
     setError(null)
     start(async () => {
       const res = await createTenantAccount(tenantId)
-      if (res.error) setError(res.error)
+      if ("error" in res) setError(res.error)
     })
   }
 

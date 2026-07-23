@@ -1,6 +1,4 @@
-export const dynamic = "force-dynamic"
-
-import { createClient } from "@/lib/supabase/server"
+import { requireUser } from "@/lib/auth/session"
 import { redirect } from "next/navigation"
 import {
   getPortalProfile,
@@ -11,11 +9,7 @@ import { formatCOP, formatDate } from "@/lib/formatters"
 import { Receipt, CheckCircle2, Clock } from "lucide-react"
 
 export default async function PagosHistorialPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
+  const user = await requireUser()
 
   const profile = await getPortalProfile(user.id)
   if (!profile) redirect("/portal")

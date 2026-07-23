@@ -51,7 +51,7 @@ export function EditTenantModal({ tenant }: { tenant: PortalTenantRow }) {
       const res = await updateTenantInquilino(tenant.tenantId, {
         telefono, email,
       })
-      if (res.error) { setError(res.error); setConfirming(false); return }
+      if ("error" in res) { setError(res.error); setConfirming(false); return }
       setOpen(false)
     })
   }

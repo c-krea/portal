@@ -1,6 +1,4 @@
-export const dynamic = "force-dynamic"
-
-import { createClient } from "@/lib/supabase/server"
+import { requireUser } from "@/lib/auth/session"
 import { redirect } from "next/navigation"
 import { getPortalProfile, getPortalContratos } from "@/lib/data/portal"
 import { formatCOP, formatDate } from "@/lib/formatters"
@@ -47,9 +45,7 @@ function Row({
 }
 
 export default async function PerfilPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
+  const user = await requireUser()
 
   const profile = await getPortalProfile(user.id)
   if (!profile) redirect("/portal")

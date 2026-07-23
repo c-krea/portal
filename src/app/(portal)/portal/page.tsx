@@ -1,7 +1,4 @@
-export const dynamic = "force-dynamic"
-
-import { createClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
+import { requireUser } from "@/lib/auth/session"
 import {
   getPortalProfile,
   getPortalPagos,
@@ -47,11 +44,7 @@ function daysFromNow(date: Date): number {
 }
 
 export default async function PortalPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
+  const user = await requireUser()
 
   const profile = await getPortalProfile(user.id)
   if (!profile) {

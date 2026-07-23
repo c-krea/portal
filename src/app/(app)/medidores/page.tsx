@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic"
-
 import { PageHeader } from "@/components/layout/page-header"
 import { getMedidoresAdmin, getUnitsWithMeters, getMeterYears } from "@/lib/data/medidores"
 import { formatCOP } from "@/lib/formatters"

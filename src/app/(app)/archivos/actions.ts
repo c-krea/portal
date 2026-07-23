@@ -1,11 +1,10 @@
 "use server"
 
 import { listFiles, getSignedDownloadUrl, deleteFile } from "@/lib/r2/files"
-import { createClient } from "@/lib/supabase/server"
+import { getAuthUser } from "@/lib/auth/session"
 
 async function requireAuth() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
   if (!user) throw new Error("No autorizado")
   return user
 }

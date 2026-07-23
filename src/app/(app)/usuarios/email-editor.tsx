@@ -20,7 +20,7 @@ export function EmailEditor({
     setError(null)
     startTransition(async () => {
       const result = await updatePortalEmail(tenantId, value)
-      if (result.error) {
+      if ("error" in result) {
         setError(result.error)
       } else {
         setEditing(false)

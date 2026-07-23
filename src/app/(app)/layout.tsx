@@ -1,8 +1,6 @@
 import { Sidebar } from "@/components/layout/sidebar"
 import { MobileNav } from "@/components/layout/mobile-nav"
-import { createClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
-import { supabaseAdmin } from "@/lib/db/executor"
+import { requireStaff } from "@/lib/auth/session"
 import { signOut } from "@/app/(auth)/login/actions"
 
 export default async function AppLayout({
@@ -10,20 +8,8 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) redirect("/login")
-
-  // Load perfil for display name
-  const { data: roleRows } = await supabaseAdmin.rpc("exec_sql", {
-    q: `SELECT rol, nombre_completo FROM v2.perfiles WHERE id = '${user.id}'::uuid LIMIT 1`,
-  })
-  const profileData = Array.isArray(roleRows) && roleRows[0] ? roleRows[0] as { rol: string; nombre_completo: string } : null
-  if (profileData?.rol === "inquilino") redirect("/portal")
-  const displayName = profileData?.nombre_completo ?? user.email ?? "Usuario"
+  const profile = await requireStaff()
+  const displayName = profile.nombreCompleto
 
   return (
     <>

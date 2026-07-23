@@ -1,7 +1,7 @@
 "use server"
 
 import { supabaseAdmin, executeDml, sqlStr } from "@/lib/db/executor"
-import { createClient } from "@/lib/supabase/server"
+import { getAuthUser } from "@/lib/auth/session"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
 import { uploadMeterPhoto } from "@/lib/r2/meter-photos"
@@ -29,8 +29,7 @@ export async function registrarLectura(
   _prev: MedidorState,
   formData: FormData,
 ): Promise<MedidorState> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
   if (!user) return { error: "No autorizado" }
 
   const parsed = schema.safeParse({
@@ -114,7 +113,7 @@ export async function registrarLectura(
     revalidatePath("/medidores")
     revalidatePath("/medidores/facturas")
     // total_energia changed → pagos electricity-dedup + medidores views recompute.
-    bustTags("pagos", "medidores")
+    bustTags("pagos", "medidores", "portal")
 
     const msg = tarifa > 0
       ? `Lectura registrada: ${kwh} kWh · $${totalEnergia.toLocaleString("es-CO")}`
@@ -129,8 +128,7 @@ export async function registrarLectura(
 
 export async function getMeterPhotoSignedUrl(key: string): Promise<string | null> {
   if (!key || !key.startsWith("medidores/") || key.includes("..")) return null
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
   if (!user) return null
   try {
     return await getSignedDownloadUrl(key)

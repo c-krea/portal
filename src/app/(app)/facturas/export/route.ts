@@ -1,7 +1,7 @@
 import { execute } from "@/lib/db/executor"
 import { NextRequest, NextResponse } from "next/server"
 import { isValidPeriodo } from "@/lib/security/validators"
-import { createClient } from "@/lib/supabase/server"
+import { getAuthUser } from "@/lib/auth/session"
 
 /**
  * GET /facturas/export?periodo=YYYY-MM
@@ -12,8 +12,7 @@ import { createClient } from "@/lib/supabase/server"
  * match the C-Krea Siesa codes.
  */
 export async function GET(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
   if (!user) return NextResponse.json({ error: "No autorizado" }, { status: 401 })
 
   const { searchParams } = new URL(req.url)

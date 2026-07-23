@@ -1,3 +1,5 @@
+import { ROLE_COOKIE, roleCookieOptions } from "@/lib/auth/session-cookie"
+import { supabaseAdmin, sqlStr } from "@/lib/db/executor"
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { NextResponse, type NextRequest } from "next/server"
@@ -27,7 +29,26 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      return NextResponse.redirect(`${origin}${next}`)
+      // Stamp role hint once so gatekeeper stays network-free after magic-link login
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      let dest = next
+      if (user) {
+        const { data: roleRows } = await supabaseAdmin.rpc("exec_sql", {
+          q: `SELECT rol FROM v2.perfiles WHERE id = ${sqlStr(user.id)}::uuid LIMIT 1`,
+        })
+        const rol =
+          Array.isArray(roleRows) && roleRows[0]?.rol
+            ? String(roleRows[0].rol)
+            : "visor"
+        cookieStore.set(ROLE_COOKIE, rol, roleCookieOptions())
+        // Only override home when caller left "next" at default
+        if (rawNext === "/" || !searchParams.get("next")) {
+          dest = rol === "inquilino" ? "/portal" : "/"
+        }
+      }
+      return NextResponse.redirect(`${origin}${dest}`)
     }
   }
 

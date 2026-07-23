@@ -1,6 +1,4 @@
-export const dynamic = "force-dynamic"
-
-import { createClient } from "@/lib/supabase/server"
+import { requireUser } from "@/lib/auth/session"
 import { redirect } from "next/navigation"
 import { getPortalProfile, getPortalMedidorHistory, getPortalMedidorRef } from "@/lib/data/portal"
 import { MedidorForm, type UnitMedidorData } from "./form"
@@ -15,9 +13,7 @@ function periodoLabel(periodo: string) {
 }
 
 export default async function MedidorPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect("/login")
+  const user = await requireUser()
 
   const profile = await getPortalProfile(user.id)
   if (!profile) redirect("/portal")

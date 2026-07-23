@@ -1,6 +1,6 @@
 "use server"
 
-import { createClient } from "@/lib/supabase/server"
+import { getAuthUser } from "@/lib/auth/session"
 import { execute, supabaseAdmin, executeDml, sqlStr } from "@/lib/db/executor"
 import { getPortalProfile } from "@/lib/data/portal"
 import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
@@ -27,8 +27,7 @@ export async function submitLectura(
   _prev: MedidorPortalState,
   formData: FormData,
 ): Promise<MedidorPortalState> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
   if (!user) return { error: "No autorizado" }
 
   const profile = await getPortalProfile(user.id)
@@ -150,7 +149,7 @@ export async function submitLectura(
   revalidatePath("/portal/medidor")
   revalidatePath("/medidores")
   // total_energia changed → pagos electricity-dedup + medidores views recompute.
-  bustTags("pagos", "medidores")
+  bustTags("pagos", "medidores", "portal")
 
   const kwhFmt = kwh.toLocaleString("es-CO")
   const message = `Lectura enviada correctamente (${kwhFmt} kWh).`

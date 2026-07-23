@@ -4,11 +4,23 @@ import { unstable_cache, revalidateTag } from "next/cache"
 // Portal-visible data changes only on the daily ERP sync or on admin edits, and
 // every such write busts the matching tag below — so a 30-min window shows
 // nothing meaningfully stale while cutting Vercel CPU sharply. Tune here.
-export const CACHE_TTL_SECONDS = 1800 // 30 minutes
+// Longer TTL = less Vercel Active CPU. Data still busts on ERP sync / admin writes.
+export const CACHE_TTL_SECONDS = 3600 // 60 minutes
 
 // Every data-cache tag. Add a tag here when you cache a new domain so the broad
 // invalidators (ERP sync, financial-rule edits) cover it automatically.
-export const CACHE_TAGS = ["pagos", "gastos", "locales", "mora", "dashboard", "proyecciones", "facturas", "medidores"] as const
+export const CACHE_TAGS = [
+  "pagos",
+  "gastos",
+  "locales",
+  "mora",
+  "dashboard",
+  "proyecciones",
+  "facturas",
+  "medidores",
+  "portal",
+  "profiles",
+] as const
 export type CacheTag = (typeof CACHE_TAGS)[number]
 
 // Wrap a data-layer read in the shared 30-min cache under one domain tag.

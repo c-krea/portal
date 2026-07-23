@@ -39,7 +39,7 @@ export function EditAdminModal({ user }: { user: UsuarioRow }) {
   function handleConfirm() {
     startTransition(async () => {
       const result = await updateAdminUser(user.id, { fullName, email, role })
-      if (result.error) {
+      if ("error" in result) {
         setError(result.error)
         setConfirming(false)
       } else {

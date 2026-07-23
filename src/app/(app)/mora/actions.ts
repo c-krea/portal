@@ -4,8 +4,8 @@ import { getEmpresaCkreaId } from "@/lib/empresa"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { runInterestAccrual, type InterestAccrualSummary } from "@/lib/interest-engine"
-import { createClient } from "@/lib/supabase/server"
-import { execute, executeDml } from "@/lib/db/executor"
+import { requireAdminOrFinanzasAction } from "@/lib/auth/session"
+import { executeDml } from "@/lib/db/executor"
 import { bustTags } from "@/lib/cache"
 
 const schema = z.object({
@@ -22,12 +22,8 @@ export async function calcularIntereses(
   _prev: AccrualState,
   formData: FormData,
 ): Promise<AccrualState> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: "No autorizado" }
-  const roleRows = await execute(`SELECT rol FROM v2.perfiles WHERE id = '${user.id}'::uuid LIMIT 1`)
-  const rol = String(roleRows[0]?.rol ?? "")
-  if (!["admin", "finanzas"].includes(rol)) return { error: "Permiso denegado" }
+  const auth = await requireAdminOrFinanzasAction()
+  if ("error" in auth) return { error: auth.error }
 
   const parsed = schema.safeParse({
     accrualDate: formData.get("accrualDate"),
@@ -68,12 +64,8 @@ export async function guardarTasaMora(
   _prev: TasaState,
   formData: FormData,
 ): Promise<TasaState> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: "No autorizado" }
-  const roleRows = await execute(`SELECT rol FROM v2.perfiles WHERE id = '${user.id}'::uuid LIMIT 1`)
-  const rol = String(roleRows[0]?.rol ?? "")
-  if (!["admin", "finanzas"].includes(rol)) return { error: "Permiso denegado" }
+  const auth = await requireAdminOrFinanzasAction()
+  if ("error" in auth) return { error: auth.error }
 
   const parsed = tasaSchema.safeParse({ tasaPct: formData.get("tasaPct") })
   if (!parsed.success) {
@@ -84,13 +76,13 @@ export async function guardarTasaMora(
   try {
     await executeDml(`
       INSERT INTO v2.tasa_interes_mora (periodo, tasa_ea, actualizado_por)
-      VALUES (to_char(CURRENT_DATE,'YYYY-MM'), ${tasaEa}, '${user.id}'::uuid)
+      VALUES (to_char(CURRENT_DATE,'YYYY-MM'), ${tasaEa}, '${auth.profile.userId}'::uuid)
       ON CONFLICT (periodo) DO UPDATE
         SET tasa_ea = EXCLUDED.tasa_ea,
             actualizado_por = EXCLUDED.actualizado_por,
             updated_at = now()
     `)
-    bustTags("mora")
+    bustTags("mora", "portal")
     revalidatePath("/mora")
     return { success: true, tasaEa }
   } catch (e) {

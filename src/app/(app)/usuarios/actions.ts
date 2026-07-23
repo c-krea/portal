@@ -5,26 +5,22 @@ import { assertUuid, isValidEmail } from "@/lib/security/validators"
 import { sendWelcomeEmail, sendPasswordResetEmail } from "@/lib/email"
 import { revalidatePath } from "next/cache"
 import { bustAllCaches } from "@/lib/cache"
-import { createClient } from "@/lib/supabase/server"
+import {
+  requireAdminAction,
+  requireAdminOrFinanzasAction,
+  bustProfileCache,
+} from "@/lib/auth/session"
 
 const SITE = process.env.SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://ckrea.com.co"
 
 async function requireAdminOrFinanzas() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: "No autorizado" as const }
-  const rows = await execute(`SELECT rol FROM v2.perfiles WHERE id = '${user.id}'::uuid LIMIT 1`)
-  if (!["admin", "finanzas"].includes(String(rows[0]?.rol ?? ""))) return { error: "Permiso denegado" as const }
-  return null
+  const result = await requireAdminOrFinanzasAction()
+  return "error" in result ? result : null
 }
 
 async function requireAdmin() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { error: "No autorizado" as const }
-  const rows = await execute(`SELECT rol FROM v2.perfiles WHERE id = '${user.id}'::uuid LIMIT 1`)
-  if (String(rows[0]?.rol ?? "") !== "admin") return { error: "Permiso denegado" as const }
-  return null
+  const result = await requireAdminAction()
+  return "error" in result ? result : null
 }
 
 export async function updatePortalEmail(inquilinoId: string, email: string) {

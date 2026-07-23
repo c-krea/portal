@@ -1,4 +1,5 @@
 import { execute } from "@/lib/db/executor"
+import { cached } from "@/lib/cache"
 import { assertUuid, assertPeriodo } from "@/lib/security/validators"
 import { ELECTRICITY_GROUPS } from "@/lib/data/electricity"
 
@@ -49,7 +50,7 @@ export type PortalMedidorStatus = {
   totalEnergia: number | null
 }
 
-export async function getPortalProfile(userId: string): Promise<PortalProfile | null> {
+async function getPortalProfile_uncached(userId: string): Promise<PortalProfile | null> {
   assertUuid(userId)
   const rows = await execute(`
     SELECT
@@ -139,7 +140,7 @@ function mapPago(r: Record<string, unknown>): PortalPago {
   }
 }
 
-export async function getPortalPagos(tenantId: string, limit = 5): Promise<PortalPago[]> {
+async function getPortalPagos_uncached(tenantId: string, limit = 5): Promise<PortalPago[]> {
   assertUuid(tenantId)
   const rawLimit = Number(limit)
   const safeLimit = Math.max(1, Math.min(50, Number.isFinite(rawLimit) ? Math.floor(rawLimit) : 5))
@@ -165,7 +166,7 @@ export type PortalPagosPage = {
   totalCount: number
 }
 
-export async function getPortalPagosPage(
+async function getPortalPagosPage_uncached(
   tenantId: string,
   page: number,
   pageSize = 10,
@@ -203,7 +204,7 @@ export type PortalPagosKpis = {
   avgDias: number | null
 }
 
-export async function getPortalPagosKpis(tenantId: string): Promise<PortalPagosKpis> {
+async function getPortalPagosKpis_uncached(tenantId: string): Promise<PortalPagosKpis> {
   assertUuid(tenantId)
   const rows = await execute(`
     SELECT
@@ -232,7 +233,7 @@ export type PortalMedidorHistoryRow = {
   validationStatus: string | null
 }
 
-export async function getPortalMedidorHistory(
+async function getPortalMedidorHistory_uncached(
   unitId: string,
   limit = 6,
 ): Promise<PortalMedidorHistoryRow[]> {
@@ -269,7 +270,7 @@ export type PortalContrato = {
   estado: string
 }
 
-export async function getPortalContratos(tenantId: string): Promise<PortalContrato[]> {
+async function getPortalContratos_uncached(tenantId: string): Promise<PortalContrato[]> {
   assertUuid(tenantId)
   const rows = await execute(`
     SELECT
@@ -336,7 +337,7 @@ export type PortalCartera = {
 
 const NIT_RE = /^\d{5,12}(-\d)?$/
 
-export async function getPortalCartera(nit: string): Promise<PortalCartera> {
+async function getPortalCartera_uncached(nit: string): Promise<PortalCartera> {
   if (!NIT_RE.test(nit)) return { saldoTotal: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }
   // Interest uses the SAME DIAN method as the admin Mora page (see mora.ts):
   // vr_vencido × (tasa DIAN del mes ÷ 366) × días vencidos, counted from the
@@ -417,7 +418,7 @@ export type SyncFreshness = {
 // overdue with a charge that grows daily. The portal hides mora/interés while true.
 const SYNC_STALE_HOURS = 24
 
-export async function getSyncFreshness(): Promise<SyncFreshness> {
+async function getSyncFreshness_uncached(): Promise<SyncFreshness> {
   const rows = await execute(`
     SELECT
       (MAX(siesa_synced_at) AT TIME ZONE 'America/Bogota')::date::text AS last_push,
@@ -442,7 +443,7 @@ export type PortalMedidorRef = {
   alreadySubmitted: boolean
 }
 
-export async function getPortalMedidorRef(
+async function getPortalMedidorRef_uncached(
   unitId: string,
   periodo: string,
 ): Promise<PortalMedidorRef> {
@@ -468,7 +469,7 @@ export async function getPortalMedidorRef(
   }
 }
 
-export async function getPortalMedidorStatus(
+async function getPortalMedidorStatus_uncached(
   unitId: string,
   periodo: string,
 ): Promise<PortalMedidorStatus> {
@@ -516,7 +517,7 @@ function periodoToSpanish(periodo: string): string {
   return `1 al ${lastDay} de ${monthName} de ${year}`
 }
 
-export async function getPortalElectricityInvoiceData(
+async function getPortalElectricityInvoiceData_uncached(
   unitId: string,
   periodo: string,
 ): Promise<PortalElectricityInvoiceData | null> {
@@ -576,7 +577,7 @@ export async function getPortalElectricityInvoiceData(
   }
 }
 
-export async function getPortalElectricityPeriodos(
+async function getPortalElectricityPeriodos_uncached(
   unitId: string,
 ): Promise<string[]> {
   assertUuid(unitId)
@@ -593,3 +594,17 @@ export async function getPortalElectricityPeriodos(
 
   return (rows as Record<string, unknown>[]).map(r => String(r.periodo))
 }
+
+// ── cached exports (auto)
+export const getPortalProfile = cached(getPortalProfile_uncached, ["portal:profile"], "portal")
+export const getPortalPagos = cached(getPortalPagos_uncached, ["portal:pagos"], "portal")
+export const getPortalPagosPage = cached(getPortalPagosPage_uncached, ["portal:pagosPage"], "portal")
+export const getPortalPagosKpis = cached(getPortalPagosKpis_uncached, ["portal:pagosKpis"], "portal")
+export const getPortalMedidorHistory = cached(getPortalMedidorHistory_uncached, ["portal:medidorHistory"], "portal")
+export const getPortalContratos = cached(getPortalContratos_uncached, ["portal:contratos"], "portal")
+export const getPortalCartera = cached(getPortalCartera_uncached, ["portal:cartera"], "portal")
+export const getSyncFreshness = cached(getSyncFreshness_uncached, ["portal:syncFreshness"], "portal")
+export const getPortalMedidorRef = cached(getPortalMedidorRef_uncached, ["portal:medidorRef"], "portal")
+export const getPortalMedidorStatus = cached(getPortalMedidorStatus_uncached, ["portal:medidorStatus"], "portal")
+export const getPortalElectricityInvoiceData = cached(getPortalElectricityInvoiceData_uncached, ["portal:elecInvoice"], "portal")
+export const getPortalElectricityPeriodos = cached(getPortalElectricityPeriodos_uncached, ["portal:elecPeriodos"], "portal")

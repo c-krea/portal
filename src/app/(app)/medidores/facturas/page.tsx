@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic"
-
 import { PageHeader } from "@/components/layout/page-header"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { getElectricityInvoices } from "@/lib/data/electricity"

@@ -1,5 +1,3 @@
-export const dynamic = "force-dynamic"
-
 import { PageHeader } from "@/components/layout/page-header"
 import { RuleForm } from "@/components/configuracion/rule-form"
 import { getFinancialRules, RULE_LABELS } from "@/lib/data/configuracion"

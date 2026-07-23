@@ -1,6 +1,6 @@
 "use server"
 
-import { createClient } from "@/lib/supabase/server"
+import { getAuthUser } from "@/lib/auth/session"
 import { getPortalProfile, getPortalElectricityInvoiceData, type PortalElectricityInvoiceData } from "@/lib/data/portal"
 import { isValidPeriodo } from "@/lib/security/validators"
 
@@ -8,8 +8,7 @@ export async function fetchElectricityInvoiceForDownload(
   unitId: string,
   periodo: string,
 ): Promise<PortalElectricityInvoiceData | null> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getAuthUser()
   if (!user) return null
 
   if (!isValidPeriodo(periodo)) return null

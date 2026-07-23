@@ -109,6 +109,6 @@ export async function saveFacturasEnergia(
   revalidatePath("/medidores")
   // Saved tarifas recompute lecturas_medidor.total_energia + the electricity
   // invoice view — refresh pagos (dedup) and medidores caches.
-  bustTags("pagos", "medidores")
+  bustTags("pagos", "medidores", "portal")
   return { success: true }
 }
