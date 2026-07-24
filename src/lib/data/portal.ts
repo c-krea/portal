@@ -412,11 +412,12 @@ export type SyncFreshness = {
   isStale: boolean
 }
 
-// Siesa pushes into siesa_raw every ~3h. When the newest push is over a day old
-// the ERP feed is stuck: cartera/recaudo are frozen while interest above is still
-// counted against CURRENT_DATE, so a tenant who paid after the freeze is shown as
-// overdue with a charge that grows daily. The portal hides mora/interés while true.
-const SYNC_STALE_HOURS = 24
+// Siesa pushes into siesa_raw on a daily (or multi-hour) cadence. Flag stale only
+// after 48h so a normal once-a-day push doesn't flash the banner. When true,
+// cartera/recaudo are frozen while interest still counts against CURRENT_DATE —
+// a tenant who paid after the freeze would look overdue with a growing charge.
+// Portal hides mora/interés while stale.
+const SYNC_STALE_HOURS = 48
 
 async function getSyncFreshness_uncached(): Promise<SyncFreshness> {
   const rows = await execute(`
