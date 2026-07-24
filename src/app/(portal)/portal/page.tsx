@@ -23,11 +23,6 @@ import {
   TriangleAlert,
 } from "lucide-react"
 
-// Shown in the stale-data banner as the expected recovery date. The banner itself
-// is driven by real sync freshness, not this string — if the date slips, the banner
-// stays up regardless. Edit this line when IT gives a new estimate.
-const NORMALIZACION_ESPERADA = "viernes 24 de julio"
-
 function currentPeriodo(now: Date) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
 }
@@ -144,9 +139,6 @@ export default async function PortalPage() {
                 <strong>{formatDateShort(sync.lastPush!)}</strong> aún no se reflejan
                 en este portal. Si ya efectuó su pago, su saldo se actualizará
                 automáticamente al restablecerse el servicio.
-              </p>
-              <p className="mt-1 text-xs text-amber-600">
-                Normalización estimada: {NORMALIZACION_ESPERADA}.
               </p>
             </div>
           </div>
