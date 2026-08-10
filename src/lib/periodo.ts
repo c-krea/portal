@@ -15,6 +15,26 @@ export function lecturaPeriodo(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
 }
 
+// Tenant submission window for meter readings.
+//
+// The nominal reading day is the 9th. When the 9th falls on a Saturday or Sunday
+// nobody is at the local to read the meter, so the window stays open through the
+// following business day instead of being lost for the month:
+//   9th on Sunday   → open on the 9th and the 10th (Monday)
+//   9th on Saturday → open on the 9th, 10th and 11th (Monday)
+// The window never loses the 9th itself — a tenant who does work the weekend can
+// still submit on time. periodo is unaffected: lecturaPeriodo() is month-based,
+// so a reading sent on the 10th or 11th still lands on the same previous month.
+export function isLecturaWindow(now: Date = nowBogota()): boolean {
+  const day = now.getDate()
+  if (day === 9) return true
+
+  const ninthDow = new Date(now.getFullYear(), now.getMonth(), 9).getDay() // 0 = Sun, 6 = Sat
+  if (ninthDow === 0) return day === 10             // Sunday    → Monday
+  if (ninthDow === 6) return day === 10 || day === 11 // Saturday → Sunday + Monday
+  return false
+}
+
 // "2026-06" → "2026-05". The month a reading's lectura_anterior must come from.
 export function mesAnterior(periodo: string): string {
   const [y, m] = periodo.split("-").map(Number)

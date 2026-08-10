@@ -4,7 +4,7 @@ import { getPortalProfile, getPortalMedidorHistory, getPortalMedidorRef } from "
 import { MedidorForm, type UnitMedidorData } from "./form"
 import { HistorialChart } from "./chart"
 import { Zap } from "lucide-react"
-import { lecturaPeriodo } from "@/lib/periodo"
+import { lecturaPeriodo, isLecturaWindow } from "@/lib/periodo"
 
 function periodoLabel(periodo: string) {
   const [year, month] = periodo.split("-")
@@ -19,8 +19,7 @@ export default async function MedidorPage() {
   if (!profile) redirect("/portal")
 
   const periodo = lecturaPeriodo()
-  const todayDay = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" })).getDate()
-  const isMedidorDay = todayDay === 9
+  const isMedidorDay = isLecturaWindow()
 
   // Load ref data + history for every unit in parallel
   const [refs, histories] = await Promise.all([
@@ -68,7 +67,8 @@ export default async function MedidorPage() {
           <Zap className="mx-auto h-10 w-10 text-slate-300 mb-3" />
           <p className="font-semibold text-slate-700">Envío disponible solo el día 9 de cada mes</p>
           <p className="mt-1 text-sm text-slate-400">
-            Vuelva el día 9 para registrar la lectura de su contador.
+            Vuelva el día 9 para registrar la lectura de su contador. Si el 9 cae
+            en fin de semana, el envío queda habilitado hasta el siguiente día hábil.
           </p>
         </div>
       )}

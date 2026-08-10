@@ -2,6 +2,38 @@
 
 ---
 
+## Session 71 — 2026-08-10: The 9th fell on a Sunday and the window was simply lost
+
+**Trigger.** German, Monday morning: the 9th was yesterday, a Sunday, nobody works — enable readings for today.
+
+**What was there.** A hard `getDate() === 9`, copy-pasted in three places: the portal medidor page (shows/hides the form), `submitLectura` (server-side guard) and the dashboard banner. One calendar day per month, no exceptions. Roughly one month in four the 9th is a weekend day, so this had been quietly costing readings.
+
+**Why not just open day 10 this once.** A hardcoded date needs a code edit and a deploy every time it recurs — twice more within a year (Jan-2027 and May-2027 both land on a weekend). The rule is what's wrong, not this month.
+
+**Fix shipped.** `isLecturaWindow()` in `src/lib/periodo.ts`, single source of truth, used by all three call sites:
+- 9th on a weekday → open the 9th only (unchanged).
+- 9th on a **Sunday** → open the 9th **and** the 10th.
+- 9th on a **Saturday** → open the 9th, 10th **and** 11th (through Monday).
+
+Checked the next 18 months by hand: Aug-2026 Sun, Jan-2027 Sat, May-2027 Sun, Oct-2027 Sat, Jan-2028 Sun — all roll correctly, every weekday 9th stays a one-day window.
+
+### Decisions
+- 🎯 **Extend the window, never move it.** Keeping the 9th open means a tenant who does work Sunday is still on time; moving the window to Monday would have retroactively invalidated them.
+- 🎯 **Saturday rolls through Sunday to Monday** (3 days). Slightly wider than strictly needed, but it's one rule instead of two and no tenant is worse off.
+- 🎯 Admin entry (`/medidores`) left alone — it was never day-gated, and widening the portal window doesn't change what an admin can file.
+
+### Learnings
+- 💡 **`periodo` is month-based, so the extra day is free.** `lecturaPeriodo()` returns month−1 regardless of the day, so a reading on the 10th books to the same month as one on the 9th. Had the periodo been derived from the day, this change would have re-created the Session 69 double-billing.
+- ⚠️ **The day-7 reminder in `/api/cron/notifications` queries the wrong period.** It checks `lecturas_medidor` for `currentPeriodo` (this month) while readings are stored under the *previous* month (Session 61 convention), so `meterRows.length === 0` is always true and the reminder fires for every tenant, including those who already submitted. Pre-existing, not touched here — worth a separate fix.
+
+### Session-end pointers
+- ADRs: none
+- Lessons: reading-window rule now documented in `src/lib/periodo.ts` header
+- State: `project_state.md` updated (Session 71)
+- Linear: none
+
+---
+
 ## Session 69 — 2026-07-14: Medidores "otros valores" — a missing May row, not a periodo bug
 
 **Trigger.** CKREA (admin) sent a June Excel: locals 502/307/309 showing consumo 239 / 336 / 51 kWh, but the portal showed roughly double. German's read was "we fixed this in Session 61, why is it back?"

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Session 71 — 2026-08-10: Reading window rolls over the weekend
+
+#### Fixed
+- **The meter-reading window was lost whenever the 9th fell on a weekend.** The 9th of August 2026 was a Sunday, so tenants found the form closed on the only day it was open and had nothing to submit on Monday either — the gate was a hard `getDate() === 9` in three places. The window now stays open through the **following business day** when the 9th lands on a Saturday or Sunday (Sunday 9th → also the 10th; Saturday 9th → also the 10th and 11th). The 9th itself is never given up, so anyone who does work the weekend still submits on time. Weekday 9ths are unchanged — one day, as before.
+
+#### Notes
+- `periodo` is month-based (`lecturaPeriodo()`), so a reading sent on the 10th or 11th still lands on the same previous month as one sent on the 9th — no period drift, no risk of the month-gap double-billing from Session 69.
+- The rule lives in one place (`isLecturaWindow()` in `src/lib/periodo.ts`) and is used by the portal page, the server action and the dashboard banner — the three copies of the old day-9 check are gone.
+- Admin entry at `/medidores` was never day-gated; it is untouched.
+
 ### Session 70 — 2026-07-22: Stale-sync notice in the tenant portal
 
 #### Fixed

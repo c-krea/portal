@@ -10,6 +10,7 @@ import {
 } from "@/lib/data/portal"
 import { formatCOP, formatDate, formatDateShort } from "@/lib/formatters"
 import { isPpDateEligible } from "@/lib/pronto-pago"
+import { isLecturaWindow } from "@/lib/periodo"
 import Link from "next/link"
 import { ProfileCard } from "./profile-card"
 import { WompiButton } from "./wompi-button"
@@ -55,7 +56,6 @@ export default async function PortalPage() {
   const nowCO = new Date(now.toLocaleString("en-US", { timeZone: "America/Bogota" }))
   const periodo = currentPeriodo(nowCO)
   const electricidadPeriodo = prevPeriodo(nowCO)
-  const todayDay = nowCO.getDate()
 
   const [pagos, medidor, cartera, electricityInvoiceResults, electricityPeriodosResults, sync] = await Promise.all([
     getPortalPagos(profile.tenantId, 5),
@@ -117,8 +117,9 @@ export default async function PortalPage() {
   const paymentWarning = daysToPayment > 5 && daysToPayment <= 10
   const paymentOverdue = daysToPayment < 0
 
-  // Medidor: submissions only on day 9 of each month
-  const isMedidorDay = todayDay === 9
+  // Medidor: submissions on day 9, extended to the next business day when the 9th
+  // falls on a weekend (shared rule in src/lib/periodo.ts).
+  const isMedidorDay = isLecturaWindow(nowCO)
   const medidorUrgent = !medidor.exists && isMedidorDay
 
   return (

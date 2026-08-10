@@ -5,7 +5,7 @@ import { execute, supabaseAdmin, executeDml, sqlStr } from "@/lib/db/executor"
 import { getPortalProfile } from "@/lib/data/portal"
 import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
 import { uploadMeterPhoto } from "@/lib/r2/meter-photos"
-import { lecturaPeriodo } from "@/lib/periodo"
+import { lecturaPeriodo, isLecturaWindow } from "@/lib/periodo"
 import { revalidatePath } from "next/cache"
 import { bustTags } from "@/lib/cache"
 import { z } from "zod"
@@ -33,7 +33,9 @@ export async function submitLectura(
   const profile = await getPortalProfile(user.id)
   if (!profile) return { error: "Perfil no encontrado" }
 
-  if (new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" })).getDate() !== 9) return { error: "El envío de lectura solo está habilitado el día 9 de cada mes." }
+  if (!isLecturaWindow()) {
+    return { error: "El envío de lectura solo está habilitado el día 9 de cada mes (o el siguiente día hábil si el 9 cae en fin de semana)." }
+  }
 
   const { companyId } = profile
 
