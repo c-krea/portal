@@ -2,6 +2,77 @@
 
 ---
 
+## Session 75 — 2026-08-26: `/pagos` was not broken code, it was a statement timeout
+
+**Trigger.** German: an admin sent a screenshot, the pagos page is not working. No error text in hand at first.
+
+**The false start that cost the most time.** Everything I could check statically was green — `tsc` clean, production build green, schema intact, `exec_sql` present with `service_role:EXECUTE`. So I ran the page's three exact queries against prod through MCP and they **all returned correct August data**. That looked like "the backend is fine, it must be rendering", which was wrong. The trap: **MCP runs SQL as `postgres`, the app runs it as `service_role` through PostgREST.** Same rows, completely different timeout regime. A query that "works" in MCP tells you nothing about whether it survives the app's connection.
+
+**What actually pointed at it.** German came back with the digest: `1653518618`. Next computes that as `djb2Hash(message + stack)` in `create-error-handler.js`, and appends `@E###` for its *own* errors via `createDigestWithErrorCode`. **No `@E` suffix ⇒ not a Next internal error ⇒ a plain `Error` thrown by app code.** In this codebase the plain-`Error` throwers on that path are `execute()` and the `assert*` validators. `assertPeriodo` can't fail (the page falls back to `currentPeriodo()`), which left `execute()`.
+
+**The measurement.** `EXPLAIN ANALYZE` on the bucket query: **4.860 ms**, and inside it `Parallel Seq Scan on recaudo ... Rows Removed by Filter: 294026` with **`loops=40`**. `v2.vista_pagos` is a view over `siesa_raw.recaudo` (332k rows, no index matching its filters). Postgres inlined the view into the `NOT EXISTS` anti-join of the electricity-dedup rule and re-scanned `recaudo` once per candidate row. Then `pg_roles`: `authenticator` carries `statement_timeout=8s`, `service_role` has `rolconfig = null` — and `SET ROLE` does **not** re-apply role settings, so every app query lives under the login role's 8 s. Three ~5 s queries in one `Promise.all` on a shared instance = cancelled statements.
+
+**Fix.** One `vp AS MATERIALIZED (...)` CTE holding `v2.vista_pagos`, with every downstream CTE (`electricity_tenants`, `deduped`, the main SELECT) reading from it instead of the view. The `MATERIALIZED` fence is the whole fix — it stops the planner inlining. Nested-loop anti-join → hash anti-join over 3.114 rows. **4.860 ms → 373 ms**; the real 2026-01 query through the `exec_sql` wrapper, **~5.000 ms → 646 ms**.
+
+**Proving it was safe.** This is money data, so "faster" is worthless without "identical". Verified on **2026-01**, deliberately chosen because August's electricity-dedup set is *empty* — an August-only diff would have proven nothing about the exclusion path. January excludes 7 inquilinos: 147 rows vs 147, two-way `EXCEPT ALL` returned 0 both ways, total $192.867.355 unchanged; KPI query identical too.
+
+### Decisions
+- 🎯 **Query shape only — no financial logic, no DDL, no migration.** The timeout is a planner problem, not a rules problem. Nothing in `siesa_raw` touched.
+- 🎯 **Materialise rather than index `recaudo`.** An index on a **shared, read-only** `siesa_raw` table would be a prod DDL affecting reymon-db / Rutas / Satelites, and needs German's go. The CTE fence is local to this file and fixes it outright.
+- 🎯 **Left the mora-bucket inconsistency alone.** German's call — flagged, not touched (below).
+- 🎯 Removed the vestigial `if (month)` branch in `getPagos_uncached`: it was already dead (`assertPeriodo` runs first), and once the SELECT reads from `vp` an empty CTE string would produce invalid SQL.
+
+### Learnings
+- 💡 **A query that succeeds in MCP has not been tested.** MCP = `postgres`, no `statement_timeout`. The app = `authenticator` → `SET ROLE service_role`, 8 s. Time queries with `EXPLAIN ANALYZE` and compare against 8 s; don't conclude "backend is fine" from an MCP round-trip.
+- 💡 **The Next digest is a real diagnostic, not an opaque id.** `djb2Hash(message + stack)`, plus `@E###` **only** for Next's own errors. Presence or absence of that suffix splits "framework bug" from "our code threw" before you read a single line of app code.
+- 💡 **A view over a big table is a landmine inside a correlated subquery.** `vista_pagos` reads cheap once (~190 ms) and catastrophic 40×. Any `NOT EXISTS` / correlated reference to it needs a `MATERIALIZED` fence.
+- 💡 **Pick the verification month by whether it exercises the branch.** August had zero electricity-dedup tenants, so diffing August would have "passed" while proving nothing.
+- ⚠️ **This will recur on other `vista_pagos` pages as `recaudo` grows.** `/mora`, `/locales/[id]` and the portal read the same view; none re-scan it 40× today, but the 8 s ceiling is shared and `recaudo` only gets bigger.
+- ⚠️ **`getPagosBuckets` LEFT JOINs `siesa_raw.documentos` on `documento` with no `periodo` filter** — if a documento number ever repeats across periods, payments multiply. Not hit today; noted.
+
+### Open — needs German
+- **The "Mora" card and the table's "Desde mora" chip disagree on the same page.** Card (`pagos.ts`) = invoice `periodo` older than the selected month **OR** `dias_mora_al_pago > 30`; table (`pagos-table.tsx:21`) = only `dias_mora_al_pago > 30`. August: card 6 inquilinos / $11.195.053, chip 3 rows / $6.214.794. SAVATAR, SOLORZANO and SANABRIA paid early in August against **July** invoices — mora by the card, "Primeros 10 días" by the chip. German asked to hold until it's checked against `financial-rules-engine-spec.md`.
+- **KPI header and table count different universes.** "Recaudado / documentos recibidos" counts only payments against the *selected month's* invoices (inner join on `inv.periodo`), while the cards and table count all cash received that month. August: $31.603.249 / 13 docs vs $42.798.302 / 20 movimientos. Possibly deliberate (it pairs with "% del proyectado"), but on screen it reads as $11,2M of real cash gone missing.
+
+### Verification on a full local twin — 2026-08-26
+
+The fix was written 10-Aug and sat on a branch for sixteen days because the original proof ran
+against **prod**. Landed today only after reproducing the failure locally.
+
+**What had to be built first.** `scripts/test-db-sync.sh` deliberately loads `siesa_raw.recaudo`
+**empty** (`RAW_DATA_TABLES` omits it; the header says a long `COPY` drops the pooler's SSL and
+"the mora feature needs neither"). But `recaudo` *is* this bug — with zero rows both versions
+return instantly and a local test proves nothing. Backfilled it prod→local **chunked by quarter**,
+which the pooler survives where one long `COPY` does not: **639.168 rows / 76.651 Z40**, exactly
+matching prod. Index parity 5/5, then `ANALYZE` (a fresh `COPY` has no stats, so the planner would
+have behaved differently). No timeout change was needed — local `authenticator` and `authenticated`
+already carry `statement_timeout=8s` and `service_role` has no `rolconfig`, same as prod.
+
+**The failure reproduced exactly.** Old code, all three queries, all four months
+(2025-12 / 2026-01 / 2026-07 / 2026-08): `canceling statement due to statement timeout` at
+~8.0 s. New code: **80–198 ms**. To get a correctness baseline at all, the local `service_role`
+timeout was temporarily raised (then reset) — un-timed, the old queries take **5.9 s to 16.6 s**.
+
+**Identical, all four months.** Row counts 173/147/90/83 matched; row content matched ignoring the
+`ROW_NUMBER` id; table totals $229.251.648 / $192.867.355 / $217.644.065 / $186.514.029 and KPI
+totals $148.151.850 / $126.679.059 / $164.178.403 / $146.067.125 all matched. 2026-01 landing on
+$192.867.355 and $126.679.059 / 50 documentos independently reproduces the 10-Aug measurement.
+
+- ⚠️ **`recaudo` nearly doubled in sixteen days** — 330k rows / ~130 MB when the fix was written,
+  **639k / 306 MB** on 26-Aug. In August the original note called the current month "intermittent";
+  by today the current month failed outright. The predicted growth curve was real, and it is the
+  reason the other `vista_pagos` pages should be treated as on the clock, not as hypothetical.
+- 💡 **A local twin that omits the table under test is not a test.** The sync script's exclusion is
+  reasonable for mora and useless here. Worth folding the chunked backfill into the script so the
+  next person does not rediscover it.
+
+### Session-end pointers
+- ADRs: none
+- Lessons: timeout regime + `MATERIALIZED` rationale documented in `src/lib/data/pagos.ts` header comment
+- State: `memory/project_state.md` — update on next session close
+- Linear: none
+
+---
 ## Session 73 — 2026-08-20: every Preview build had been failing for nine days
 
 **Trigger.** Two docs PRs opened against `main` both showed a red Vercel check. The PRs were

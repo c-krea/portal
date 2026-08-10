@@ -41,17 +41,28 @@ function prevMonthStr(year: number, monthNum: number): string {
 // vista_pagos already applies the 4 canonical filters (FVS cruce + dedup + <$1B + zona Z40).
 // However it does NOT exclude standalone 001- entries that match prior-month electricity totals.
 // We identify those inquilinos and exclude their standalone entries here.
+//
+// `vp` materialises v2.vista_pagos ONCE per query and every downstream CTE reads from it.
+// Without the MATERIALIZED fence Postgres inlines the view into the NOT EXISTS anti-join and
+// re-scans siesa_raw.recaudo (330k+ rows, no usable index for the view's filters) once per
+// candidate row — 40 seq scans, ~4.9s. That blew past the 8s statement_timeout PostgREST
+// inherits from the `authenticator` role and took the whole page down with "Error al cargar".
+// Materialising drops the same query to ~0.37s. Keep the fence; results are identical.
 function electricityTenantsSubquery(monthExpr: string, prevMonth: string): string {
   return `
+    vp AS MATERIALIZED (
+      SELECT inquilino_id, fecha_recaudo, valor_final, docto, cruce, dias_mora_al_pago
+      FROM v2.vista_pagos
+    ),
     electricity_tenants AS (
       SELECT tst.inquilino_id
       FROM (
         SELECT p.inquilino_id, SUM(p.valor_final) AS standalone_total
-        FROM v2.vista_pagos p
+        FROM vp p
         WHERE date_trunc('month', p.fecha_recaudo) = ${monthExpr}
           AND p.docto LIKE '001-%'
           AND NOT EXISTS (
-            SELECT 1 FROM v2.vista_pagos p2
+            SELECT 1 FROM vp p2
             WHERE p2.inquilino_id = p.inquilino_id
               AND p2.cruce        = p.cruce
               AND p2.docto        = REPLACE(p.docto, '001-', '')
@@ -90,7 +101,7 @@ async function getPagosKPIs_uncached(month: string): Promise<PagosKPIs> {
     WITH ${electricityTenantsSubquery(monthExpr, prev)},
     deduped AS (
       SELECT p.inquilino_id, p.fecha_recaudo, p.valor_final, p.docto
-      FROM v2.vista_pagos p
+      FROM vp p
       JOIN siesa_raw.documentos inv
         ON inv.documento = '001-' || p.cruce
         AND inv.tipo     = 'Facturas'
@@ -139,17 +150,13 @@ async function getPagos_uncached(month: string): Promise<PagoRow[]> {
   assertPeriodo(month)
   const monthFilter = `AND date_trunc('month', p.fecha_recaudo) = DATE '${month}-01'`
 
-  let electricityCte = ""
-  let electricityExclusion = ""
-  if (month) {
-    const [y, m] = month.split("-").map(Number)
-    const prev = prevMonthStr(y, m)
-    electricityCte = `WITH ${electricityTenantsSubquery(`DATE '${month}-01'`, prev)}`
-    electricityExclusion = EXCLUDE_ELECTRICITY
-  }
+  // assertPeriodo guarantees a month, so the CTE is always present — the SELECT below
+  // reads from `vp`, which only exists because electricityTenantsSubquery defines it.
+  const [y, m] = month.split("-").map(Number)
+  const electricityCte = `WITH ${electricityTenantsSubquery(`DATE '${month}-01'`, prevMonthStr(y, m))}`
 
   const rows = await execute(`
-    ${electricityCte || ""}
+    ${electricityCte}
     SELECT
       ROW_NUMBER() OVER (ORDER BY p.fecha_recaudo DESC, p.docto)::text AS id,
       p.inquilino_id AS tenant_id,
@@ -165,10 +172,10 @@ async function getPagos_uncached(month: string): Promise<PagoRow[]> {
       p.docto AS siesa_docto,
       p.cruce AS siesa_cruce,
       COALESCE(p.dias_mora_al_pago, 0) AS dias_mora_al_pago
-    FROM v2.vista_pagos p
+    FROM vp p
     LEFT JOIN v2.inquilinos t ON t.id = p.inquilino_id
     WHERE 1=1
-      ${electricityExclusion}
+      ${EXCLUDE_ELECTRICITY}
     ${monthFilter}
     ORDER BY p.fecha_recaudo DESC
   `)
@@ -211,7 +218,7 @@ async function getPagosBuckets_uncached(month: string): Promise<PagosBuckets> {
     deduped AS (
       SELECT p.inquilino_id, p.fecha_recaudo, p.valor_final, p.dias_mora_al_pago,
              inv.periodo AS invoice_periodo
-      FROM v2.vista_pagos p
+      FROM vp p
       LEFT JOIN siesa_raw.documentos inv
         ON inv.documento = '001-' || p.cruce
         AND inv.tipo     = 'Facturas'

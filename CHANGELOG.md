@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Session 75 — 2026-08-26: `/pagos` died on a statement timeout
+
+#### Fixed
+- **The Pagos page threw "Error al cargar" instead of loading.** The three queries behind the page each re-scanned `siesa_raw.recaudo` (330k+ rows) up to **40 times** and took ~5 s apiece; the page fires all three concurrently against the **8 s `statement_timeout`** PostgREST inherits from the `authenticator` role. Past that line Postgres cancelled the statement, `execute()` threw, and the `(app)` error boundary replaced the whole page. Current month was intermittent, older months failed outright — and it got worse every day, because `recaudo` grows with each ERP sync.
+- **Cause was an un-fenced view, not the financial logic.** `v2.vista_pagos` is a view over `recaudo` with no index usable for its filters (`cruce LIKE 'FVS-%'`, `id_zona = 'Z40'`, `valor_final < $1B`). Postgres inlined it into the `NOT EXISTS` anti-join of the electricity-dedup rule and re-planned it as a nested loop — one full seq scan of `recaudo` per candidate row. The view is now materialised **once** per query as a `vp AS MATERIALIZED` CTE that every downstream CTE reads from, turning the nested-loop anti-join into a single hash anti-join over 3.114 rows.
+
+#### Notes
+- **No financial logic, no DB object and no migration changed.** Pure query-shape fix; `siesa_raw` untouched (still read-only). Results verified byte-identical against the old queries on **2026-01** — the heaviest month that actually exercises the electricity-dedup exclusion (7 inquilinos excluded): 147 rows vs 147, zero rows in either direction of a two-way `EXCEPT ALL`, same total **$192.867.355**; KPI query likewise identical ($126.679.059, 50 documentos).
+- Measured end-to-end through the real `exec_sql` wrapper: **~5.000 ms → 646 ms** on 2026-01, and 4.860 ms → 373 ms on the bucket query for 2026-08. Roughly 8× headroom under the timeout.
+- The 8 s ceiling comes from `ALTER ROLE authenticator SET statement_timeout`; `service_role` has no `rolconfig` of its own and `SET ROLE` does not re-apply role settings, so every app query runs under it. Worth remembering for any other page built on `vista_pagos`.
+- **Verified against a full local twin on 2026-08-26** (fix authored 10-Aug, landed today). Local Docker DB loaded with the complete `siesa_raw.recaudo` — **639.168 rows / 76.651 Z40 / 306 MB**, an exact copy of prod, with prod's index set and the same inherited 8 s ceiling. The old code failed **every** month tested (2025-12, 2026-01, 2026-07, 2026-08), all three queries, at the 8 s line; un-timed it ran 5.9–16.6 s. The new code ran 80–198 ms throughout. Results identical on all four months: row counts 173/147/90/83 matched, row content matched, table totals matched ($229.251.648 / $192.867.355 / $217.644.065 / $186.514.029) and KPI totals matched ($148.151.850 / $126.679.059 / $164.178.403 / $146.067.125).
+- **`recaudo` has nearly doubled since the fix was written** — 330k rows at authoring, 639k two weeks later. The original measurement said the current month was "intermittent"; by 26-Aug the current month failed outright. The growth curve was real.
+
 ### Session 73 — 2026-08-20: Preview builds fixed, CLAUDE.md thinned
 
 #### Fixed
