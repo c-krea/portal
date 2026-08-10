@@ -2,29 +2,36 @@
 
 ---
 
-## Session 71 — 2026-08-10: The 9th fell on a Sunday and the window was simply lost
+## Session 71 — 2026-08-10: The 9th fell on a Sunday and the reading day was simply lost
 
 **Trigger.** German, Monday morning: the 9th was yesterday, a Sunday, nobody works — enable readings for today.
 
-**What was there.** A hard `getDate() === 9`, copy-pasted in three places: the portal medidor page (shows/hides the form), `submitLectura` (server-side guard) and the dashboard banner. One calendar day per month, no exceptions. Roughly one month in four the 9th is a weekend day, so this had been quietly costing readings.
+**What was there.** A hard `getDate() === 9`, copy-pasted in three places: the portal medidor page (shows/hides the form), `submitLectura` (server-side guard) and the dashboard banner. One calendar day per month, no exceptions.
 
-**Why not just open day 10 this once.** A hardcoded date needs a code edit and a deploy every time it recurs — twice more within a year (Jan-2027 and May-2027 both land on a weekend). The rule is what's wrong, not this month.
+**Why not just open day 10 this once.** A hardcoded date needs a code edit and a deploy every time it recurs. The rule was what's wrong, not this month.
 
-**Fix shipped.** `isLecturaWindow()` in `src/lib/periodo.ts`, single source of truth, used by all three call sites:
-- 9th on a weekday → open the 9th only (unchanged).
-- 9th on a **Sunday** → open the 9th **and** the 10th.
-- 9th on a **Saturday** → open the 9th, 10th **and** 11th (through Monday).
+**First pass was wrong, German corrected it.** I shipped a weekend rule that *extended* the window through the next business day and treated Saturday like Sunday. Both wrong for this business: Ckrea is a commercial centre, **Saturday is a working day**, and German wants **one** reading day that *moves*, not a widened window. Rule as he stated it: the 9th, unless it's a Sunday or a Colombian holiday, in which case it moves to the next day.
 
-Checked the next 18 months by hand: Aug-2026 Sun, Jan-2027 Sat, May-2027 Sun, Oct-2027 Sat, Jan-2028 Sun — all roll correctly, every weekday 9th stays a one-day window.
+**The part that needed adding.** "Move to the next day" cannot be a single step. **Ley Emiliani puts most Colombian holidays on a Monday**, so a Sunday 9th very often moves straight onto a holiday Monday. Real case within the year: **May 2027** — the 9th is a Sunday, the 10th is Ascensión del Señor → reading day is the 11th. The move now repeats until it lands on a day that is neither Sunday nor festivo.
+
+**Fix shipped.**
+- `src/lib/festivos.ts` — the 18 Colombian holidays computed per year: fixed dates, Ley Emiliani transfers to the following Monday, and the five Easter-relative days off a Gregorian Easter (Meeus/Jones/Butcher). No yearly table to maintain.
+- `lecturaDay()` / `isLecturaWindow()` in `src/lib/periodo.ts` — single source of truth for all three call sites.
+- Tenant copy now names the real day ("Envío disponible solo el 10 de agosto"); a flat "el día 9" would send tenants back to a closed form on a moved month.
+
+Verified the holiday output against the official 2026/2027/2028 calendars — including the non-transferable ones (20-jul-2027 stays Tuesday, 1-may-2027 stays Saturday) — and walked the reading day Aug-2026 → Dec-2027: only Aug-2026 (→10) and May-2027 (→11) move.
 
 ### Decisions
-- 🎯 **Extend the window, never move it.** Keeping the 9th open means a tenant who does work Sunday is still on time; moving the window to Monday would have retroactively invalidated them.
-- 🎯 **Saturday rolls through Sunday to Monday** (3 days). Slightly wider than strictly needed, but it's one rule instead of two and no tenant is worse off.
-- 🎯 Admin entry (`/medidores`) left alone — it was never day-gated, and widening the portal window doesn't change what an admin can file.
+- 🎯 **Move the day, don't widen the window.** German's call. Keeps "exactly one reading day per month" true, which is what makes the "sin lectura → 1,5× el promedio" deadline unambiguous.
+- 🎯 **Saturday does not move it.** Commercial tenants work Saturdays; only Sunday and festivos empty the locals.
+- 🎯 **Compute holidays, never tabulate them.** A hardcoded year list is a silent time bomb — it doesn't fail, it just quietly opens the portal on the wrong day once the list runs out.
+- 🎯 Admin entry (`/medidores`) left alone — it was never day-gated.
 
 ### Learnings
-- 💡 **`periodo` is month-based, so the extra day is free.** `lecturaPeriodo()` returns month−1 regardless of the day, so a reading on the 10th books to the same month as one on the 9th. Had the periodo been derived from the day, this change would have re-created the Session 69 double-billing.
-- ⚠️ **The day-7 reminder in `/api/cron/notifications` queries the wrong period.** It checks `lecturas_medidor` for `currentPeriodo` (this month) while readings are stored under the *previous* month (Session 61 convention), so `meterRows.length === 0` is always true and the reminder fires for every tenant, including those who already submitted. Pre-existing, not touched here — worth a separate fix.
+- 💡 **Ask what the working week actually looks like before encoding "weekend".** I assumed Sat+Sun off from habit; for a Bogotá commercial centre only Sunday counts. The business calendar is domain knowledge, not a library default.
+- 💡 **Ley Emiliani makes "next day" a loop, not an increment.** Because holidays cluster on Mondays, the naive rule fails precisely in the case that triggered the ticket — a Sunday 9th. Found it by printing 17 months of the rule instead of trusting it.
+- 💡 **`periodo` is month-based, so a moved day is free.** `lecturaPeriodo()` returns month−1 regardless of the day. Had periodo been derived from the day, this change would have re-created the Session 69 double-billing.
+- ⚠️ **The day-7 reminder in `/api/cron/notifications` queries the wrong period.** It checks `lecturas_medidor` for `currentPeriodo` (this month) while readings are stored under the *previous* month (Session 61 convention), so `meterRows.length === 0` is always true and the reminder fires for every tenant, including those who already submitted. It also still says "tienes 3 días", which the moving day can make wrong. Pre-existing, not touched here — worth a separate fix.
 
 ### Session-end pointers
 - ADRs: none

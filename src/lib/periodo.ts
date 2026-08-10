@@ -1,3 +1,5 @@
+import { isFestivoColombia } from "./festivos"
+
 // Billing-period conventions for electricity meter readings (America/Bogota).
 //
 // A reading taken on day 9 of month N measures month N-1's consumption,
@@ -15,24 +17,27 @@ export function lecturaPeriodo(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
 }
 
-// Tenant submission window for meter readings.
+// The one day of the month tenants may send their meter reading.
 //
-// The nominal reading day is the 9th. When the 9th falls on a Saturday or Sunday
-// nobody is at the local to read the meter, so the window stays open through the
-// following business day instead of being lost for the month:
-//   9th on Sunday   → open on the 9th and the 10th (Monday)
-//   9th on Saturday → open on the 9th, 10th and 11th (Monday)
-// The window never loses the 9th itself — a tenant who does work the weekend can
-// still submit on time. periodo is unaffected: lecturaPeriodo() is month-based,
-// so a reading sent on the 10th or 11th still lands on the same previous month.
-export function isLecturaWindow(now: Date = nowBogota()): boolean {
-  const day = now.getDate()
-  if (day === 9) return true
+// Nominally the 9th. If the 9th is a Sunday or a Colombian holiday nobody is at the
+// local to read the meter, so the day moves forward to the next one that is neither.
+// Saturday is a normal working day at Ckrea and does NOT move.
+//
+// The step repeats on purpose: Ley Emiliani puts most Colombian holidays on a MONDAY,
+// so a Sunday 9th very often moves onto a holiday Monday and has to move again
+// (e.g. 9th on Sunday + holiday Monday the 10th → the reading day is the 11th).
+//
+// Still exactly one reading day per month, so "no reading today → 1,5× el promedio"
+// stays a single, unambiguous deadline. periodo is unaffected: lecturaPeriodo() is
+// month-based, so a reading sent on a moved day books to the same previous month.
+export function lecturaDay(now: Date = nowBogota()): number {
+  const d = new Date(now.getFullYear(), now.getMonth(), 9)
+  while (d.getDay() === 0 || isFestivoColombia(d)) d.setDate(d.getDate() + 1)
+  return d.getDate()
+}
 
-  const ninthDow = new Date(now.getFullYear(), now.getMonth(), 9).getDay() // 0 = Sun, 6 = Sat
-  if (ninthDow === 0) return day === 10             // Sunday    → Monday
-  if (ninthDow === 6) return day === 10 || day === 11 // Saturday → Sunday + Monday
-  return false
+export function isLecturaWindow(now: Date = nowBogota()): boolean {
+  return now.getDate() === lecturaDay(now)
 }
 
 // "2026-06" → "2026-05". The month a reading's lectura_anterior must come from.

@@ -4,7 +4,7 @@ import { getPortalProfile, getPortalMedidorHistory, getPortalMedidorRef } from "
 import { MedidorForm, type UnitMedidorData } from "./form"
 import { HistorialChart } from "./chart"
 import { Zap } from "lucide-react"
-import { lecturaPeriodo, isLecturaWindow } from "@/lib/periodo"
+import { lecturaPeriodo, isLecturaWindow, lecturaDay, nowBogota } from "@/lib/periodo"
 
 function periodoLabel(periodo: string) {
   const [year, month] = periodo.split("-")
@@ -20,6 +20,10 @@ export default async function MedidorPage() {
 
   const periodo = lecturaPeriodo()
   const isMedidorDay = isLecturaWindow()
+  // Named explicitly: when the 9th is a Sunday or a holiday the day moves, and a
+  // tenant told only "el día 9" would come back to a closed form.
+  const diaLectura = lecturaDay()
+  const mesLectura = nowBogota().toLocaleDateString("es-CO", { month: "long" })
 
   // Load ref data + history for every unit in parallel
   const [refs, histories] = await Promise.all([
@@ -65,10 +69,12 @@ export default async function MedidorPage() {
       {!isMedidorDay && (
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm text-center">
           <Zap className="mx-auto h-10 w-10 text-slate-300 mb-3" />
-          <p className="font-semibold text-slate-700">Envío disponible solo el día 9 de cada mes</p>
+          <p className="font-semibold text-slate-700">
+            Envío disponible solo el {diaLectura} de {mesLectura}
+          </p>
           <p className="mt-1 text-sm text-slate-400">
-            Vuelva el día 9 para registrar la lectura de su contador. Si el 9 cae
-            en fin de semana, el envío queda habilitado hasta el siguiente día hábil.
+            La lectura del contador se recibe el día 9 de cada mes. Si el 9 cae
+            domingo o festivo, el envío se traslada al día siguiente.
           </p>
         </div>
       )}
