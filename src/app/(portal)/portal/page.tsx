@@ -117,8 +117,8 @@ export default async function PortalPage() {
   const paymentWarning = daysToPayment > 5 && daysToPayment <= 10
   const paymentOverdue = daysToPayment < 0
 
-  // Medidor: submissions on day 9, extended to the next business day when the 9th
-  // falls on a weekend (shared rule in src/lib/periodo.ts).
+  // Medidor: exactly one submission day — the 9th, moved forward if it is a Sunday
+  // or a Colombian holiday (shared rule in src/lib/periodo.ts).
   const isMedidorDay = isLecturaWindow(nowCO)
   const medidorUrgent = !medidor.exists && isMedidorDay
 
