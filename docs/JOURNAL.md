@@ -25,9 +25,11 @@
 - ⚠️ Direct SQL does not bust the 30-min cache. Deploy (or an in-app save) needed before Harold stops seeing $2.2M.
 
 ### Session-end pointers
-- Linear: free-plan issue cap — could not create
-- State: `memory/project_state.md` missing in this checkout
-- Backup: `docs/backups/lecturas_medidor_806_baseline_20260812_backup.csv`
+- Shipped `ed5bddd` to `main` → https://ckrea.com.co Ready
+- Linear: free-plan issue cap — could not create. No open C-Krea issues in CLI.
+- State: `memory/project_state.md` created this close
+- Backup: `docs/backups/lecturas_medidor_806_baseline_20260812_backup.csv` (gitignored)
+- After compact, next: nothing on this lane. Open leftover: 307 July $219k off-portal.
 
 ---
 
