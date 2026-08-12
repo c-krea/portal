@@ -108,6 +108,7 @@ export type UnitMedidorData = {
   lecturaAnteriorRef: number
   tarifaKwh: number
   alreadySubmitted: boolean
+  esPrimeraLectura: boolean
   history: PortalMedidorHistoryRow[]
 }
 
@@ -264,12 +265,18 @@ export function MedidorForm({
 
             {/* Right: digit input */}
             <div className="flex flex-col gap-4">
-              <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                Lectura anterior:{" "}
-                <span className="font-semibold text-slate-900">
-                  {String(Math.floor(selected.lecturaAnteriorRef)).padStart(5, "0")} kWh
-                </span>
-              </div>
+              {selected.esPrimeraLectura ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  Primera lectura de este local. Se guarda como punto de partida — <span className="font-semibold">este mes no se cobra</span>.
+                </div>
+              ) : (
+                <div className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  Lectura anterior:{" "}
+                  <span className="font-semibold text-slate-900">
+                    {String(Math.floor(selected.lecturaAnteriorRef)).padStart(5, "0")} kWh
+                  </span>
+                </div>
+              )}
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
@@ -284,6 +291,20 @@ export function MedidorForm({
 
               {digits.every(d => d !== "") && (() => {
                 const lecturaActual = Number(digits.join(""))
+                if (selected.esPrimeraLectura) {
+                  return (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 divide-y divide-slate-200 overflow-hidden">
+                      <div className="flex items-center justify-between px-4 py-3">
+                        <span className="text-sm text-slate-500">Lectura este mes</span>
+                        <span className="font-semibold tabular-nums text-slate-700">{digits.join("").padStart(5, "0")} kWh</span>
+                      </div>
+                      <div className="flex items-center justify-between px-4 py-3 bg-emerald-50">
+                        <span className="text-sm font-medium text-emerald-700">Valor a pagar</span>
+                        <span className="font-bold tabular-nums text-emerald-800">$ 0</span>
+                      </div>
+                    </div>
+                  )
+                }
                 const consumo = Math.max(0, lecturaActual - Math.floor(selected.lecturaAnteriorRef))
                 const total = consumo * selected.tarifaKwh
                 return (

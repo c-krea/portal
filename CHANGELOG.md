@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Session 72 — 2026-08-12: First meter reading is a $0 baseline
+
+#### Fixed
+- **Local 806 billed $2.252.800 for its first reading.** Harold Castiblanco moved 307→806 last week and submitted 2.734 kWh with no previous row. The write path treated "no previous" as anterior = 0 and charged the whole meter. July 806 row set to handover baseline (2.734,7 / 2.734,7 / 0 kWh / $0). Backup: `docs/backups/lecturas_medidor_806_baseline_20260812_backup.csv`.
+- **First reading with no previous row no longer bills.** Shared rule in `src/lib/lectura-consumo.ts`: no previous → anterior = actual, kwh = 0, total = $0. Wired into tenant `submitLectura` and admin `registrarLectura`. Portal and admin forms say "punto de partida — este mes no se cobra". Zero-kWh rows no longer appear as an energy invoice.
+
+#### Notes
+- Photo of the 806 DTS238 read **2.734,7** (they typed 2.734). Baseline stored at 2.734,7.
+- 806 `tiene_medidor` flipped false → true.
+- 307 July energy ($219.000, entered by operaciones) left as-is — last month at the old unit. Portal no longer shows 307 (contract closed 2-Aug).
+
 ### Session 71 — 2026-08-10: Reading day moves off Sundays and holidays
 
 #### Fixed

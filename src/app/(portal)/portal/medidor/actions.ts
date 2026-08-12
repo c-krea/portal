@@ -6,6 +6,7 @@ import { getPortalProfile } from "@/lib/data/portal"
 import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
 import { uploadMeterPhoto } from "@/lib/r2/meter-photos"
 import { lecturaPeriodo, isLecturaWindow, lecturaDay } from "@/lib/periodo"
+import { consumoDesdeLecturas, totalEnergia } from "@/lib/lectura-consumo"
 import { revalidatePath } from "next/cache"
 import { bustTags } from "@/lib/cache"
 import { z } from "zod"
@@ -73,7 +74,8 @@ export async function submitLectura(
     ORDER BY periodo DESC
     LIMIT 1
   `)
-  const lecturaAnterior = prevRows[0] ? Number(prevRows[0].lectura_actual) : 0
+  const prevLectura = prevRows[0] ? Number(prevRows[0].lectura_actual) : null
+  const { lecturaAnterior, kwh, esPrimeraLectura } = consumoDesdeLecturas(lecturaActual, prevLectura)
   // Prefer the invoice tarifa for THIS periodo (Excel formula: valor ÷ kWh per building).
   // If the invoice isn't entered yet, fall back to the previous reading's tarifa;
   // saveFacturasEnergia re-propagates the real tarifa once the invoice is entered.
@@ -82,14 +84,13 @@ export async function submitLectura(
     ? invoiceTarifa
     : (prevRows[0] ? Number(prevRows[0].tarifa_kwh) : 0)
 
-  if (lecturaActual < lecturaAnterior) {
+  if (!esPrimeraLectura && lecturaActual < lecturaAnterior) {
     return {
       error: `La lectura actual (${lecturaActual}) no puede ser menor a la anterior (${lecturaAnterior})`,
     }
   }
 
-  const kwh = Math.round((lecturaActual - lecturaAnterior) * 100) / 100
-  const totalEnergia = Math.round(kwh * tarifaKwh / 50) * 50
+  const total = totalEnergia(kwh, tarifaKwh)
 
   // Trust the tenant's reading — accept as submitted, no automatic review.
   const validationStatus = "aprobado"
@@ -126,7 +127,7 @@ export async function submitLectura(
          submitted_by, estado_validacion)
       VALUES (
         '${companyId}'::uuid, '${unitId}'::uuid, '${periodo}',
-        ${lecturaAnterior}, ${lecturaActual}, ${kwh}, ${tarifaKwh}, ${totalEnergia},
+        ${lecturaAnterior}, ${lecturaActual}, ${kwh}, ${tarifaKwh}, ${total},
         ${sqlStr(notas ?? null)}, ${sqlStr(fotoUrl)}, ${sqlStr(fotoKey)},
         '${user.id}'::uuid, '${validationStatus}'
       )
@@ -153,8 +154,9 @@ export async function submitLectura(
   // total_energia changed → pagos electricity-dedup + medidores views recompute.
   bustTags("pagos", "medidores", "portal")
 
-  const kwhFmt = kwh.toLocaleString("es-CO")
-  const message = `Lectura enviada correctamente (${kwhFmt} kWh).`
+  const message = esPrimeraLectura
+    ? "Lectura inicial guardada. Este mes no se cobra — queda como punto de partida."
+    : `Lectura enviada correctamente (${kwh.toLocaleString("es-CO")} kWh).`
 
   return {
     success: true,

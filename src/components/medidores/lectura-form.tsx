@@ -144,7 +144,9 @@ export function LecturaForm({ units, periodo }: { units: UnitWithMeter[]; period
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">
               Lectura anterior
-              <span className="ml-1.5 font-normal text-slate-400">({lecturaAnteriorPeriodo})</span>
+              {lecturaAnterior != null && (
+                <span className="ml-1.5 font-normal text-slate-400">({lecturaAnteriorPeriodo})</span>
+              )}
             </label>
             <input
               type="number"
@@ -154,6 +156,11 @@ export function LecturaForm({ units, periodo }: { units: UnitWithMeter[]; period
               className="w-full rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-500 cursor-not-allowed"
             />
             <input type="hidden" name="lecturaAnterior" value={lecturaAnterior ?? 0} />
+            {selectedId && lecturaAnterior == null && (
+              <p className="mt-1.5 text-xs text-amber-700">
+                Primera lectura de este local. Se guarda como punto de partida — este mes no se cobra.
+              </p>
+            )}
           </div>
 
           {/* Current reading */}

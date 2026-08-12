@@ -2,6 +2,35 @@
 
 ---
 
+## Session 72 — 2026-08-12: 806 first reading billed the whole meter
+
+**Trigger.** CKREA forwarded Harold Castiblanco's first meter photo for local 806. Local delivered last week (moved from 307, contract closed 2-Aug).
+
+**Finding.** Photo = DTS238, reading **2.734,7**. Already in `v2.lecturas_medidor` (periodo `2026-07`, submitted 10-Aug by `hazastudio.co@gmail.com`): anterior=0, actual=2734, kwh=2734, total **$2.252.800**, estado=aprobado. No previous 806 row ever. `tiene_medidor` was false. Siesa has no energy invoice for that amount.
+
+**Root cause.** Both write paths (`submitLectura`, `registrarLectura`) did `anterior = previous ?? 0` then `kwh = actual − anterior`. First reading of a new/vacant local = charge the entire meter. Same hole that 506A/507 avoided only because a human wrote the baseline by hand.
+
+**Decision.** German: first reading with no previous row must not charge. Apply to 806 **and** lock the rule in code.
+
+**Fixes.**
+- DB (approved): 806 July → anterior=actual=2734.7, kwh=0, total=0. `tiene_medidor=true`. Undo SQL in `notas`. Backup CSV in `docs/backups/`.
+- Code: `consumoDesdeLecturas` / `totalEnergia` in `src/lib/lectura-consumo.ts`. No previous row → baseline $0. A stored previous of 0 is still a real reading (next month bills the difference). Portal invoice query skips kwh≤0.
+
+### Decisions
+- 🎯 **No previous row = punto de partida, $0.** Not "anterior = 0". The signal is the missing row, not a zero value.
+- 🎯 Baseline stored at the photo number (2.734,7), not the integer they typed.
+
+### Learnings
+- 💡 A new tenant's first photo is not a bill. If the form shows a huge kWh / peso figure, the write path is wrong.
+- ⚠️ Direct SQL does not bust the 30-min cache. Deploy (or an in-app save) needed before Harold stops seeing $2.2M.
+
+### Session-end pointers
+- Linear: free-plan issue cap — could not create
+- State: `memory/project_state.md` missing in this checkout
+- Backup: `docs/backups/lecturas_medidor_806_baseline_20260812_backup.csv`
+
+---
+
 ## Session 71 — 2026-08-10: The 9th fell on a Sunday and the reading day was simply lost
 
 **Trigger.** German, Monday morning: the 9th was yesterday, a Sunday, nobody works — enable readings for today.

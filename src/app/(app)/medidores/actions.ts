@@ -1,12 +1,13 @@
 "use server"
 
-import { supabaseAdmin, executeDml, sqlStr } from "@/lib/db/executor"
+import { supabaseAdmin, execute, executeDml, sqlStr } from "@/lib/db/executor"
 import { getAuthUser } from "@/lib/auth/session"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
 import { uploadMeterPhoto } from "@/lib/r2/meter-photos"
 import { getSignedDownloadUrl } from "@/lib/r2/files"
 import { isValidPeriodo } from "@/lib/security/validators"
+import { consumoDesdeLecturas, totalEnergia } from "@/lib/lectura-consumo"
 import { revalidatePath } from "next/cache"
 import { bustTags } from "@/lib/cache"
 import { z } from "zod"
@@ -44,13 +45,22 @@ export async function registrarLectura(
     return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
 
-  const { unitId, periodo, lecturaAnterior, lecturaActual, notas } = parsed.data
+  const { unitId, periodo, lecturaActual, notas } = parsed.data
 
-  if (lecturaActual < lecturaAnterior) {
+  const prevRows = await execute(`
+    SELECT lectura_actual::numeric AS lectura_actual
+    FROM v2.lecturas_medidor
+    WHERE local_id = '${unitId}'::uuid
+      AND periodo < '${periodo}'
+    ORDER BY periodo DESC
+    LIMIT 1
+  `)
+  const prevLectura = prevRows[0] ? Number(prevRows[0].lectura_actual) : null
+  const { lecturaAnterior, kwh, esPrimeraLectura } = consumoDesdeLecturas(lecturaActual, prevLectura)
+
+  if (!esPrimeraLectura && lecturaActual < lecturaAnterior) {
     return { error: "Lectura actual debe ser mayor o igual a la anterior" }
   }
-
-  const kwh            = Math.round((lecturaActual - lecturaAnterior) * 100) / 100
   const rawUnitNumber  = (formData.get("unitNumber") as string | null) ?? ""
   const unitNumber     = rawUnitNumber.replace(/[^a-zA-Z0-9_-]/g, "")
   const rawMime        = (formData.get("fotoMime") as string | null) ?? "image/jpeg"
@@ -84,7 +94,7 @@ export async function registrarLectura(
     // Auto-lookup tarifa from the entered invoice for this period + unit's building group.
     // If no invoice exists yet, tarifa=0 and total=0; re-run registration once invoice is entered.
     const tarifa = await getElectricityTarifaForUnit(empresaId, unitId, periodo)
-    const totalEnergia = tarifa > 0 ? Math.round(kwh * tarifa / 50) * 50 : 0
+    const total = totalEnergia(kwh, tarifa)
 
     await executeDml(`
       INSERT INTO v2.lecturas_medidor
@@ -93,7 +103,7 @@ export async function registrarLectura(
       VALUES (
         '${empresaId}'::uuid, '${unitId}'::uuid, '${periodo}',
         ${lecturaAnterior}, ${lecturaActual}, ${kwh},
-        ${tarifa > 0 ? tarifa : 0}, ${totalEnergia},
+        ${tarifa > 0 ? tarifa : 0}, ${total},
         ${sqlStr(notas ?? null)}, ${sqlStr(fotoUrl)}, ${sqlStr(fotoKey)},
         '${user.id}'::uuid
       )
@@ -115,9 +125,11 @@ export async function registrarLectura(
     // total_energia changed → pagos electricity-dedup + medidores views recompute.
     bustTags("pagos", "medidores", "portal")
 
-    const msg = tarifa > 0
-      ? `Lectura registrada: ${kwh} kWh · $${totalEnergia.toLocaleString("es-CO")}`
-      : `Lectura registrada: ${kwh} kWh · costo pendiente (ingresa la factura del período primero, luego re-registra)`
+    const msg = esPrimeraLectura
+      ? "Lectura inicial guardada como punto de partida. Este mes no se cobra."
+      : tarifa > 0
+        ? `Lectura registrada: ${kwh} kWh · $${total.toLocaleString("es-CO")}`
+        : `Lectura registrada: ${kwh} kWh · costo pendiente (ingresa la factura del período primero, luego re-registra)`
 
     return { success: true, message: msg }
   } catch (e) {

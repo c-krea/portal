@@ -135,8 +135,8 @@ periodo:   202605
 
 **How the total is calculated:**
 1. Admin enters utility bill values at `/medidores/facturas` → stored in `v2.facturas_energia` → `tarifa_kwh = valor_factura / kwh_factura`
-2. Tenant submits meter reading on day 9 via portal → `kwh = lectura_actual - lectura_anterior`
-3. Portal computes `total_energia = Math.round(kwh × tarifa_kwh)` and saves to `v2.lecturas_medidor`
+2. Tenant submits meter reading on day 9 via portal. If a previous row exists → `kwh = lectura_actual - lectura_anterior`. If this is the local's first reading (no previous row) → handover baseline: `lectura_anterior = lectura_actual`, `kwh = 0`, `total_energia = 0` (see `src/lib/lectura-consumo.ts`).
+3. Portal computes `total_energia = MROUND(kwh × tarifa_kwh, 50)` and saves to `v2.lecturas_medidor`. Zero-kWh baselines never appear as an energy invoice.
 
 **Source of truth per field:**
 | Field | Source |

@@ -442,6 +442,7 @@ export type PortalMedidorRef = {
   lecturaAnteriorRef: number
   tarifaKwh: number
   alreadySubmitted: boolean
+  esPrimeraLectura: boolean
 }
 
 async function getPortalMedidorRef_uncached(
@@ -467,6 +468,7 @@ async function getPortalMedidorRef_uncached(
     lecturaAnteriorRef: prevRows[0] ? Number(prevRows[0].la) : 0,
     tarifaKwh:          prevRows[0] ? Number(prevRows[0].tk) : 0,
     alreadySubmitted:   currentRows.length > 0,
+    esPrimeraLectura:   !prevRows[0],
   }
 }
 
@@ -551,11 +553,14 @@ async function getPortalElectricityInvoiceData_uncached(
   const r = rows[0]
   if (!r) return null
 
+  const kwh = Number(r.kwh)
+  // Handover baselines (kwh = 0) are not bills.
+  if (!Number.isFinite(kwh) || kwh <= 0) return null
+
   const grupo = String(r.grupo_energia ?? "")
   const meta  = ELECTRICITY_GROUPS.find(g => g.group === grupo)
   if (!meta) return null
 
-  const kwh    = Number(r.kwh)
   const tarifa = Number(r.tarifa_kwh)
   const total  = r.total_energia != null
     ? Number(r.total_energia)

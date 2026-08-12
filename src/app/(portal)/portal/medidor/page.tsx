@@ -37,6 +37,7 @@ export default async function MedidorPage() {
     lecturaAnteriorRef: refs[i].lecturaAnteriorRef,
     tarifaKwh:          refs[i].tarifaKwh,
     alreadySubmitted:   refs[i].alreadySubmitted,
+    esPrimeraLectura:   refs[i].esPrimeraLectura,
     history:            histories[i],
   }))
 
