@@ -16,6 +16,14 @@ updated: 2026-08-12 (Session 72)
 - **Notifications cron** still checks the wrong period (this month vs previous) → reminder fires for everyone. Session 71 leftover.
 - **506B** — active contract, no May/June readings. Old follow-up.
 - Linear free-plan cap — could not file the 806 issue. No open C-Krea issues in CLI.
+- **Notifications cron writes its dedup row before sending** (`push_notification_log` insert
+  precedes `sendPushToUser`). A genuine push misconfiguration would suppress that notification on
+  every later run. Latent, found Session 73.
+- **`src/lib/push.ts` builds SQL by string interpolation.** IDs come from our own DB today. Low
+  risk, worth a cleanup pass.
+- **The Siesa sync connects as the Postgres superuser**, not a role scoped to `siesa_raw`. Contradicts
+  `docs/isolation-checklist.md`. Fix is IT's, via Esteban — scoped role + rotate the password if it
+  has travelled. Found Session 73.
 
 ## Money rules (do not redefine)
 A pronto pago · B phase discount · C mora DIAN · D gastos (water flat, electricity metered).

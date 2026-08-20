@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+### Session 73 — 2026-08-20: Preview builds fixed, CLAUDE.md thinned
+
+#### Fixed
+- **Every Vercel Preview build had been failing for nine days.** `src/lib/push.ts` called
+  `webpush.setVapidDetails()` at module load, so importing the file was enough to run it — and Next
+  runs that during build-time page-data collection for `/api/cron/notifications`. The VAPID
+  variables exist only in Vercel's Production scope, so Preview threw
+  `No subject set in vapidDetails.subject`. Push is now configured on first send instead, so a build
+  that never sends a notification never needs the credentials. Missing credentials throw a named
+  error rather than being hidden behind `process.env.X!`. Production was unaffected throughout.
+
+#### Changed
+- **`CLAUDE.md` cut 1440 → 940 words.** It now carries repo facts only — stack, financial rules,
+  DB and isolation conventions, Siesa integration. Org/IT context, Supabase access paths and the
+  deploy-author constraint moved to a git-ignored `.claude/CLAUDE.local.md`, so the file is safe to
+  share with anyone who opens the repo.
+
+#### Added
+- Five documents that had been untracked since May, including `docs/isolation-checklist.md` — which
+  `CLAUDE.md` already pointed at, so that reference had been dangling.
+- `integracion_supabase/` added to `.gitignore`: it was a clone of IT's own GitLab repo carrying its
+  own `.env` and a 68 MB venv. Now deleted from disk.
+
+#### Notes
+- Open, not fixed: the notifications cron writes its dedup row before sending, so a genuine push
+  misconfiguration would suppress a notification permanently. Detail in `docs/JOURNAL.md`.
+
 ### Session 72 — 2026-08-12: First meter reading is a $0 baseline
 
 #### Fixed

@@ -2,6 +2,63 @@
 
 ---
 
+## Session 73 — 2026-08-20: every Preview build had been failing for nine days
+
+**Trigger.** Two docs PRs opened against `main` both showed a red Vercel check. The PRs were
+docs-only, so the failure could not have been theirs.
+
+**Finding.** Preview deployments had been failing since at least 11-Aug; Production was green the
+whole time, which is why nobody noticed. `src/lib/push.ts` called `webpush.setVapidDetails()` at
+module top level, so merely *importing* the file ran it. Next runs that during build-time page-data
+collection for `/api/cron/notifications`. The three VAPID variables exist only in Vercel's
+**Production** scope, so in Preview they were empty and `web-push` threw
+`No subject set in vapidDetails.subject`.
+
+Reproduced locally with the variables blanked, which is exactly what Preview does:
+
+```
+VAPID_SUBJECT= VAPID_PRIVATE_KEY= NEXT_PUBLIC_VAPID_PUBLIC_KEY= npm run build
+```
+
+**Decision.** Fix the code, not the environment. Copying the keys into Preview scope would have
+unblocked the PRs in a minute but puts real push credentials into every preview build. Configuring
+push at *send* time instead of *load* time means a build that never sends a notification never
+needs them.
+
+**Fix.** A once-only `configure()` at the top of `sendPushToUser` and `sendPushToAll`
+(`src/lib/push.ts`). The three `process.env.X!` non-null assertions are gone — they claimed the
+variables always exist, and they don't. Missing credentials now throw a named error at send time
+rather than being asserted away, and the cached flag stays `false` on failure so a later call can
+still succeed. Signatures and return shapes unchanged; the cron route needed no edit. PR #3.
+
+**Also this session.** `CLAUDE.md` cut 1440 → 940 words: it now carries repo facts only, with
+personal/org material moved to a git-ignored `.claude/CLAUDE.local.md` (PR #1). Five documents that
+had been untracked since May were committed, including `docs/isolation-checklist.md` — which
+`CLAUDE.md` already referenced, so that pointer had been dangling (PR #2).
+
+### Decisions
+- 🎯 **Configure external SDKs at use time, not import time.** A module-scope call runs during the
+  build, in an environment that has none of the secrets.
+- 🎯 **A green Production build is not evidence the app builds.** Preview and Production have
+  different environments; only Preview proves a PR.
+
+### Found, not fixed
+- **`notify()` writes its dedup row before sending.** `src/app/api/cron/notifications/route.ts`
+  inserts into `push_notification_log`, then calls `sendPushToUser`. If push is ever genuinely
+  unconfigured, the row is already written when the send throws, and that notification is
+  suppressed on every later run. Latent — only bites on a misconfiguration that isn't true today.
+- **`src/lib/push.ts` builds SQL by string interpolation** (`user_id = '${userId}'::uuid`). The IDs
+  come from our own database today, so low risk, but it should not stay that way.
+- **The Siesa sync connects as the Postgres superuser.** Reviewing `integracion_supabase/` (IT's
+  own GitLab repo, cloned into this folder 27-Apr and deleted from disk today) showed its `.env`
+  using `postgres.bosylehvmtwtqkrlievy` — full access to every schema of every app on the shared
+  Reymon project. `docs/isolation-checklist.md` prescribes a scoped role, and the portals follow
+  it; the process filling `siesa_raw` does not. Fix is IT's, via Esteban: a role limited to the
+  five `siesa_raw` tables, and rotate the superuser password if it has travelled by email or chat.
+  Credentials never reached GitLab — `.env` was correctly gitignored there.
+
+---
+
 ## Session 72 — 2026-08-12: 806 first reading billed the whole meter
 
 **Trigger.** CKREA forwarded Harold Castiblanco's first meter photo for local 806. Local delivered last week (moved from 307, contract closed 2-Aug).
