@@ -1,11 +1,24 @@
 import webpush from "web-push"
 import { execute } from "@/lib/db/executor"
 
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT!,
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-)
+let configured = false
+
+function configure() {
+  if (configured) return
+
+  const subject = process.env.VAPID_SUBJECT
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+  const privateKey = process.env.VAPID_PRIVATE_KEY
+
+  if (!subject || !publicKey || !privateKey) {
+    throw new Error(
+      "Push not configured: VAPID_SUBJECT, NEXT_PUBLIC_VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY must all be set."
+    )
+  }
+
+  webpush.setVapidDetails(subject, publicKey, privateKey)
+  configured = true
+}
 
 type PushPayload = {
   title: string
@@ -14,6 +27,7 @@ type PushPayload = {
 }
 
 export async function sendPushToUser(userId: string, payload: PushPayload) {
+  configure()
   const subs = await execute(
     `SELECT endpoint, p256dh, auth FROM v2.push_subscriptions WHERE user_id = '${userId}'::uuid`
   )
@@ -34,6 +48,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload) {
 }
 
 export async function sendPushToAll(payload: PushPayload) {
+  configure()
   const subs = await execute(
     `SELECT endpoint, p256dh, auth FROM v2.push_subscriptions`
   )
