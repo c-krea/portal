@@ -17,8 +17,8 @@ Money rules below). A doc that misstates a money rule is worse than no doc.
 
 | To find | Look at |
 |---|---|
-| Tables, columns, RPCs, RLS | `docs/db-schema-reference.md`, then `supabase/migrations/` — or query the live DB |
-| The money rules as implemented | `docs/foundation/02_financial_rules/financial-rules-engine-spec.md` and `src/lib/data/mora.ts` |
+| Tables, columns, RPCs, RLS | `docs/db-schema-reference.md` and `docs/schema/` — or query the live DB. **Not** `supabase/migrations/`: it holds one file, because this schema was applied directly to the database. |
+| The money rules as implemented | `docs/financial-rules-engine-spec.md` and `src/lib/data/mora.ts` |
 | Routes | `src/app/` |
 | Cron jobs and their schedules | `vercel.json` and `src/app/api/cron/` |
 | What shipped, when | `CHANGELOG.md` |

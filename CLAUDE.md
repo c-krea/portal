@@ -44,9 +44,14 @@ Docker-based local twin of Ckrea's data. **All dev/testing runs here, never prod
 ## Key docs (read before touching domain logic)
 - `docs/context.md` — the business, the ERP relationship, the money rules in prose. States nothing countable on purpose; points at the source for anything that can be looked up.
 - `docs/PRD_C-krea.md` — full product requirements
-- `docs/foundation/02_financial_rules/financial-rules-engine-spec.md` — ALL financial math. If portal math ≠ this doc, something is wrong.
-- `docs/foundation/03_ui_ux/Step4_UI_UX_Guide.md` — screen-by-screen design spec
-- `docs/foundation/01_schema_erd/001_initial_schema.sql` — canonical DB schema
+- `docs/financial-rules-engine-spec.md` — ALL financial math. If portal math ≠ this doc, something is wrong.
+- `docs/schema/` — the **live `v2` DDL**: `01_tablas.sql`, `02_vistas.sql`, `03_rpcs.sql`.
+
+  ⚠️ **`supabase/migrations/` holds exactly one file.** Ckrea's schema was applied directly to the
+  live database, so unlike Palma (57 migrations), Paxco (82) and Cartera (18) **there is no
+  replayable history and no file-level revert path.** These DDL files plus the live DB are the
+  schema of record. Treat that as a known gap, not a convention to copy — Paxco hit the same
+  problem and repaired it (see its `project_migration_drift_repair` memory).
 - `docs/db-schema-reference.md` — column-level reference for `siesa_raw` + `v2`, join patterns, projection logic. Read before any DB query.
 - `docs/reference/user-admin-edge-function.md` — spec for the shared login Edge Function. **Canonical, because that function's source does not live in this repo.** §11 (red-team resolutions) wins on conflict.
 

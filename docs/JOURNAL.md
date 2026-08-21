@@ -3344,3 +3344,37 @@ with `CLAUDE.md` and lost).
 **Rule, now written into `CLAUDE.md`:** build plans and specs are not kept. Why → JOURNAL. What
 shipped → CHANGELOG. Lasting rule → `docs/reference/`. And a doc may state what the code cannot; the
 moment it states a count, a rate, or a schedule, it has taken on a debt nobody will pay.
+
+### 2026-08-20 (same session) — the foundation folder, and a schema-history gap
+
+⚠️ **`CLAUDE.md` called a dead file the "canonical DB schema".**
+`docs/foundation/01_schema_erd/001_initial_schema.sql` creates `companies`, `profiles`, `tenants`,
+`units`, `contracts` — the **English-named `public.*` schema from 16 April**, superseded by Phase G.
+The portal reads Spanish-named `v2.*` tables exclusively. An agent told to check the schema was
+reading a schema that no longer exists. Same failure as the interest rule earlier today: the file
+was not just stale, it was *authoritative and wrong*.
+
+🎯 **`docs/foundation/` retired; the live DDL promoted out of it.** The whole folder was project
+bootstrap scaffolding (its index, `FOUNDATION_GUIDE.md`, was deleted earlier today — deleting the
+index but leaving the folder was the mistake this fixes). Deleted: the dead initial schema, its ERD,
+`002_seed_data.sql` (57k words seeding `companies`/`contracts`/`gastos` — all dead tables),
+`Step4_UI_UX_Guide.md` + wireframes and `Step5_API_Routes_Backend_Logic.md` (April build plans by
+any other name), and `G_migration_map.md` (Phase G finished in April).
+
+Promoted, because these are the **live** schema: `v2/01_tablas.sql`, `02_vistas.sql`, `03_rpcs.sql`
+→ **`docs/schema/`**. `financial-rules-engine-spec.md` → `docs/financial-rules-engine-spec.md`.
+
+⚠️ **The real finding: this repo has no replayable schema history.**
+`supabase/migrations/` holds **one** file. Palma has 57, Paxco 82, Cartera 18. Ckrea's schema
+changes were applied straight to the live database, so there is **no file-level revert path** —
+while `CLAUDE.md` tells agents to "use idempotent migrations, develop and verify on local first",
+a practice the repo does not actually follow. Now written down in `CLAUDE.md` as a known gap rather
+than left to be discovered during an incident. Paxco hit the identical problem and repaired it
+(`project_migration_drift_repair` memory: "migrations now rebuild prod from scratch, verified
+parity"). **Not fixed here — it needs a session with DB access.**
+
+🧹 Also deleted from disk (untracked, no diff): `Portal Ckrea/.claude/worktrees/` (3.7 MB). Part of
+a ~1.21 GB sweep across all projects the same day — the bulk of it a **1.2 GB orphaned worktree in
+Paxco** whose `.git` pointed at the pre-July `~/workspace/` path, dead since the 5 July move. It
+held a full second copy of the 28 plans and specs retired that morning, including the dead Wompi
+plan; deleting the docs while leaving that directory would have been cosmetic.
