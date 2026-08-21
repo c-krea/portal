@@ -3176,3 +3176,44 @@ Admin flagged the pagos page showing $0 for "11 al 30" of July. Investigated as 
 - **Left alone on purpose:** "Próximo Pago" can still read "vencido" for a paid invoice. Smallest-fix discipline — it shows a due date, not a growing charge, and the banner now explains it.
 - **Lesson / first move next time:** pagos page showing $0 for a recent range → check `siesa_synced_at` BEFORE auditing filters. Cost most of this session's investigation. Playbook saved: `siesa_sync_stale_banner` memory.
 - **Root cause is IT's:** `siesa_raw` is read-only and Siesa is IT-controlled. Portal fix limits damage only; the feed itself needs Reymon IT. Message to IT still pending.
+
+## Session 74 — 2026-08-20 — the docs staleness pass
+
+⚠️ **The one that mattered: `docs/context.md` stated a wrong money rule.** It said late interest was
+**"0.05%/day accruing from day 11"**. Both halves were wrong and had been for months — the method
+changed to DIAN / art. 635 E.T. on 2026-07-10 (`interés = vr_vencido × tasa_ea_mes ÷ 366 ×
+días_vencidos`, rate admin-entered in `v2.tasa_interes_mora`), and the grace period had already been
+corrected to day 31, not day 11. `CLAUDE.md` and `financial-rules-engine-spec.md` both carried the
+correct rule with a SUPERSEDED banner. `context.md` was the only file still teaching the old one —
+and it is the file a cold session reads first.
+
+🎯 **Decision — `context.md` rewritten (804w → 1,071w, and it says more while claiming less).** It
+now states nothing countable. What was in it and had rotted: a "Current status (2026-04-28, Phase G
+COMPLETE)" block whose **"Next entry points"** told every session to start *Phase F* and *Phase H* —
+four months old; a warning about `invoice-engine.ts` / `reconciliation.ts` being "no-op stubs"
+(`reconciliation.ts` no longer exists, and `runInterestAccrual` is live and called from
+`mora/actions.ts`); a bootstrap checklist still saying "Get DB password", "Apply
+001_initial_schema.sql", "Connect Vercel", "Set up Linear project". The portal has been in
+production for months.
+
+🎯 **Decision — `docs/superpowers/` retired**, same as Paxco the same day. Plans and specs describe
+*intent*, and intent competes with shipped code. Deleted: the user-admin build plan, the mora-DIAN
+design (shipped, code in `src/lib/data/mora.ts`), the dual-portal design (shipped), the reymon-db
+control-room design (that repo self-documents in its own `docs/DESIGN.md`).
+
+⚠️ **One spec was kept, and the reason is the exception worth remembering.**
+`2026-07-01-shared-user-admin-edge-function-design.md` → **`docs/reference/user-admin-edge-function.md`**.
+The Edge Function is deployed and holds the only `service_role` key on the shared Supabase project —
+but **its source is not in this repo**. "The code is the truth" fails when the code is not here.
+That spec is the canonical record.
+
+🧹 **Removed from the repo:** `DOCUMENTACION_APP.md` (7,399w Spanish technical doc — a deliverable
+for people, not agents; moved to `~/Desktop/ckrea-docs/` **after** correcting its Regla C, which had
+the same stale 0.05%/day rate), `docs/TODO.md` (120 words of raw dictated chat from 24 April),
+`docs/REVIEW_PLAN.md` (a finished one-off cleanup checklist), `docs/FOUNDATION_GUIDE.md` (claimed
+"read this first, always" and then described a folder layout that no longer exists — it competed
+with `CLAUDE.md` and lost).
+
+**Rule, now written into `CLAUDE.md`:** build plans and specs are not kept. Why → JOURNAL. What
+shipped → CHANGELOG. Lasting rule → `docs/reference/`. And a doc may state what the code cannot; the
+moment it states a count, a rate, or a schedule, it has taken on a debt nobody will pay.

@@ -42,10 +42,15 @@ Docker-based local twin of Ckrea's data. **All dev/testing runs here, never prod
 - **Tasks:** Linear
 
 ## Key docs (read before touching domain logic)
+- `docs/context.md` — the business, the ERP relationship, the money rules in prose. States nothing countable on purpose; points at the source for anything that can be looked up.
 - `docs/PRD_C-krea.md` — full product requirements
 - `docs/foundation/02_financial_rules/financial-rules-engine-spec.md` — ALL financial math. If portal math ≠ this doc, something is wrong.
 - `docs/foundation/03_ui_ux/Step4_UI_UX_Guide.md` — screen-by-screen design spec
 - `docs/foundation/01_schema_erd/001_initial_schema.sql` — canonical DB schema
+- `docs/db-schema-reference.md` — column-level reference for `siesa_raw` + `v2`, join patterns, projection logic. Read before any DB query.
+- `docs/reference/user-admin-edge-function.md` — spec for the shared login Edge Function. **Canonical, because that function's source does not live in this repo.** §11 (red-team resolutions) wins on conflict.
+
+Build plans and specs are **not** kept. Once work ships the code is the truth; the *why* goes to `docs/JOURNAL.md`, the *what* to `CHANGELOG.md`, a lasting rule to `docs/reference/`. `docs/superpowers/` was retired 2026-08-20.
 
 ## Financial rules (critical — never guess)
 Four rules govern ALL money calculations:

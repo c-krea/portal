@@ -1,3 +1,0 @@
-And now we're going to turn this into two parts that we're going to do here:
-1. Fixed: I see nine issues in Next.js, and all of them say the same: "Encountered two children with the same key. Key should be unique so that components maintain their identity across updates." There are none of those.
-2. We're going to start filling in the gastos (expenses). If you review, we have an Excel called "secreia", and in this Excel there are all the expenses that have been accrued from the ERP software of the company. If you read some memory files, you can see how this Excel file was already reviewed, so you can save some time reading everything from scratch.

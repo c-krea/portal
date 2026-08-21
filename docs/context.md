@@ -1,72 +1,130 @@
 # C-Krea PayControl — Project Context
 
-**Last updated:** 2026-04-28
+**What it is:** a portal that runs billing and payment control for ~85 commercial rental units in
+Central Kreativa, a mall-like property in Bogotá. It replaced manual Excel billing.
 
-## What is this
-C-Krea manages ~85 commercial rental units in Central Kreativa, a mall-like property in Bogotá, Colombia. This portal replaces manual Excel-based billing and payment tracking.
+---
 
-## The problem being solved
-- 85 units billed monthly with complex discount rules (phase-based + early payment)
-- Manual Excel tracking = errors, delays, no real-time visibility
-- Shared expenses (gastos: water, electricity) distributed manually
-- Siesa ERP (external accounting system) requires exact XML format for every transaction
-- Raymond (another company) shares the same Siesa DB — data must be filtered from day 1
+## How to read this file
 
-## Business rules that drive everything
-1. Each tenant has a contract with time-based phase discounts (e.g., 20% off first 5 months)
-2. Paying within 10 days of invoice = 10% early payment discount (pronto pago)
-3. Late payment = 0.05%/day interest accruing from day 11
-4. Shared expenses: water flat $29,947/unit, electricity individually metered
-5. IPC (inflation) applied individually per tenant on their contract anniversary date (5.1% for 2026)
+This holds only what the code **cannot** tell you: the business, the money rules, and the shape of
+the ERP relationship. It deliberately states **nothing countable** — no table counts, no route
+lists, no rates that change yearly.
 
-## Siesa ERP integration
-- SQL Server database with C-Krea data (and Raymond data mixed in)
-- Pull contracts, tenants, invoices, payments, gastos from Siesa
-- Push validated records back as XML files in exact format
-- Must be 100% accurate — Siesa is the legal financial record
+Until 2026-08-20 it did, and it had gone wrong in the way that matters most: it stated late interest
+as **"0.05%/day from day 11"**. That is not what the code does and has not been for months (see
+Money rules below). A doc that misstates a money rule is worse than no doc.
+
+| To find | Look at |
+|---|---|
+| Tables, columns, RPCs, RLS | `docs/db-schema-reference.md`, then `supabase/migrations/` — or query the live DB |
+| The money rules as implemented | `docs/foundation/02_financial_rules/financial-rules-engine-spec.md` and `src/lib/data/mora.ts` |
+| Routes | `src/app/` |
+| Cron jobs and their schedules | `vercel.json` and `src/app/api/cron/` |
+| What shipped, when | `CHANGELOG.md` |
+| Why a decision was made, and what broke | `docs/JOURNAL.md` |
+| Current phase, branches, blockers | `memory/project_state.md` |
+
+---
+
+## The business
+
+C-Krea rents commercial units in Central Kreativa. Tenants are billed monthly for **canon** (rent),
+plus shared expenses, plus individually metered electricity. The complications that shape every
+part of the system:
+
+- **Contracts carry phase discounts** — a tenant may pay a reduced rate for their first months.
+- **Pronto pago:** paying early earns a 10% discount, which is applied at payment time and never in
+  a projection or an invoice.
+- **IPC (inflation) is applied per tenant, on their own contract anniversary** — not on a common
+  date, so at any moment tenants sit at different rates.
+- **Electricity is billed separately from canon**, on its own period convention.
+- **Reymon shares the same Siesa ERP database.** C-Krea data must be filtered from Reymon's at
+  every read. This is not a nicety — an unfiltered query returns another company's money.
+
+## The ERP relationship — read this before anything else
+
+**Siesa is the legal financial record. This portal is a reader, not a writer.**
+
+The ERP **pushes** exports into the `siesa_raw` schema every few hours. Nothing here pulls, and the
+old pull scripts are dead. Every figure the portal shows about money — invoices, payments, cartera,
+occupancy — must trace back to `siesa_raw`. The `v2` schema holds the portal's **own** metadata and
+display data, never a competing copy of the money.
+
+Two consequences that catch people:
+
+1. **A frozen push looks exactly like a filter bug.** If a page shows $0 for a recent range, check
+   `siesa_synced_at` *first*. A stale cartera combined with live-date interest bills tenants growing
+   interest on money they have already paid.
+2. **`siesa_raw` date columns are `timestamptz`.** Read into JS as ISO strings, they become
+   `Invalid Date` → `NaN` → a silently wrong number that TypeScript cannot catch. Cast `::date` in
+   SQL.
+
+## Money rules
+
+**Late interest uses the DIAN / art. 635 E.T. method**, not a flat daily percentage:
+
+```
+interés = vr_vencido × (tasa_ea_mes ÷ 366) × días_vencidos
+```
+
+The rate comes from `v2.tasa_interes_mora` for the current month and is entered by an admin — when
+it has not been entered, the rate is null and the page must say so rather than bill zero. Interest
+counts from the **effective due date**. Implementation: `src/lib/data/mora.ts`.
+
+*(The old rule — 0.05%/day from day 11 — is wrong twice over: the method changed to DIAN, and the
+grace period was corrected to start interest on day 31, not day 11. Siesa's `fecha_vence` is
+misconfigured for pre-May invoices; use `financia - 30`.)*
+
+**Pronto pago** is valid within 10 days of **each invoice's own** `fecha_factura`, counted from the
+day after, in Bogotá time. It is per-invoice, computed on the canon base, and applied **only at
+payment time** — never deducted in a projection or an invoice. Do not trust the ERP's
+`fecha_pronto_pago` column. Shared helper: `src/lib/pronto-pago.ts`.
+
+**The 10% pronto pago is recorded twice** in the ERP — once on `recaudo.pronto_pago` as the charge,
+once as a `documentos` row of `tipo='Descuentos'` (`RK-`/`CN-` prefix) at closing. Any query over
+`vista_facturas` that does not filter these double-counts.
+
+**`siesa_clasificacion` must never be used** for classifying payments. Four specific filters are
+correct instead — they are written down in the `recaudo_data_model` memory note and
+`docs/audits/recaudo-cartera-audit.md`.
+
+**Identity is the NIT**, and it lives in `cartera.documento` / `documentos.doc`. The `cliente`
+column is a razón social, not an identifier. `tipo_persona` ('PJ'/'PN') drives retefuente; `juridica`
+means legal collections. They are unrelated and must not be conflated.
 
 ## Users
-- **Admin/Finance team** (primary): Full access, bulk actions, Siesa sync, reports
-- **Management** (secondary): Executive dashboard, read-only
-- **Tenants** (Phase 2): Self-service payment view
 
-## Current status (2026-04-28, Phase G COMPLETE)
-- Phase G **shipped to production** end of Session 38. Merge commit `2532efb` on `main`. Vercel prod Ready.
-- All 7 sub-phases done: G.0 mapping → G.1 infra → G.2 data migration → G.3 cron sync → G.4 36-file portal refactor (6 subgrupos) → G.5 build clean → G.6 preview verified → G.7 merge to main.
-- Portal reads `v2.*` Spanish-named tables exclusively. `public.*` legacy tables still exist but **nothing in code reads them** — safe to archive in Phase F.
-- Cron `/api/cron/sync-v2` runs daily 05:30 COT (Hobby cap = 1×/day).
-- C-Krea UUID `00000000-0000-0000-0000-000000000001`, NIT `900123456`, looked up via `getEmpresaCkreaId()` helper.
-- **Next entry points**:
-  - **Phase F** — archive 25 old `public.*` tables (DROP or move to `legacy.*` schema). Now unblocked.
-  - **Phase H** — copilot tool surface (separate concern, AI agent over data).
+| Role | Sees |
+|---|---|
+| Admin / finance | everything: billing, payments, ERP sync state, reports |
+| Management | executive dashboard, read-only |
+| Tenant | their own units, invoices and meter readings |
 
-## Last major decisions
-- **Phase G shipped** (Session 38, 2026-04-28): 36 portal files migrated to `v2.*`. invoice-engine + reconciliation are now no-op stubs (Siesa upstream).
-- **Vercel Hobby cron cap** (Session 38): plan limits crons to 1×/day. `sync-v2` set daily 05:30 COT.
-- **v2 schema design** (Session 34, 2026-04-26): collapse 25 tables to 12 + views + RPCs. `siesa_clasificacion` never used; PP only at payment time; PP+phase stack; NIT=identity.
-- **Date scope Opción B** (Session 34): vista_pagos exposes full history; date cutoff lives in RPCs/consumers, not in vista. 2024 retained for PP signal.
-- **NIT join keys fix** (Session 35): `cartera.documento` and `documentos.doc`, NEVER `cliente`. See feedback_nit_columns.md.
+## Locked technical decisions
 
-## Biggest current gotchas
-- **`vista_facturas.doc_id` ≠ `vista_cartera_actual.documento`**: two different identifier formats (`001-FVS-69739` vs `60344275`). Cannot join. Portal hardcodes `saldo=0`, `status="emitida"` on factura list; cartera page handles its own data.
-- **Vercel Hobby cron limit = 1×/day**. Adding more crons or higher frequency = upgrade plan or refactor into one consolidated cron.
-- **`invoice-engine.ts` and `reconciliation.ts` are no-op stubs** — signatures preserved so callers compile, but bodies do nothing. If you find yourself "fixing" them, you probably want to fix the upstream Siesa integration instead. Mark for delete in cleanup pass.
-- **Supabase free tier blocks direct port 5432.** All local DB tools must use pooler URL: `postgres.bosylehvmtwtqkrlievy:PASSWORD@aws-1-us-east-1.pooler.supabase.com:5432/postgres`.
-- **`documentos` tipo='Descuentos' rows** (PP del 10% as separate accounting entry, RK-/CN- prefix) break naive `vista_facturas` queries. Filter `tipo='Facturas'` or expose `is_factura` flag.
-- **Pandas float→str `.0` artifact** lurks in any numeric-looking column read from xlsx. Loader now declares `strip_dot_zero=[col,...]` per sheet — extend if new NIT/code cols appear contaminated.
+- **Drizzle ORM** — chosen for the ledger pattern: financial records are append-only, never mutated.
+- **Supabase** — Postgres + Auth + RLS + Realtime in one, no separate auth service.
+- **Company-scoped RLS from day one** — mandatory, because Reymon's data is in the same database.
+- **Spanish UI** throughout; code in English.
+- **Next.js App Router.** Note: in Next 16 the middleware file is `src/proxy.ts`. Public routes and
+  the matcher live there.
 
-## Key decisions made
-- **Drizzle ORM over Prisma**: chosen for ledger pattern — immutable financial records, double-entry style
-- **Supabase**: PostgreSQL + Auth + RLS + Realtime in one (no separate auth service)
-- **Company-scoped RLS from day 1**: mandatory to separate C-Krea from Raymond in shared Siesa DB
-- **Spanish UI**: all labels/routes in Spanish (business team is Spanish-speaking)
-- **Ledger pattern**: financial records are append-only, never mutated after creation
+## Platform limits worth knowing before you design around them
 
-## Open questions / next steps
-- [ ] Get DB password from Supabase to complete DATABASE_URL
-- [ ] Apply 001_initial_schema.sql to Supabase via MCP
-- [ ] Create Drizzle schema files mirroring SQL schema
-- [ ] Connect Vercel (re-login with new email)
-- [ ] Run Sentry wizard after Vercel is set up
-- [ ] Set up Linear project "C-Krea Portal"
-- [ ] Seed initial data (company record for C-Krea)
+- **Vercel Hobby caps cron at 1×/day.** More frequent schedules are rejected at deploy. Consolidate
+  rather than add.
+- **App queries run under an 8-second `statement_timeout`.** Over it, the query is cancelled and the
+  user sees "Error al cargar", not a 404. The Supabase MCP has no such timeout, so a query can look
+  healthy in testing and fail in production.
+- **The free tier blocks direct port 5432** — local tools must use the pooler host.
+- **Commits must be authored `gburgos293@gmail.com`** or Vercel blocks the production deploy.
+
+## Shared-infrastructure reality
+
+This Supabase project is shared with Cartera, Rutas, Satélites and reymon-db, each in its own
+schema. Two things follow: schema isolation is a security boundary, not tidiness
+(`docs/isolation-checklist.md`), and login creation for every Reymon app goes through one deployed
+Edge Function so no app holds the `service_role` key — its spec is
+`docs/reference/user-admin-edge-function.md`, and it is the canonical record because **that
+function's source does not live in this repo**.
