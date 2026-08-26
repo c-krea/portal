@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Session 79 — 2026-08-26: tenant Total a Pagar includes electricity
+
+#### Fixed
+- **The portal Total a Pagar number was rent only.** Electricity already showed on the pay-energy button and never entered the headline. The big number now is Siesa rent + that same energy total, with an **Energía** line under the invoices. Pronto pago still cuts rent only. On the local twin, Fusión Grafik went from **$10.483.459** to **$10.965.509** (+ **$482.050** light).
+
+#### Notes
+- Pay online is unchanged: rent and energy stay two steps.
+- Did not change mora or the rent formula. The unused detail modal was left unused.
+
 ### Session 78 — 2026-08-26: password reset survived the mail scanner
 
 #### Fixed

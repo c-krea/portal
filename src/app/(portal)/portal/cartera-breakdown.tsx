@@ -1,8 +1,14 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronUp, BadgePercent, Banknote } from "lucide-react"
+import { ChevronDown, ChevronUp, BadgePercent, Banknote, Zap } from "lucide-react"
 import { formatCOP } from "@/lib/formatters"
+
+export type CarteraEnergyInvoice = {
+  unidad: string
+  periodoLabel: string
+  total: number
+}
 
 export type BreakdownRow = {
   periodo: number
@@ -93,6 +99,7 @@ export function CarteraBreakdown({
   isPpWindow,
   ppPct,
   rows,
+  electricityInvoices = [],
 }: {
   saldoTotal: number
   saldoConPp: number
@@ -100,9 +107,13 @@ export function CarteraBreakdown({
   isPpWindow: boolean
   ppPct: number
   rows: BreakdownRow[]
+  electricityInvoices?: CarteraEnergyInvoice[]
 }) {
   const showPp = isPpWindow && ppDiscountTotal > 0
-  const displayTotal = showPp ? saldoConPp : saldoTotal
+  const energyTotal = electricityInvoices.reduce((s, inv) => s + inv.total, 0)
+  const rentDisplay = showPp ? saldoConPp : saldoTotal
+  const displayTotal = rentDisplay + energyTotal
+  const hasContent = saldoTotal > 0 || energyTotal > 0
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -120,9 +131,9 @@ export function CarteraBreakdown({
         )}
       </div>
 
-      {saldoTotal > 0 ? (
+      {hasContent ? (
         <>
-          {/* Grand total row */}
+          {/* Grand total row — rent display (+ PP) + energy */}
           <div className="flex items-baseline justify-between">
             <p className="text-4xl font-black tabular-nums leading-none text-slate-900">
               {formatCOP(displayTotal)}
@@ -134,7 +145,7 @@ export function CarteraBreakdown({
             )}
           </div>
           {showPp && (
-            <p className="mt-1 text-xs text-slate-400 line-through">{formatCOP(saldoTotal)}</p>
+            <p className="mt-1 text-xs text-slate-400 line-through">{formatCOP(saldoTotal + energyTotal)}</p>
           )}
 
           {/* Invoice list — always visible, detail per row is collapsible */}
@@ -142,7 +153,25 @@ export function CarteraBreakdown({
             {rows.map((row) => (
               <InvoiceRow key={`${row.periodo}-${row.unidad}`} row={row} />
             ))}
-
+            {electricityInvoices.map((inv) => (
+              <div
+                key={`energia-${inv.unidad}-${inv.periodoLabel}`}
+                className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0"
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 shrink-0">
+                    Local {inv.unidad}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs font-medium text-slate-700 truncate">
+                    <Zap className="h-3 w-3 text-amber-500 shrink-0" />
+                    Energía · {inv.periodoLabel}
+                  </span>
+                </div>
+                <span className="text-sm font-semibold text-slate-900 tabular-nums shrink-0 ml-2">
+                  {formatCOP(inv.total)}
+                </span>
+              </div>
+            ))}
           </div>
 
           {showPp && (

@@ -299,6 +299,11 @@ export default async function PortalPage() {
           impuesto:    row.impuesto,
           retenciones: row.retenciones,
         }))}
+        electricityInvoices={electricityInvoices.map(inv => ({
+          unidad:       inv.unidad,
+          periodoLabel: inv.periodoLabel,
+          total:        inv.total,
+        }))}
       />
 
       {/* ── Pago en línea ── */}

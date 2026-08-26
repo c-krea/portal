@@ -2,6 +2,29 @@
 
 ---
 
+## Session 79 — 2026-08-26: Total a Pagar now includes energy
+
+**Trigger.** Session 77 parked WOR-58 as a money call. German confirmed the headline was rent-only, then said ship it.
+
+**What tenants saw.** Portal **Total a Pagar** (`CarteraBreakdown`) summed Siesa FVS- rent only. Electricity was already computed (`getPortalElectricityInvoiceData`) and shown on the Wompi “pagar energía” step. The unused `total-breakdown-modal.tsx` listed light in a detail the tenant never opened. The big number understated what they owed.
+
+**Fix.** Same `electricityInvoices` array already passed to Wompi is passed into `CarteraBreakdown`. Headline = rent display (with pronto pago if in window) **+** sum of energy totals. An **Energía** row per invoice (local + period) sits under the rent lines. Pronto pago does **not** apply to energy. Strikethrough (when PP) is rent-before-PP + energy. Empty state: rent $0 + energy > 0 still shows the energy number, not “$ 0 / Sin facturas pendientes en Siesa”.
+
+Did **not** recompute canon / phase discount / IVA — Siesa FVS rows already are the rent bill. Did not wire the dead modal. Did not change Wompi (rent and energy stay two pay steps). Did not change `getPortalCartera` (`FVS-%`).
+
+**Verification (local Docker `:54622`, never prod).** NIT `900984500` Fusión Grafik, local 117: FVS saldo **$10.483.459** + July 2026 `total_energia` **$482.050** = headline **$10.965.509**. eslint (pre-existing unused `periodo` on the page, out of scope) and `tsc --noEmit` clean. Captain read the money diff.
+
+### Decisions
+- 🎯 **Add the existing energy total. Do not invent a second rent formula.** Phase discounts stay inside Siesa.
+- 🎯 **PP is rent-only.** Energy is a separate bill.
+- 🎯 **Headline is the sum; Wompi still splits.** Tenant sees one owing number, still pays rent and energy in two steps.
+
+### Session-end pointers
+- Linear: WOR-58 (In Progress until merge)
+- Branch: `fix/wor-58-total-energia`
+
+---
+
 ## Session 78 — 2026-08-26: password-reset emails died before the person clicked
 
 **Report.** Someone tried to reset their password and it "didn't work." Same failure mode as Session 60 (unit 314): they got the "enlace expiró o ya fue usado" screen.
