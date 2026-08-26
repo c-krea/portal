@@ -3,11 +3,11 @@ canonical: self
 updated: 2026-08-26 (Session 76)
 
 ## Live
-- Prod: https://ckrea.com.co — Ready (`198e4e2` on `main`; Session 76 pagos chip is on a PR, not merged yet)
+- Prod: https://ckrea.com.co — Ready (`f08bf34` on `main`, PR #5 merged)
 - DB: shared Supabase `v2` + read-only `siesa_raw` (Z40). Never test on prod. Local twin: Docker `:54622`, `npm run dev:test` / `npm run db:sync` (now loads `recaudo`).
 
 ## Just shipped
-- **Session 76 (PR, not on prod until merge):** `/pagos` "Desde mora" filter now uses the mora card's rule (older invoice period OR days-late > grace). August was hiding $13.490.363; July $19.431.732. KPI vs table universes labelled, maths unchanged.
+- **Session 76 (merged `f08bf34`):** `/pagos` "Desde mora" filter now uses the mora card's rule (older invoice period OR days-late > grace). August was hiding $13.490.363; July $19.431.732. KPI vs table universes labelled, maths unchanged.
 - **Session 75:** `/pagos` no longer dies on the 8s statement timeout — `vp AS MATERIALIZED` fence. Sync script now loads `recaudo` locally.
 - First meter reading with **no previous row** = handover baseline, **$0**. Rule in `src/lib/lectura-consumo.ts`.
 - Reading day (Session 71): the 9th, moves forward off Sunday + Colombian holidays. Saturday is a working day.
