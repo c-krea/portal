@@ -89,12 +89,15 @@ async function getPortfolioStats(empresaId: string) {
 
 async function getTotalRecaudado(empresaId: string, year: number) {
   const rows = await execute(`
+    WITH vp AS MATERIALIZED (
+      SELECT * FROM v2.vista_pagos
+      WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
+        AND empresa_id = '${empresaId}'
+    )
     SELECT
       COALESCE(SUM(valor_final), 0)::numeric          AS recaudado,
       COALESCE(SUM(pronto_pago_aplicado), 0)::numeric AS pp_otorgado
-    FROM v2.vista_pagos
-    WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
-      AND empresa_id = '${empresaId}'
+    FROM vp
   `)
   const r = (rows as Array<Record<string, unknown>>)[0] ?? {}
   return {

@@ -1,8 +1,9 @@
+import Link from "next/link"
 import { PageHeader } from "@/components/layout/page-header"
 import { ClientesTable } from "@/components/clientes/clientes-table"
-import { getClienteRows, getVacantUnitRows, getLocalesKPIs } from "@/lib/data/clientes"
+import { getClienteRows, getVacantUnitRows, getLocalesKPIs, getYaSalieronRows } from "@/lib/data/clientes"
 import { formatCOP } from "@/lib/formatters"
-import { Building2, DoorOpen, TrendingUp, CalendarClock } from "lucide-react"
+import { Building2, DoorOpen, TrendingUp, CalendarClock, ChevronRight } from "lucide-react"
 
 export default async function ClientesPage({
   searchParams,
@@ -11,10 +12,11 @@ export default async function ClientesPage({
 }) {
   const { entrada } = await searchParams
 
-  const [rows, vacantRows, kpis] = await Promise.all([
+  const [rows, vacantRows, kpis, yaSalieron] = await Promise.all([
     getClienteRows(entrada),
     getVacantUnitRows(entrada),
     getLocalesKPIs(entrada),
+    getYaSalieronRows(),
   ])
 
   const occupancyPct = kpis.totalUnits > 0
@@ -85,6 +87,69 @@ export default async function ClientesPage({
       </div>
 
       <ClientesTable data={rows} vacantUnits={vacantRows} activeEntrada={entrada} />
+
+      {yaSalieron.length > 0 && (
+        <div className="mt-8">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="inline-block rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-slate-600">
+              Ya salieron
+            </span>
+            <span className="text-xs text-slate-400">
+              Gente que ya se fue y aún debe · cobro por fuera de ocupación actual
+            </span>
+          </div>
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Cliente</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Último local</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Saldo pendiente</th>
+                  <th className="w-10 px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {yaSalieron.map((r) => (
+                  <tr key={r.tenantId} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                    <td className="px-4 py-3">
+                      {r.tenantId ? (
+                        <Link href={`/locales/${r.tenantId}`} className="font-medium text-slate-900 hover:text-blue-600 hover:underline">
+                          {r.nombre ?? "—"}
+                        </Link>
+                      ) : (
+                        <span className="font-medium text-slate-900">{r.nombre ?? "—"}</span>
+                      )}
+                      {r.nit && <p className="text-xs text-slate-400">{r.nit}</p>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.ultimaUnidad ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-600">
+                          {r.ultimaEntrada && (
+                            <span className="text-slate-400">E{r.ultimaEntrada === "ZONA 8" ? "8" : r.ultimaEntrada}·</span>
+                          )}
+                          {r.ultimaUnidad}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="font-medium text-rose-600">{formatCOP(r.saldo)}</span>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {r.tenantId && (
+                        <Link href={`/locales/${r.tenantId}`} className="inline-flex items-center justify-center rounded-md p-1 text-slate-400 hover:text-slate-600">
+                          <ChevronRight className="h-4 w-4" />
+                        </Link>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </>
   )
 }

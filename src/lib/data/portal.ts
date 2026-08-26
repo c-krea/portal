@@ -145,6 +145,9 @@ async function getPortalPagos_uncached(tenantId: string, limit = 5): Promise<Por
   const rawLimit = Number(limit)
   const safeLimit = Math.max(1, Math.min(50, Number.isFinite(rawLimit) ? Math.floor(rawLimit) : 5))
   const rows = await execute(`
+    WITH mine AS MATERIALIZED (
+      SELECT * FROM v2.vista_pagos WHERE inquilino_id = '${tenantId}'::uuid
+    )
     SELECT
       ROW_NUMBER() OVER (ORDER BY fecha_recaudo DESC, docto, cruce)::text AS id,
       fecha_recaudo,
@@ -153,8 +156,7 @@ async function getPortalPagos_uncached(tenantId: string, limit = 5): Promise<Por
       valor_final::numeric                        AS valor_final,
       valor_aplicado::numeric                     AS valor_aplicado,
       (fecha_recaudo - fecha_factura)             AS dias_desde_factura
-    FROM v2.vista_pagos
-    WHERE inquilino_id = '${tenantId}'::uuid
+    FROM mine
     ORDER BY fecha_recaudo DESC
     LIMIT ${safeLimit}
   `)
@@ -178,6 +180,9 @@ async function getPortalPagosPage_uncached(
   const safePageSize = Math.max(1, Math.min(100,    Number.isFinite(rawPageSize) ? Math.floor(rawPageSize) : 10))
   const offset       = (safePage - 1) * safePageSize
   const rows = await execute(`
+    WITH mine AS MATERIALIZED (
+      SELECT * FROM v2.vista_pagos WHERE inquilino_id = '${tenantId}'::uuid
+    )
     SELECT
       ROW_NUMBER() OVER (ORDER BY fecha_recaudo DESC, docto, cruce)::text AS id,
       fecha_recaudo,
@@ -187,8 +192,7 @@ async function getPortalPagosPage_uncached(
       valor_aplicado::numeric                     AS valor_aplicado,
       (fecha_recaudo - fecha_factura)             AS dias_desde_factura,
       COUNT(*) OVER()                             AS total_count
-    FROM v2.vista_pagos
-    WHERE inquilino_id = '${tenantId}'::uuid
+    FROM mine
     ORDER BY fecha_recaudo DESC
     LIMIT ${safePageSize} OFFSET ${offset}
   `)
@@ -207,14 +211,16 @@ export type PortalPagosKpis = {
 async function getPortalPagosKpis_uncached(tenantId: string): Promise<PortalPagosKpis> {
   assertUuid(tenantId)
   const rows = await execute(`
+    WITH mine AS MATERIALIZED (
+      SELECT * FROM v2.vista_pagos WHERE inquilino_id = '${tenantId}'::uuid
+    )
     SELECT
       COUNT(*)                                                                    AS total_count,
       SUM(valor_final)::numeric                                                   AS total_pagado,
       COUNT(*) FILTER (WHERE fecha_recaudo - fecha_factura <= 30)                 AS en_plazo,
       COUNT(*) FILTER (WHERE fecha_recaudo - fecha_factura > 30)                 AS tarde,
       ROUND(AVG(fecha_recaudo - fecha_factura), 1)                                AS avg_dias
-    FROM v2.vista_pagos
-    WHERE inquilino_id = '${tenantId}'::uuid
+    FROM mine
   `)
   const r = rows[0] ?? {}
   return {

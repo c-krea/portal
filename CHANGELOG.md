@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Session 77 — 2026-08-26: remaining payment queries fenced; Locales shows who left still owing
+
+#### Fixed
+- **Four more pages still hit `vista_pagos` without the Pagos shield.** Reportes, the tenant portal payment list, the dashboard recaudado figure, and the payment-confirmation cron. They do not time out today (~70ms, one scan) but they share the 8s ceiling and recaudo has doubled in two weeks. Same `MATERIALIZED` fence as Pagos / ficha del cliente. 2026 totals on the local twin unchanged: **$1.694.516.741,77** recaudado, **$107.715.494** pronto pago.
+
+#### Added
+- **Locales → Ya salieron.** People with no active contract who still owe now sit in their own block under the occupancy table, so cobro does not mix them with current tenants. Today on the local twin: Pedraza **$7.260.656** and Punto Acrílico **$4.818.675**. Names from the original ticket are stale — most of those units are occupied again.
+
+#### Notes
+- Did not change what "paid" means, mora maths, or the `vista_pagos` view.
+- WOR-58 (add electricity to Total a Pagar) was not in this ship — the live headline is Siesa rent, electricity is a separate pay button.
+
 ### Session 76 — 2026-08-26: `/pagos` late-filter now matches the mora card
 
 #### Fixed

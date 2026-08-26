@@ -177,7 +177,64 @@ async function getVacantUnitRows_uncached(entrada?: string): Promise<ClienteRow[
   }))
 }
 
+export type YaSalieronRow = {
+  tenantId: string
+  nit: string | null
+  nombre: string | null
+  ultimaUnidad: string | null
+  ultimaEntrada: string | null
+  saldo: number
+}
+
+async function getYaSalieronRows_uncached(): Promise<YaSalieronRow[]> {
+  const rows = await execute(`
+    SELECT
+      i.id AS tenant_id,
+      i.nit,
+      COALESCE(i.nombre_corto, i.razon_social) AS nombre,
+      COALESCE(SUM(ca.saldo), 0)::numeric AS saldo,
+      (
+        SELECT l.unidad
+        FROM v2.contratos c2
+        JOIN v2.locales l ON l.id = c2.local_id
+        WHERE c2.inquilino_id = i.id
+          AND c2.estado IN ('terminado', 'vencido')
+        ORDER BY c2.fecha_fin DESC NULLS LAST, c2.id DESC
+        LIMIT 1
+      ) AS ultima_unidad,
+      (
+        SELECT l.entrada
+        FROM v2.contratos c2
+        JOIN v2.locales l ON l.id = c2.local_id
+        WHERE c2.inquilino_id = i.id
+          AND c2.estado IN ('terminado', 'vencido')
+        ORDER BY c2.fecha_fin DESC NULLS LAST, c2.id DESC
+        LIMIT 1
+      ) AS ultima_entrada
+    FROM v2.inquilinos i
+    JOIN v2.vista_cartera_actual ca ON ca.inquilino_id = i.id
+    WHERE NOT EXISTS (
+      SELECT 1 FROM v2.contratos c
+      WHERE c.inquilino_id = i.id
+        AND c.estado IN ('activo', 'critico')
+    )
+    GROUP BY i.id, i.nit, i.razon_social, i.nombre_corto
+    HAVING SUM(ca.saldo) > 0
+    ORDER BY SUM(ca.saldo) DESC
+  `)
+
+  return rows.map((r) => ({
+    tenantId: String(r.tenant_id),
+    nit: r.nit ? String(r.nit) : null,
+    nombre: r.nombre ? String(r.nombre) : null,
+    ultimaUnidad: r.ultima_unidad ? String(r.ultima_unidad) : null,
+    ultimaEntrada: r.ultima_entrada ? String(r.ultima_entrada) : null,
+    saldo: Number(r.saldo ?? 0),
+  }))
+}
+
 // ── Cached exports (30-min window; read-only — locales is ERP-derived) ──
-export const getLocalesKPIs    = cached(getLocalesKPIs_uncached,    ["locales:kpis"],     "locales")
-export const getClienteRows    = cached(getClienteRows_uncached,    ["locales:clientes"], "locales")
-export const getVacantUnitRows = cached(getVacantUnitRows_uncached, ["locales:vacantes"], "locales")
+export const getLocalesKPIs     = cached(getLocalesKPIs_uncached,     ["locales:kpis"],       "locales")
+export const getClienteRows     = cached(getClienteRows_uncached,     ["locales:clientes"],   "locales")
+export const getVacantUnitRows  = cached(getVacantUnitRows_uncached,  ["locales:vacantes"],   "locales")
+export const getYaSalieronRows  = cached(getYaSalieronRows_uncached,  ["locales:ya_salieron"], "locales")

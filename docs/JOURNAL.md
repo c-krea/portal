@@ -2,6 +2,41 @@
 
 ---
 
+## Session 77 — 2026-08-26: fence the remaining readers, Ya salieron on Locales
+
+**Trigger.** Linear hygiene left 14 open tickets. German asked which ones an executor could run without a product call. Three looked safest. Two landed. The third did not.
+
+**WOR-277 — same fence as Pagos, four more readers.** Session 75 materialised `v2.vista_pagos` on `/pagos` after it died on the 8s PostgREST timeout. Four other files still hit the view raw: `reportes.ts` (3 queries), `portal.ts` (3), `dashboard.ts` (1), notifications cron (1). They scan once today (~70ms on the local twin) and do not fail, but recaudo grew 330k → 639k in 16 days and they share the same 8s ceiling. Year-wide queries use `vp AS MATERIALIZED` with year + empresa inside the CTE; per-tenant queries use `mine AS MATERIALIZED` with `inquilino_id` inside, matching `tenant-detail.ts`.
+
+Money numbers identical on local `:54622` before and after: 2026 `SUM(valor_final)=1.694.516.741,77`, `SUM(pronto_pago_aplicado)=107.715.494,00`, 1006 rows. Tenant `18db93c1-…` still 153 / $476.280.627 / 30 en plazo / 123 tarde. EXPLAIN after fence: year SUM 82ms, tenant COUNT 78ms — still one Parallel Seq Scan, not N loops. Slightly slower than the unfenced 71ms; that is the materialise tax, not a regression. No view/DDL change, no new helper.
+
+**WOR-75 — Ya salieron on Locales.** People who left still owe, and they disappeared from the occupancy list (or hid under Mora → Cartera Jurídica). New section below the main table, same visual language as that jurídica block. Rule, 100% from data, no name whitelist: inquilino with no contrato `activo|critico` and `SUM(saldo) > 0` from `vista_cartera_actual`, including `juridica=true`. Last known unit from the latest `terminado|vencido` contrato; `—` if none.
+
+Phase I names in the ticket (Becerra, Guzmán, Sierra, …) are stale. Most of those NITs now have an `activo` contract or zero saldo. Local twin today returns exactly two: PEDRAZA `60344275` $7.260.656 (jurídica, no contratos) and PUNTO ACRÍLICO `901600134` $4.818.675 (no contratos). Becerra `51738650` stays out (activo). Mora, KPIs, vacant units, and `getClienteRows` untouched.
+
+**WOR-58 was not the third safest.** The live **Total a Pagar** is Siesa FVS- cartera (`CarteraBreakdown`). Electricity is a separate Wompi step. The modal that already lists canon + phase discount + IVA + light (`total-breakdown-modal.tsx`) is unused. Adding energy into the Siesa headline would mix two pots. Stopped; German decides.
+
+**Review.** Captain read both diffs. 277 is a query-shape copy of a shipped pattern; totals matched. 75 reads `vista_cartera_actual.saldo`, does not compute it. Executor self-review on 277 returned SHIP (P1 interpolation and `::uuid` inconsistency pre-existing, left). No browser pass — Locales is behind login; SQL + render code reviewed instead.
+
+### Decisions
+- 🎯 **Fence even when today's plan is a single scan.** The ticket listed the four remaining readers. Recaudo is still growing. Do not skip a file because it is "already fast".
+- 🎯 **Ya salieron is the data rule, not the 2026-04 name list.** Hardcoding those ten people would show Becerra as gone while she occupies 120.
+- 🎯 **Do not start WOR-58 as a solo executor job.** Live UI ≠ the unused invoice-engine modal. Mixing Siesa rent with portal-side energy is a money call.
+- 🎯 **Auth/recovery files that appeared mid-session are a different story.** Not staged.
+
+### Open
+- WOR-58 — Total a Pagar vs electricity. Needs German: add energy to the Siesa headline, wire the unused modal, or close.
+- WOR-80, WOR-78, WOR-76, WOR-56, WOR-79, WOR-47, WOR-71, WOR-81, WOR-278, WOR-77, WOR-60 — still backlog. None of these were this ship.
+- Two untracked business files at repo root — still not this ship.
+- Leftover uncommitted auth/recovery work on this working tree — not this PR.
+
+### Session-end pointers
+- Linear: WOR-277, WOR-75 (In Progress until merge)
+- Branch: `fix/ckrea-linear-safest`
+- State: `.claude/state.md`
+
+---
+
 ## Session 76 — 2026-08-26: the mora chip and the mora card finally agree
 
 **Trigger.** Session 75 left this open. The Claude Code pane died on a session limit mid-handoff; this session picked it up, verified on the local twin, reviewed, and shipped.
@@ -33,13 +68,13 @@ Join did not multiply rows (0 duplicate `documento+tipo` Facturas; n_delta = 0).
 - 🎯 **Smallest fix.** Did not unify the two queries or compute `bucket` server-side. Follow-up only if the two copies start to drift.
 
 ### Open
-- WOR-277 — fence `vista_pagos` in the 4 remaining unprotected readers
+- WOR-277 — closed session 77 (fence landed, waiting on merge)
 - WOR-278 — no replayable migration history (1 file vs 57/82/18)
 - Optional: compute `bucket` once on the server so the SQL CASE and `bucketFor` cannot drift
 - Two untracked business files still in the repo root (`Borrador Cuenta de Cobro…pdf`, `SIESA connexion.xlsm`) — commit, ignore, or move out. Not this ship.
 
 ### Session-end pointers
-- Linear: WOR-277, WOR-278 (backlog, not this ship)
+- Linear: WOR-277 / WOR-75 in session 77; WOR-278 still backlog
 - State: `memory/project_state.md` + `.claude/state.md`
 
 ---

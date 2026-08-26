@@ -84,13 +84,16 @@ export async function getAgingBuckets(): Promise<AgingBucket[]> {
 export async function getMonthlyCollections(year = 2026): Promise<MonthlyCollection[]> {
   const empresaId = await getEmpresaCkreaId()
   const rows = await execute(`
+    WITH vp AS MATERIALIZED (
+      SELECT * FROM v2.vista_pagos
+      WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
+        AND empresa_id = '${empresaId}'
+    )
     SELECT
       EXTRACT(MONTH FROM fecha_recaudo)::int AS month,
       COALESCE(SUM(valor_final), 0)::numeric AS recaudado,
       COUNT(*)::int                          AS count
-    FROM v2.vista_pagos
-    WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
-      AND empresa_id = '${empresaId}'
+    FROM vp
     GROUP BY month
     ORDER BY month
   `)
@@ -161,13 +164,16 @@ export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal
       ORDER BY mes
     `),
     execute(`
+      WITH vp AS MATERIALIZED (
+        SELECT * FROM v2.vista_pagos
+        WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
+          AND empresa_id = '${empresaId}'
+      )
       SELECT
         EXTRACT(MONTH FROM fecha_recaudo)::int          AS month,
         COALESCE(SUM(valor_final), 0)::numeric          AS recaudado,
         COALESCE(SUM(pronto_pago_aplicado), 0)::numeric AS pp_otorgado
-      FROM v2.vista_pagos
-      WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
-        AND empresa_id = '${empresaId}'
+      FROM vp
       GROUP BY month
       ORDER BY month
     `),
@@ -206,10 +212,13 @@ export async function getReporteSummary(year = 2026): Promise<ReporteSummary> {
         AND juridica = false
     `),
     execute(`
+      WITH vp AS MATERIALIZED (
+        SELECT * FROM v2.vista_pagos
+        WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
+          AND empresa_id = '${empresaId}'
+      )
       SELECT COALESCE(SUM(valor_final), 0)::numeric AS total_recaudado
-      FROM v2.vista_pagos
-      WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
-        AND empresa_id = '${empresaId}'
+      FROM vp
     `),
   ])
 

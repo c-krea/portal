@@ -173,10 +173,12 @@ export async function GET(req: Request) {
 
     // ── Payment confirmation — yesterday's payments ──────────────────
     const payments = await execute(`
+      WITH mine AS MATERIALIZED (
+        SELECT * FROM v2.vista_pagos WHERE inquilino_id = '${inquilinoId}'
+      )
       SELECT docto, cruce, valor_final::int AS valor
-      FROM v2.vista_pagos
-      WHERE inquilino_id = '${inquilinoId}'
-        AND fecha_recaudo = '${yesterdayStr}'
+      FROM mine
+      WHERE fecha_recaudo = '${yesterdayStr}'
     `)
 
     for (const pago of payments) {
