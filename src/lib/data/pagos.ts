@@ -13,6 +13,7 @@ export type PagoRow = {
   siesaDocto: string | null
   siesaCruce: string | null
   diasMoraAlPago: number
+  invoicePeriodo: number | null
 }
 
 export type TenantOption = {
@@ -173,9 +174,13 @@ async function getPagos_uncached(month: string): Promise<PagoRow[]> {
       p.valor_final::numeric AS valor_final,
       p.docto AS siesa_docto,
       p.cruce AS siesa_cruce,
-      COALESCE(p.dias_mora_al_pago, 0) AS dias_mora_al_pago
+      COALESCE(p.dias_mora_al_pago, 0) AS dias_mora_al_pago,
+      inv.periodo AS invoice_periodo
     FROM vp p
     LEFT JOIN v2.inquilinos t ON t.id = p.inquilino_id
+    LEFT JOIN siesa_raw.documentos inv
+      ON inv.documento = '001-' || p.cruce
+      AND inv.tipo     = 'Facturas'
     WHERE 1=1
       ${EXCLUDE_ELECTRICITY}
     ${monthFilter}
@@ -191,6 +196,7 @@ async function getPagos_uncached(month: string): Promise<PagoRow[]> {
     siesaDocto:    r.siesa_docto ? String(r.siesa_docto) : null,
     siesaCruce:    r.siesa_cruce ? String(r.siesa_cruce) : null,
     diasMoraAlPago: Number(r.dias_mora_al_pago ?? 0),
+    invoicePeriodo: r.invoice_periodo != null ? Number(r.invoice_periodo) : null,
   }))
 }
 

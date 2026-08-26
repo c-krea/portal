@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Session 76 — 2026-08-26: `/pagos` late-filter now matches the mora card
+
+#### Fixed
+- **The table's "Desde mora" filter under-reported late payments.** It only looked at days-late; the mora card also counts cash applied to an older invoice. Tenants paying last month's bill a few days into this month showed as "Primeros 10 días" in the table and as mora on the card. On the local twin the filter was hiding **$13.490.363 in August** and **$19.431.732 in July**. The table now uses the card's rule. Collection totals did not move.
+
+#### Changed
+- **KPI and table labels now name the two different universes.** "Recaudado" is cash against this month's invoices; the table is all cash received in the month, including late bills. The numbers were always different on purpose; they no longer look like a missing-cash bug.
+
+#### Notes
+- Do not "simplify" late to `días > 0`. Siesa's due date is wrong on invoices before May 2026, so that shortcut doubles mora in January and December while looking fine in July/August.
+- Verified locally (never prod) on 2025-12, 2026-01, 2026-07, 2026-08: chip mora = card mora, row counts and totals unchanged.
+
 ### Session 75 — 2026-08-26: `/pagos` died on a statement timeout
 
 #### Fixed

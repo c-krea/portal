@@ -2,6 +2,48 @@
 
 ---
 
+## Session 76 — 2026-08-26: the mora chip and the mora card finally agree
+
+**Trigger.** Session 75 left this open. The Claude Code pane died on a session limit mid-handoff; this session picked it up, verified on the local twin, reviewed, and shipped.
+
+**The bug.** Two things on `/pagos` claimed to say "who paid late" and disagreed. The card (`getPagosBuckets`) uses: invoice `periodo` older than the selected month **OR** `dias_mora_al_pago > grace` (30). The table chip (`bucketFor`) only used days-late. Tenants paying last month's bill a few days into this month read "Primeros 10 días" in the table and "mora" on the card.
+
+On the local twin the chip under-reported mora by **$13.490.363 in 2026-08** and **$19.431.732 in 2026-07**.
+
+**The trap.** `dias_mora_al_pago > 0` looks equivalent and is not. Siesa's due date is wrong on invoices before May 2026, so days-late is junk for those months. Card vs a naive "days > 0" rule: August and July match; January $55.2M vs $107.0M; December $64.5M vs $89.7M. The chip has to copy the card's own rule, not a proxy for it.
+
+**Fix.** `getPagos` now LEFT JOINs `siesa_raw.documentos` the same way the card already did, and each row carries `invoicePeriodo`. `bucketFor` uses the card's CASE. KPI maths untouched — the top card still counts only this month's invoices, the table still counts all cash received. Labels now say so: "Recaudado de la facturación de este mes" vs "todo el efectivo recibido en el mes".
+
+**Verification (local Docker `:54622`, never prod).** Four months, electricity fence included, grace = 30:
+
+| Mes | Rows (old=new) | Table total unchanged | Chip mora before | Chip = card after | Hidden cash now shown |
+|---|---|---|---|---|---|
+| 2026-08 | 83 | $186.514.029 | $26.956.541 | $40.446.904 | $13.490.363 |
+| 2026-07 | 90 | $217.644.065 | $34.033.930 | $53.465.662 | $19.431.732 |
+| 2026-01 | 147 | $192.867.355 | $52.425.667 | $55.249.469 | $2.823.802 |
+| 2025-12 | 173 | $229.251.648 | $48.652.642 | $64.500.698 | $15.848.056 |
+
+Join did not multiply rows (0 duplicate `documento+tipo` Facturas; n_delta = 0). `npx tsc --noEmit`, eslint on the three files, and a VAPID-blanked `next build` all clean.
+
+**Review.** Formal Executor review (correctness + simplicity) returned NEEDS HUMAN: duplicated mora rule in SQL+TS, KPI/table divergence, join fan-out, null `invoicePeriodo` fallthrough. Judged: the two P0s are the intended smallest fix (copy the card's rule; do not change KPI maths). Fan-out verified empty on the local twin. Null-periodo fallthrough is the card's own behaviour — changing it here would make the table disagree with the card again. SHIP.
+
+### Decisions
+- 🎯 **Card is the source of truth for "late".** Chip copies it. Do not "simplify" to days > 0 — that fails on pre-May invoices.
+- 🎯 **KPI vs table universes stay different and labelled.** Both figures are wanted. Relabel, don't reconcile the numbers.
+- 🎯 **Smallest fix.** Did not unify the two queries or compute `bucket` server-side. Follow-up only if the two copies start to drift.
+
+### Open
+- WOR-277 — fence `vista_pagos` in the 4 remaining unprotected readers
+- WOR-278 — no replayable migration history (1 file vs 57/82/18)
+- Optional: compute `bucket` once on the server so the SQL CASE and `bucketFor` cannot drift
+- Two untracked business files still in the repo root (`Borrador Cuenta de Cobro…pdf`, `SIESA connexion.xlsm`) — commit, ignore, or move out. Not this ship.
+
+### Session-end pointers
+- Linear: WOR-277, WOR-278 (backlog, not this ship)
+- State: `memory/project_state.md` + `.claude/state.md`
+
+---
+
 ## Session 75 — 2026-08-26: `/pagos` was not broken code, it was a statement timeout
 
 **Trigger.** German: an admin sent a screenshot, the pagos page is not working. No error text in hand at first.
@@ -31,8 +73,8 @@
 - ⚠️ **`getPagosBuckets` LEFT JOINs `siesa_raw.documentos` on `documento` with no `periodo` filter** — if a documento number ever repeats across periods, payments multiply. Not hit today; noted.
 
 ### Open — needs German
-- **The "Mora" card and the table's "Desde mora" chip disagree on the same page.** Card (`pagos.ts`) = invoice `periodo` older than the selected month **OR** `dias_mora_al_pago > 30`; table (`pagos-table.tsx:21`) = only `dias_mora_al_pago > 30`. August: card 6 inquilinos / $11.195.053, chip 3 rows / $6.214.794. SAVATAR, SOLORZANO and SANABRIA paid early in August against **July** invoices — mora by the card, "Primeros 10 días" by the chip. German asked to hold until it's checked against `financial-rules-engine-spec.md`.
-- **KPI header and table count different universes.** "Recaudado / documentos recibidos" counts only payments against the *selected month's* invoices (inner join on `inv.periodo`), while the cards and table count all cash received that month. August: $31.603.249 / 13 docs vs $42.798.302 / 20 movimientos. Possibly deliberate (it pairs with "% del proyectado"), but on screen it reads as $11,2M of real cash gone missing.
+- **The "Mora" card and the table's "Desde mora" chip disagree on the same page.** Card (`pagos.ts`) = invoice `periodo` older than the selected month **OR** `dias_mora_al_pago > 30`; table (`pagos-table.tsx:21`) = only `dias_mora_al_pago > 30`. August: card 6 inquilinos / $11.195.053, chip 3 rows / $6.214.794. SAVATAR, SOLORZANO and SANABRIA paid early in August against **July** invoices — mora by the card, "Primeros 10 días" by the chip. German asked to hold until it's checked against `financial-rules-engine-spec.md`. **Closed session 76** — chip now copies the card's rule; verified on the local twin for 2025-12 / 2026-01 / 2026-07 / 2026-08.
+- **KPI header and table count different universes.** "Recaudado / documentos recibidos" counts only payments against the *selected month's* invoices (inner join on `inv.periodo`), while the cards and table count all cash received that month. August: $31.603.249 / 13 docs vs $42.798.302 / 20 movimientos. Possibly deliberate (it pairs with "% del proyectado"), but on screen it reads as $11,2M of real cash gone missing. **Closed session 76** — universes kept; labels now say which is which.
 
 ### Verification on a full local twin — 2026-08-26
 

@@ -17,8 +17,8 @@ const BUCKET_BUTTONS: { key: Bucket; label: string; cls: string }[] = [
   { key: "mora",     label: "Desde mora",       cls: "bg-rose-50 text-rose-700" },
 ]
 
-function bucketFor(p: PagoRow, gracePeriod: number): "temprano" | "tardio" | "mora" {
-  if (p.diasMoraAlPago > gracePeriod) return "mora"
+function bucketFor(p: PagoRow, gracePeriod: number, yyyymm: number): "temprano" | "tardio" | "mora" {
+  if ((p.invoicePeriodo != null && p.invoicePeriodo < yyyymm) || p.diasMoraAlPago > gracePeriod) return "mora"
   const day = Number((p.fechaRecaudo ?? "").slice(8, 10))
   return day >= 1 && day <= 10 ? "temprano" : "tardio"
 }
@@ -26,10 +26,13 @@ function bucketFor(p: PagoRow, gracePeriod: number): "temprano" | "tardio" | "mo
 export function PagosTable({
   data,
   gracePeriod,
+  selectedMonth,
 }: {
   data: PagoRow[]
   gracePeriod: number
+  selectedMonth: string
 }) {
+  const yyyymm = Number(selectedMonth.replace("-", ""))
   const [q, setQ] = useState("")
   const [bucket, setBucket] = useState<Bucket>("todos")
   const [page, setPage] = useState(1)
@@ -43,7 +46,7 @@ export function PagosTable({
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
     return data.filter((p) => {
-      if (bucket !== "todos" && bucketFor(p, gracePeriod) !== bucket) return false
+      if (bucket !== "todos" && bucketFor(p, gracePeriod, yyyymm) !== bucket) return false
       if (!needle) return true
       return (
         p.clienteName.toLowerCase().includes(needle) ||
@@ -51,7 +54,7 @@ export function PagosTable({
         (p.siesaDocto ?? "").toLowerCase().includes(needle)
       )
     })
-  }, [data, q, bucket, gracePeriod])
+  }, [data, q, bucket, gracePeriod, yyyymm])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -66,6 +69,7 @@ export function PagosTable({
             <p className="text-xs text-slate-400">
               {filtered.length} de {data.length} movimientos · Fuente: CSF ERP
             </p>
+            <p className="text-xs text-slate-400">Todo el efectivo recibido en el mes · incluye pagos tardíos de facturas anteriores</p>
           </div>
           <div className="relative w-full sm:w-72">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />

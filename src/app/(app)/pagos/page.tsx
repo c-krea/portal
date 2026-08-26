@@ -43,17 +43,18 @@ export default async function PagosPage({
 
       {/* KPI Cards */}
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {/* Recaudado este mes */}
+        {/* Recaudado este mes — solo documentos del mes seleccionado */}
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-              Recaudado
+              Recaudado de la facturación de este mes
             </p>
             <CreditCard className="h-4 w-4 text-emerald-500" />
           </div>
           <p className="mt-2 text-2xl font-bold text-slate-900">
             {formatCOP(kpis.totalEsteMes)}
           </p>
+          <p className="mt-1 text-xs text-slate-400">Solo documentos de este mes</p>
           {kpis.proyectadoMes > 0 && (
             <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
               <TrendingUp className="h-3 w-3" />
@@ -239,7 +240,7 @@ export default async function PagosPage({
         </div>
       </div>
 
-      <PagosTable data={pagos} gracePeriod={gracePeriod} />
+      <PagosTable data={pagos} gracePeriod={gracePeriod} selectedMonth={month} />
     </>
   )
 }
