@@ -40,7 +40,9 @@ Did **not** recompute canon / phase discount / IVA — Siesa FVS rows already ar
 - After Continuar-equivalent `verifyOtp` → `updateUser` → login with the new password: all three succeeded. Throwaway user deleted.
 - Pages render: `/forgot-password`, `/auth/confirm?token_hash=…` shows Continuar, `/update-password` still the password form.
 
-**Not proven:** a real Gmail/Outlook click on production. That's the first test after this lands on ckrea.com.co. Send **one** new email; old emails stay dead.
+**Not proven at ship:** a real Gmail/Outlook click on production.
+
+**Production check (same day, German):** live test on ckrea.com.co passed. Closed.
 
 ### Decisions
 - 🎯 **Continuar is required, not decoration.** Auto-verify on GET would just move the scanner burn from supabase.co to ckrea.com.co.
