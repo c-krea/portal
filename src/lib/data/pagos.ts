@@ -48,11 +48,13 @@ function prevMonthStr(year: number, monthNum: number): string {
 // candidate row — 40 seq scans, ~4.9s. That blew past the 8s statement_timeout PostgREST
 // inherits from the `authenticator` role and took the whole page down with "Error al cargar".
 // Materialising drops the same query to ~0.37s. Keep the fence; results are identical.
+// SELECT * on purpose: the view is ~3k rows after its own filters, so the extra columns cost
+// nothing, and a hand-kept column list would have to be edited every time a new field is read
+// from vp. tenant-detail.ts:186 fences the same view the same way.
 function electricityTenantsSubquery(monthExpr: string, prevMonth: string): string {
   return `
     vp AS MATERIALIZED (
-      SELECT inquilino_id, fecha_recaudo, valor_final, docto, cruce, dias_mora_al_pago
-      FROM v2.vista_pagos
+      SELECT * FROM v2.vista_pagos
     ),
     electricity_tenants AS (
       SELECT tst.inquilino_id

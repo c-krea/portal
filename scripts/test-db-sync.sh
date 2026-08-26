@@ -6,8 +6,14 @@
 #   — we deliberately DO NOT copy those.
 #
 #   Structure for all listed siesa_raw tables (so v2 views build); DATA only for the small ones.
-#   recaudo (130MB) + estado_resultados (189MB) drop the pooler's SSL on long COPYs and the
-#   mora feature needs neither — they load EMPTY. Backfill later if pagos/energy needs them.
+#   estado_resultados (189MB) drops the pooler's SSL on a long COPY and nothing reads it yet —
+#   it loads EMPTY.
+#
+#   recaudo IS loaded, but NOT via pg_dump: one long COPY of 639k rows drops the pooler's SSL.
+#   It is streamed prod->local a quarter at a time instead (see "chunked backfill" below), which
+#   the pooler survives. /pagos is built on it, so an empty recaudo makes the local DB useless
+#   for testing that page — both the fast and the slow query return instantly on zero rows.
+#   Set SKIP_RECAUDO=1 to skip it when you only need the mora/cartera path (saves ~2 min).
 #
 #   NOTE: pg_dump ignores --schema when --table is also given, so v2 and siesa_raw are dumped
 #   SEPARATELY, then loaded siesa_raw-first (v2 views depend on siesa_raw tables).
@@ -41,7 +47,7 @@ echo "▶ Dumping siesa_raw SCHEMA (${RAW_SCHEMA_TABLES[*]})…"
 pg_dump "$PROD" "${SIESA_SCHEMA_ARGS[@]}" --schema-only --no-owner --no-privileges -f .test-data/siesa.schema.sql
 echo "▶ Dumping v2 SCHEMA (full)…"
 pg_dump "$PROD" --schema=v2 --schema-only --no-owner --no-privileges -f .test-data/v2.schema.sql
-echo "▶ Dumping siesa_raw DATA (${RAW_DATA_TABLES[*]}; recaudo/estado_resultados stay empty)…"
+echo "▶ Dumping siesa_raw DATA (${RAW_DATA_TABLES[*]}; recaudo comes later, chunked)…"
 pg_dump "$PROD" "${SIESA_DATA_ARGS[@]}" --data-only --no-owner -f .test-data/siesa.data.sql
 echo "▶ Dumping v2 DATA (full)…"
 pg_dump "$PROD" --schema=v2 --data-only --no-owner -f .test-data/v2.data.sql
@@ -74,6 +80,32 @@ echo "▶ Loading data (FK triggers disabled)…"
 { echo "SET session_replication_role = replica;"; cat .test-data/siesa.data.sql .test-data/v2.data.sql; } \
   | psql "$LOCAL" -v ON_ERROR_STOP=0 -q 2>&1 | grep -iE '^ERROR' | head -20 || true
 
+# --- chunked backfill: siesa_raw.recaudo -------------------------------------
+# pg_dump/COPY of the whole table dies mid-stream on the pooler's SSL. Quarter-sized
+# slices do not. Same rows, arriving in ~11 pieces instead of one.
+if [[ "${SKIP_RECAUDO:-0}" == "1" ]]; then
+  echo "▶ SKIP_RECAUDO=1 — recaudo left empty (/pagos will not be testable locally)"
+else
+  echo "▶ Backfilling siesa_raw.recaudo in quarters (long single COPY drops the pooler's SSL)…"
+  psql "$LOCAL" -X -q -c "truncate siesa_raw.recaudo;"
+  chunk_start=2024-01-01
+  chunk_stop=$(date -v+3m "+%Y-%m-%d")   # a quarter past today, so the newest rows are included
+  while [[ "$chunk_start" < "$chunk_stop" ]]; do
+    chunk_end=$(date -j -v+3m -f "%Y-%m-%d" "$chunk_start" "+%Y-%m-%d")
+    printf '   %s → %s  ' "$chunk_start" "$chunk_end"
+    psql "$PROD" -X -q -c "\copy (select * from siesa_raw.recaudo where fecha_recaudo >= '$chunk_start' and fecha_recaudo < '$chunk_end') to stdout" \
+      | psql "$LOCAL" -X -q -c "\copy siesa_raw.recaudo from stdin"
+    psql "$LOCAL" -X -qtA -c "select count(*)||' rows' from siesa_raw.recaudo;"
+    chunk_start="$chunk_end"
+  done
+fi
+
+# ANALYZE is not optional: a freshly COPYed table has no statistics, so the planner
+# picks different plans locally than in prod — which silently invalidates any
+# performance test done here (the exact thing this DB exists for).
+echo "▶ ANALYZE (fresh COPY has no stats; without this the planner behaves unlike prod)…"
+psql "$LOCAL" -X -q -c "analyze siesa_raw.recaudo; analyze siesa_raw.documentos; analyze siesa_raw.cartera; analyze siesa_raw.ocupacion;"
+
 echo "▶ Verifying the objects the app needs exist:"
 psql "$LOCAL" -tAc "
 select object||' : '||(case when ok then 'OK' else 'MISSING ❌' end) from (
@@ -91,6 +123,7 @@ psql "$LOCAL" -tAc "select 'v2.inquilinos = '||count(*) from v2.inquilinos;"
 psql "$LOCAL" -tAc "select 'v2.contratos  = '||count(*) from v2.contratos;"
 psql "$LOCAL" -tAc "select 'siesa_raw.cartera    = '||count(*) from siesa_raw.cartera;"
 psql "$LOCAL" -tAc "select 'siesa_raw.documentos = '||count(*) from siesa_raw.documentos;"
+psql "$LOCAL" -tAc "select 'siesa_raw.recaudo    = '||count(*)||' ('||count(*) filter (where id_zona='Z40')||' Z40)' from siesa_raw.recaudo;"
 psql "$LOCAL" -tAc "select 'v2.vista_cartera_actual (rows) = '||count(*) from v2.vista_cartera_actual;"
 
 echo "✅ Local test DB refreshed (full v2 + Ckrea's siesa_raw tables). Nothing was written to prod."

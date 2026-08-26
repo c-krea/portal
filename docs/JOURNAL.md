@@ -66,6 +66,62 @@ $192.867.355 and $126.679.059 / 50 documentos independently reproduces the 10-Au
   reasonable for mora and useless here. Worth folding the chunked backfill into the script so the
   next person does not rediscover it.
 
+### Post-review follow-up: `vp` takes the whole view
+
+The formal review (Executor, FIND-only) returned **SHIP** — no P0, no P1 — and confirmed the four
+things worth confirming: `vp` projected every column downstream actually read, `MATERIALIZED` is an
+evaluation fence and not a semantic change, the deleted `if (month)` branch was genuinely
+unreachable, and no money math or filter changed. One claim was taken on its word at first — that
+the view is deterministic with no volatile functions — and then checked directly against the prod
+dump: 19 columns, no `now()`, no `random()`, the four canonical filters present.
+
+Its list of *other* at-risk files was wrong, though, and the error is instructive: it named three
+and there are four. `src/app/api/cron/notifications/route.ts:177` reads `vista_pagos` unfenced too.
+An Executor review is a second opinion, not a verdict — its factual claims still need checking.
+
+Acted on one advisory: `vp` now does `SELECT * FROM v2.vista_pagos` instead of hand-listing six
+columns. The review's stated reason (a future dev getting a silent wrong number) is overstated — a
+missing column raises `column does not exist`, loudly. The real reason is consistency:
+`tenant-detail.ts:186` already fenced the same view the same way with `SELECT *`, and two files
+solving one problem differently is where confusion starts. Re-verified rather than reasoned about:
+identical to both the pre-fix code and the shipped fix across all four months.
+
+- 🎯 **A one-line change to a money query still gets the full test.** "It obviously can't change
+  anything" is the sentence that precedes the incidents.
+
+### Open — the same landmine, four more files
+
+`vista_pagos` is read without a `MATERIALIZED` fence in `portal.ts` (3 sites), `reportes.ts`
+(3 sites), `dashboard.ts` and `api/cron/notifications/route.ts`. None fail today — they scan once,
+not 40×. But `recaudo` went 330k → 639k rows in sixteen days and they share the same 8 s ceiling;
+`reportes` scans a full year, so it tips first. Tracked in Linear.
+
+Also noticed while reading the view: `DISTINCT ON (r.row_id_mov) ... ORDER BY r.row_id_mov` has no
+tiebreaker beyond the distinct key itself. If two `recaudo` rows ever share a `row_id_mov`, which
+one survives is arbitrary. Pre-existing, not observed, same family as `feedback_distinct_on_deterministic`.
+
+### The sync script now loads `recaudo` — chunked
+
+Fixed the gap the verification exposed rather than leaving it as a note. `scripts/test-db-sync.sh`
+loaded `recaudo`'s *structure* but not its *rows*, so `/pagos` was untestable locally — on an empty
+table the broken and the fixed query both return instantly and prove nothing.
+
+The original reason was real: one `COPY` of the whole table drops the pooler's SSL mid-stream. The
+answer is not to give up on the table, it is to ask for less at a time — the script now streams it
+prod→local a quarter at a time (12 slices), which the pooler survives. `SKIP_RECAUDO=1` opts out
+when only the mora/cartera path is needed. `estado_resultados` still loads empty; nothing reads it.
+
+Also added an `ANALYZE` step, which was missing and matters more than it looks: a freshly `COPY`ed
+table carries **no statistics**, so Postgres picks different plans locally than in prod. Without it
+the local DB silently stops being a valid place to measure performance — the one job it has here.
+
+- 🎯 **A local twin that omits the table under test is not a test.** The exclusion was correct for
+  the feature that prompted it (mora) and wrong the moment anyone touched pagos. Table-by-table
+  "do we need this one" decisions age badly; record *why* a table was skipped so the next person
+  can tell whether the reason still holds.
+- 💡 **Chunk size is a working substitute for a better connection.** Same rows, eleven small
+  requests instead of one long one.
+
 ### Session-end pointers
 - ADRs: none
 - Lessons: timeout regime + `MATERIALIZED` rationale documented in `src/lib/data/pagos.ts` header comment
