@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Session 78 — 2026-08-26: password reset survived the mail scanner
+
+#### Fixed
+- **Password-reset (and welcome) emails died before the person clicked.** The email used a one-time secret link that mail apps open to "check" it. The link was already used when they clicked. Emails now open our portal; the token is only used after they click **Continuar**, then they set the new password.
+
+#### Notes
+- Old emails stay dead. After this is live, send **one** new email.
+- Same extra click on first-time "create your password" welcome emails.
+
 ### Session 77 — 2026-08-26: remaining payment queries fenced; Locales shows who left still owing
 
 #### Fixed

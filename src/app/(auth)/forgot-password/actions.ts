@@ -1,5 +1,6 @@
 "use server"
 
+import { buildRecoveryUrl } from "@/lib/auth/recovery-link"
 import { supabaseAdmin } from "@/lib/db/executor"
 import { sendPasswordResetEmail } from "@/lib/email"
 import { isValidEmail } from "@/lib/security/validators"
@@ -8,8 +9,6 @@ export type ForgotPasswordState = {
   error?: string
   success?: boolean
 }
-
-const SITE = process.env.SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://ckrea.com.co"
 
 export async function requestPasswordReset(
   _prev: ForgotPasswordState,
@@ -22,19 +21,18 @@ export async function requestPasswordReset(
   }
 
   try {
-    const redirectTo = `${SITE}/auth/confirm`
     const { data, error } = await supabaseAdmin.auth.admin.generateLink({
       type: "recovery",
       email,
-      options: { redirectTo },
     })
 
     // Always return success to avoid email enumeration
-    if (error || !data?.properties?.action_link) {
+    const resetUrl = buildRecoveryUrl(data?.properties?.hashed_token ?? "")
+    if (error || !resetUrl) {
       return { success: true }
     }
 
-    await sendPasswordResetEmail({ to: email, resetUrl: data.properties.action_link })
+    await sendPasswordResetEmail({ to: email, resetUrl })
     return { success: true }
   } catch {
     return { success: true }

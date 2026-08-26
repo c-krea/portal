@@ -2,6 +2,35 @@
 
 ---
 
+## Session 78 — 2026-08-26: password-reset emails died before the person clicked
+
+**Report.** Someone tried to reset their password and it "didn't work." Same failure mode as Session 60 (unit 314): they got the "enlace expiró o ya fue usado" screen.
+
+**Cause.** Forgot-password and welcome emails sent Supabase's `action_link` (`…/auth/v1/verify?token=…`). That URL is one-time and is consumed on GET. Mail apps (Gmail, Outlook Safe Links) open it to scan it. Token is dead when the person clicks. Session 60 only improved the error message. This session changes the link.
+
+**Fix.** Email now points at our portal: `https://ckrea.com.co/auth/confirm?token_hash=…&type=recovery`. Opening the page does not use the token. A **Continuar** button does. Then they set the password as before. Old hash-style emails still have a fallback on `/auth/confirm`.
+
+**Verified on the local twin (`:54621` auth, never prod).**
+- `action_link` still is the verify URL (the thing scanners burn).
+- New portal URL has `token_hash`, never `/auth/v1/verify`.
+- A GET of the confirm page (scanner) does **not** consume the token; `verifyOtp` still succeeds after it.
+- After Continuar-equivalent `verifyOtp` → `updateUser` → login with the new password: all three succeeded. Throwaway user deleted.
+- Pages render: `/forgot-password`, `/auth/confirm?token_hash=…` shows Continuar, `/update-password` still the password form.
+
+**Not proven:** a real Gmail/Outlook click on production. That's the first test after this lands on ckrea.com.co. Send **one** new email; old emails stay dead.
+
+### Decisions
+- 🎯 **Continuar is required, not decoration.** Auto-verify on GET would just move the scanner burn from supabase.co to ckrea.com.co.
+- 🎯 **Same change for welcome emails and admin "send reset"** — they used the same `action_link`.
+- 🎯 **Do not mix with the leftover PDF/xlsm at repo root.**
+
+### Session-end pointers
+- Linear: none (no ticket)
+- Branch: `fix/password-reset-scanner`
+- State: `.claude/state.md`
+
+---
+
 ## Session 77 — 2026-08-26: fence the remaining readers, Ya salieron on Locales
 
 **Trigger.** Linear hygiene left 14 open tickets. German asked which ones an executor could run without a product call. Three looked safest. Two landed. The third did not.

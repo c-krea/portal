@@ -1,5 +1,6 @@
 "use server"
 
+import { buildRecoveryUrl } from "@/lib/auth/recovery-link"
 import { supabaseAdmin, execute, executeDml, sqlStr } from "@/lib/db/executor"
 import { assertUuid, isValidEmail } from "@/lib/security/validators"
 import { sendWelcomeEmail, sendPasswordResetEmail } from "@/lib/email"
@@ -10,8 +11,6 @@ import {
   requireAdminOrFinanzasAction,
   bustProfileCache,
 } from "@/lib/auth/session"
-
-const SITE = process.env.SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://ckrea.com.co"
 
 async function requireAdminOrFinanzas() {
   const result = await requireAdminOrFinanzasAction()
@@ -250,14 +249,13 @@ export async function createTenantAccount(inquilinoId: string) {
   }
 
   // Send welcome email with password-setup link
-  const redirectTo = `${SITE}/auth/confirm`
   const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
     type: "recovery",
     email,
-    options: { redirectTo },
   })
-  if (linkData?.properties?.action_link) {
-    await sendWelcomeEmail({ to: email, name: fullName, setupUrl: linkData.properties.action_link })
+  const setupUrl = buildRecoveryUrl(linkData?.properties?.hashed_token ?? "")
+  if (setupUrl) {
+    await sendWelcomeEmail({ to: email, name: fullName, setupUrl })
   }
 
   revalidatePath("/usuarios")
@@ -311,24 +309,21 @@ export async function sendSystemEmail(data: {
 
   if (!isValidEmail(data.toEmail)) return { error: "Email inválido" }
 
-  const SITE = process.env.SITE_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "https://ckrea.com.co"
-  const redirectTo = `${SITE}/auth/confirm`
-
   const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
     type: "recovery",
     email: data.toEmail,
-    options: { redirectTo },
   })
 
-  if (linkError || !linkData?.properties?.action_link) {
+  const setupUrl = buildRecoveryUrl(linkData?.properties?.hashed_token ?? "")
+  if (linkError || !setupUrl) {
     return { error: "No se pudo generar el enlace. Verifica que el usuario tenga cuenta activa." }
   }
 
   try {
     if (data.type === "welcome") {
-      await sendWelcomeEmail({ to: data.toEmail, name: data.toName, setupUrl: linkData.properties.action_link })
+      await sendWelcomeEmail({ to: data.toEmail, name: data.toName, setupUrl })
     } else {
-      await sendPasswordResetEmail({ to: data.toEmail, resetUrl: linkData.properties.action_link })
+      await sendPasswordResetEmail({ to: data.toEmail, resetUrl: setupUrl })
     }
     return { success: true }
   } catch {
