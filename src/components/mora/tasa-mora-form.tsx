@@ -7,14 +7,25 @@ import { guardarTasaMora, type TasaState } from "@/app/(app)/mora/actions"
 const initial: TasaState = {}
 
 /** Compact top-right control to set the month's DIAN mora rate; panel drops open below. */
-export function TasaMoraForm({ periodo, tasaEa }: { periodo: string; tasaEa: number | null }) {
+export function TasaMoraForm({
+  periodo,
+  tasaEa,
+  tasaPeriodo,
+}: {
+  periodo: string
+  tasaEa: number | null
+  tasaPeriodo: string | null
+}) {
   const [open, setOpen] = useState(false)
   const [state, action, pending] = useActionState(guardarTasaMora, initial)
 
   const currentEa = state.success && state.tasaEa != null ? state.tasaEa : tasaEa
+  // After a successful save, the rate belongs to the calendar month
+  const currentTasaPeriodo = state.success && state.tasaEa != null ? periodo : tasaPeriodo
   const pct = currentEa != null ? Number((currentEa * 100).toFixed(4)) : null
   const diaria = currentEa != null ? (currentEa / 366) * 100 : null
   const falta = currentEa == null
+  const isFallback = !falta && currentTasaPeriodo != null && currentTasaPeriodo !== periodo
 
   return (
     <div className="relative">
@@ -23,7 +34,7 @@ export function TasaMoraForm({ periodo, tasaEa }: { periodo: string; tasaEa: num
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm shadow-sm transition-colors ${
-          falta
+          falta || isFallback
             ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
             : "border-slate-200 bg-white text-slate-800 hover:bg-slate-50"
         }`}
@@ -47,10 +58,17 @@ export function TasaMoraForm({ periodo, tasaEa }: { periodo: string; tasaEa: num
                 Falta la tasa de este mes — el interés se muestra en $0
               </p>
             ) : (
-              <p className="mt-1 text-sm font-bold text-slate-900 tabular-nums">
-                {pct}% E.A.{" "}
-                <span className="font-normal text-slate-400">· {diaria!.toFixed(4)}%/día</span>
-              </p>
+              <>
+                <p className="mt-1 text-sm font-bold text-slate-900 tabular-nums">
+                  {pct}% E.A.{" "}
+                  <span className="font-normal text-slate-400">· {diaria!.toFixed(4)}%/día</span>
+                </p>
+                {isFallback && (
+                  <p className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
+                    Usando tasa de {currentTasaPeriodo} porque aún no se ha configurado la tasa de {periodo}.
+                  </p>
+                )}
+              </>
             )}
 
             <form action={action} className="mt-3 flex items-center gap-2">

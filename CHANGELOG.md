@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Session 80 — 2026-08-26: Mora keeps last month's DIAN rate if this month is empty
+
+#### Fixed
+- **August had no DIAN rate, so all mora interest was $0.** Only July 26.79% was in the table (entered 10 July). If this month has no row, Mora and the tenant portal now use the latest earlier month. The box still lets you type a new %. It warns when it is using last month. On the local twin, one Imagenn invoice went from **$0** interest to **$258.144**.
+
+#### Notes
+- Did not scrape Hacienda. August's published rate is 27.66% — type it in the box when you want that figure. Until then the number is a bit low, not zero.
+
 ### Session 79 — 2026-08-26: tenant Total a Pagar includes electricity
 
 #### Fixed

@@ -38,8 +38,9 @@ export type MoraSummary = {
   juridicaCarteraVencida: number
   juridicaInteres: number
   juridicaClientes: number
-  tasaEa: number | null       // current-month DIAN rate (null = not entered yet)
+  tasaEa: number | null       // DIAN rate in effect (fallback to latest <= current month)
   periodo: string             // current 'YYYY-MM'
+  tasaPeriodo: string | null  // periodo of the rate actually in use (null if none)
 }
 
 export type MoraData = {
@@ -69,15 +70,18 @@ async function getMoraData_uncached(): Promise<MoraData> {
     SELECT
       to_char(CURRENT_DATE,'YYYY-MM') AS periodo,
       (SELECT tasa_ea FROM v2.tasa_interes_mora
-        WHERE periodo = to_char(CURRENT_DATE,'YYYY-MM') LIMIT 1) AS tasa_ea
+        WHERE periodo <= to_char(CURRENT_DATE,'YYYY-MM') ORDER BY periodo DESC LIMIT 1) AS tasa_ea,
+      (SELECT periodo FROM v2.tasa_interes_mora
+        WHERE periodo <= to_char(CURRENT_DATE,'YYYY-MM') ORDER BY periodo DESC LIMIT 1) AS tasa_periodo
   `)
   const periodo = String(rateRows[0]?.periodo ?? "")
   const tasaEa = rateRows[0]?.tasa_ea == null ? null : Number(rateRows[0].tasa_ea)
+  const tasaPeriodo = rateRows[0]?.tasa_periodo == null ? null : String(rateRows[0].tasa_periodo)
 
   const rows = (await execute(`
     WITH rate AS (
       SELECT tasa_ea FROM v2.tasa_interes_mora
-       WHERE periodo = to_char(CURRENT_DATE,'YYYY-MM') LIMIT 1
+       WHERE periodo <= to_char(CURRENT_DATE,'YYYY-MM') ORDER BY periodo DESC LIMIT 1
     ),
     base AS (
       SELECT
@@ -165,6 +169,7 @@ async function getMoraData_uncached(): Promise<MoraData> {
     juridicaClientes:       juridica.length,
     tasaEa,
     periodo,
+    tasaPeriodo,
   }
 
   return { activos, juridica, summary }

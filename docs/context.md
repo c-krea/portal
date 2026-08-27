@@ -68,9 +68,10 @@ Two consequences that catch people:
 interés = vr_vencido × (tasa_ea_mes ÷ 366) × días_vencidos
 ```
 
-The rate comes from `v2.tasa_interes_mora` for the current month and is entered by an admin — when
-it has not been entered, the rate is null and the page must say so rather than bill zero. Interest
-counts from the **effective due date**. Implementation: `src/lib/data/mora.ts`.
+The rate comes from `v2.tasa_interes_mora` and is entered by an admin. If this calendar month has
+no row, Mora and the tenant portal use the latest earlier month so interest is not billed as zero.
+The box stays editable and warns when it is using last month. Interest counts from the **effective
+due date**. Implementation: `src/lib/data/mora.ts`.
 
 *(The old rule — 0.05%/day from day 11 — is wrong twice over: the method changed to DIAN, and the
 grace period was corrected to start interest on day 31, not day 11. Siesa's `fecha_vence` is

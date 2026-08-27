@@ -2,6 +2,28 @@
 
 ---
 
+## Session 80 — 2026-08-26: Mora uses last month's DIAN rate if this month is empty
+
+**Trigger.** German: the DIAN box on Mora is manual, he does not know when it was last edited, and if it is empty the mora numbers never show.
+
+**What was true.** Rate lookup is `periodo = this calendar month`. Only row in the table: **2026-07 / 26.79%**, entered 10 July. **August has no row.** Interest SQL `COALESCE`s a missing rate to 0, so every interest figure on Mora and the tenant portal is **$0** all August. Overdue *balances* still show; interest does not.
+
+Hacienda Bogotá (art. 635, usura − 2) for August is **27.66%**. We did not write that row.
+
+**Fix (option 1).** If this month has no row, use the latest `periodo <=` this month. Same fallback on the portal. Admin box stays editable and writes **this** month when they save. Amber warning when the rate on screen is last month's. Empty table still $0.
+
+**Verification (local `:54622`, never prod).** August NULL, fallback 0.2679 / 2026-07. Imagenn FVS invoice `vr_vencido=13.061.895`, due 2026-07-31, 27 days: interest **0 → 258.144**. eslint + `tsc --noEmit` clean. Captain read the money diff.
+
+### Decisions
+- 🎯 **Fallback, do not scrape, do not auto-insert August.** Conservative (26.79 vs 27.66) until German types the new %.
+- 🎯 **Same rate on admin Mora and tenant portal.**
+
+### Session-end pointers
+- Linear: WOR-280 (In Progress until merge)
+- Branch: `fix/wor-280-tasa-fallback`
+
+---
+
 ## Session 79 — 2026-08-26: Total a Pagar now includes energy
 
 **Trigger.** Session 77 parked WOR-58 as a money call. German confirmed the headline was rent-only, then said ship it.

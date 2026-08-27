@@ -21,7 +21,7 @@ export default async function MoraPage() {
   return (
     <>
       <PageHeader title="Gestión de Mora">
-        <TasaMoraForm periodo={summary.periodo} tasaEa={summary.tasaEa} />
+        <TasaMoraForm periodo={summary.periodo} tasaEa={summary.tasaEa} tasaPeriodo={summary.tasaPeriodo} />
       </PageHeader>
 
       {/* ── Row 1: core KPIs (active tenants) ── */}

@@ -194,8 +194,9 @@ Each tenant-contract record needs:
 > ⚠ **SUPERSEDED (2026-07-10) — mora billing now uses the DIAN / Superfinanciera rate (art. 635 E.T.).**
 > The shipped Mora page (`src/lib/data/mora.ts`) and the tenant portal (`src/lib/data/portal.ts`) compute:
 > `interés = vr_vencido × (tasa_ea_mes ÷ 366) × días vencidos`, counted from the **due date** (invoice + 30).
-> The monthly effective-annual rate is admin-entered in `v2.tasa_interes_mora` (Jul 2026 = 26,79% E.A. ≈ 0,073%/day),
-> **not** the fixed 0.05%/day described below. The 1.5%/mo content in this section is retained for historical
+> The monthly effective-annual rate is admin-entered in `v2.tasa_interes_mora` (Jul 2026 = 26,79% E.A. ≈ 0,073%/day).
+> If the current month has no row, the latest `periodo <=` this month is used so a missed entry does not bill $0
+> (WOR-280). **Not** the fixed 0.05%/day described below. The 1.5%/mo content in this section is retained for historical
 > rationale only. Canonical: memory `mora_dian_interest`. Reconciled peso-for-peso vs the admin's DIAN Excel.
 
 ### 4.1 Definition

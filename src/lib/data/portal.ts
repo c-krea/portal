@@ -351,7 +351,7 @@ async function getPortalCartera_uncached(nit: string): Promise<PortalCartera> {
   const rows = await execute(`
     WITH rate AS (
       SELECT COALESCE(
-        (SELECT tasa_ea FROM v2.tasa_interes_mora WHERE periodo = to_char(CURRENT_DATE,'YYYY-MM') LIMIT 1),
+        (SELECT tasa_ea FROM v2.tasa_interes_mora WHERE periodo <= to_char(CURRENT_DATE,'YYYY-MM') ORDER BY periodo DESC LIMIT 1),
         0
       ) / 366 AS r
     ),
