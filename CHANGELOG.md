@@ -4,6 +4,13 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 
 ## [Unreleased]
 
+### 2026-09-10 — One live money page
+
+#### Changed
+- `docs/context.md` is the only live money/ERP page. `AGENTS.md` points; it no longer copies the formulas.
+- Old money spec and JOURNAL moved to `docs/history/`.
+- Living docs aligned with the code: PP window is day 0–10 (no 11th-day rule); mora due-date test is factura+25; schema comments no longer teach 0.05%/día or “water is billed separately”; isolation checklist marked as a template for *new* apps; Ckrea holds `service_role` server-side.
+
 ### 2026-09-10 — Docs map for anyone (human or AI)
 
 #### Changed
@@ -14,7 +21,7 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 #### Changed
 - README and `CLAUDE.md` / `AGENTS.md` rewritten as the front door for anyone taking over the repo.
 - Removed stale docs that contradicted the running app (old PRD, old recaudo filter spec, duplicate changelog, meeting dumps, dead Excel loader).
-- `docs/JOURNAL.md` kept as history, marked not-required-reading.
+- `docs/JOURNAL.md` kept as history (now `docs/history/JOURNAL.md`).
 
 ### Session 80 — 2026-08-26: Mora keeps last month's DIAN rate if this month is empty
 
@@ -106,7 +113,7 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 
 #### Notes
 - Open, not fixed: the notifications cron writes its dedup row before sending, so a genuine push
-  misconfiguration would suppress a notification permanently. Detail in `docs/JOURNAL.md`.
+  misconfiguration would suppress a notification permanently. Detail in `docs/history/JOURNAL.md`.
 
 ### Session 72 — 2026-08-12: First meter reading is a $0 baseline
 

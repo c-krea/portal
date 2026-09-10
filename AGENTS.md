@@ -18,7 +18,7 @@ This app sits on a **live Supabase database with real client money**. The same d
 - Never touch other schemas (`cartera`, `rutas`, `satelites`, …).
 - Never redefine shared money logic (what “paid” means, mora, pronto pago) to fix one record.
 - Prod writes, migrations, and deploys need explicit approval. Show the exact diff first.
-- Financial rows are append-only. Overrides need a `reason`.
+- `siesa_raw` is never written. Portal meter/energy rows upsert. Money rules: `docs/context.md` only.
 
 ## Local development
 
@@ -35,7 +35,7 @@ Guard: `scripts/assert-local-db.sh`. `.env.test`, `.test-data/`, `supabase/.temp
 
 `db:sync` does **not** copy `auth`. Create a local staff user via the GoTrue admin API (`http://127.0.0.1:54621/auth/v1/admin/users`, service-role key from `.env.test`) plus a matching `v2.perfiles` row (`rol` anything but `inquilino`, `empresa_id` = Ckrea). Prod logins will never work here.
 
-Migrations: develop on local first, then propose the diff for prod. `supabase/migrations/` holds one file — schema of record is `docs/schema/` plus the live DB.
+Migrations: develop on local first, then propose the diff for prod. `supabase/migrations/` holds one file (`v2.tasa_interes_mora`). Schema of record is `docs/schema/` plus that migration plus the live DB.
 
 ## Stack
 
@@ -43,20 +43,13 @@ Next.js 16 (App Router) · TypeScript · Tailwind v4 · shadcn/ui · TanStack Ta
 
 In Next 16 the middleware file is `src/proxy.ts`.
 
-## Money rules (never guess)
+## Money
 
-Full math: `docs/financial-rules-engine-spec.md`. Business prose: `docs/context.md`.
+Live rules: **`docs/context.md` only.** Do not use `docs/history/financial-rules-engine-spec.md` for
+current mora — its §4.1–4.4 is the old 0.05%/day / day-11 formula.
 
-- **A — Pronto pago:** discount if paid within 10 days of that invoice. Applied at payment time only, never on invoices or projections.
-- **B — Phase discount:** time-based % on canon, expires by month.
-- **C — Mora:** DIAN / Superfinanciera monthly rate (art. 635 E.T.). `interés = vr_vencido × (tasa_mes ÷ 366) × días vencidos`, from due date (invoice + 30). Rate in `v2.tasa_interes_mora`. If this month has no row, use the latest earlier month — do not bill $0.
-- **D — Gastos:** water is a flat per-unit amount; electricity is metered; C-Krea absorbs the rest.
-
-Invoice chain: `canon − phase → IVA 19% − pronto pago (if on time) → + gastos → + mora (if late)`
-
-**Siesa is the legal record. This portal reads it; it does not write money back.** ERP pushes into `siesa_raw` (zone `Z40`). `v2` holds portal metadata. `v2.sync_desde_raw()` refreshes portal tables. `scripts/sync-csf.ts` is a leftover manual top-up, not the source of truth.
-
-Read payments through `v2.vista_pagos`. The four recaudo filters live in `docs/schema/02_vistas.sql`. Never filter by `siesa_clasificacion` / `clasificacion`. Dedup is by `row_id_mov`, not invoice+date (that collapsed real partial payments).
+Siesa is the legal record. This portal reads; it does not write money back. Payments:
+`v2.vista_pagos` (`docs/schema/02_vistas.sql`). Never filter by `clasificacion`.
 
 ## Key docs
 
@@ -64,15 +57,14 @@ Read payments through `v2.vista_pagos`. The four recaudo filters live in `docs/s
 
 | Need | File |
 |---|---|
-| Business, ERP, landmines | `docs/context.md` |
-| Financial math | `docs/financial-rules-engine-spec.md` (banner first — Rule C body is stale) |
+| Business, ERP, money | `docs/context.md` (the only live money page) |
 | Tables / views / RPCs | `docs/schema/` then `docs/db-schema-reference.md` |
 | Shared-DB isolation | `docs/isolation-checklist.md` — Ckrea = `v2` |
 | Login Edge Function (source is **not** in this repo; §11 wins on conflict) | `docs/reference/user-admin-edge-function.md` |
 | Electricity invoices | `docs/electricity-invoice-process.md` |
 | Env var names | `.env.example` |
 | What shipped | `CHANGELOG.md` |
-| Why a decision was made | `docs/JOURNAL.md` (history, not onboarding) |
+| Why / old money spec | `docs/history/` |
 
 ## UI
 
@@ -85,8 +77,8 @@ Read payments through `v2.vista_pagos`. The four recaudo filters live in `docs/s
 
 - Company-scoped from day one (C-Krea vs Reymon share the database)
 - Auth trigger is `on_auth_user_created_v2` → `v2.handle_new_user()` — never an unsuffixed name
-- RLS on all tables
-- `service_role` is server-side only, this app only
+- RLS on operational money tables. `agente_chat` has none by design.
+- `service_role` is server-side, **this app only** (login create uses it). Other apps must not copy that.
 - `siesa_raw` = SELECT only
 
 ## Env

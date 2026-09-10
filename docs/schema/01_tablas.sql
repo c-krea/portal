@@ -6,7 +6,7 @@
 -- Objetivo: una tabla por concepto, nombres en español, sin tablas vacías.
 -- Reduce el esquema de 25 tablas (v1) a 12 tablas + 4 vistas + 5 RPCs.
 --
--- Lecciones aplicadas (de docs/JOURNAL.md y memoria):
+-- Lecciones aplicadas (de docs/history/JOURNAL.md y memoria):
 --   - Portal es LECTOR del ERP, no emisor (eliminamos invoices/line_items/etc)
 --   - siesa_clasificacion es no-determinista, NUNCA filtrar por esa columna
 --   - PP y descuento de fase APILAN (no son mutuamente excluyentes)
@@ -122,7 +122,7 @@ CREATE TABLE inquilinos (
 );
 
 COMMENT ON TABLE inquilinos IS 'Inquilinos. NIT = identidad permanente. Sincroniza desde ERP. Cartera/pagos atan a inquilino_id, NO a contrato_id.';
-COMMENT ON COLUMN inquilinos.juridica IS 'Si está en proceso jurídico. Excluye de KPIs de mora normales. Cambia retención (×1.155 vs ×1.19).';
+COMMENT ON COLUMN inquilinos.juridica IS 'Proceso jurídico / legal collections. Excluye de KPIs de mora normales. NO cambia retefuente — eso es tipo_persona (PJ/PN).';
 COMMENT ON COLUMN inquilinos.pp_historico_pct IS 'Cache: % histórico de pagos con pronto pago aplicado. Recomputar tras cada sync. Tenants <10 pagos usan fallback global.';
 
 -- =============================================================================
@@ -154,7 +154,7 @@ CREATE TABLE locales (
 );
 
 COMMENT ON TABLE locales IS 'Locales arrendables. ERP no emite estado=Inactivo, vacío = ausencia en ocupacion.';
-COMMENT ON COLUMN locales.grupo_energia IS '1 de 6 grupos de facturación de energía (entrada-based). Drives cómo se reparten kWh.';
+COMMENT ON COLUMN locales.grupo_energia IS 'Grupo de facturación de energía, keyed by address (e.g. CRA2710065). See ELECTRICITY_GROUPS in src/lib/data/electricity.ts.';
 
 -- =============================================================================
 -- 5. CONTRATOS — Inquilino × Local con términos financieros
@@ -280,7 +280,7 @@ CREATE TABLE tipos_gasto (
     updated_at          timestamptz NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE tipos_gasto IS 'Catálogo. Solo electricidad y agua se facturan a inquilinos — el resto absorbe C-Krea.';
+COMMENT ON TABLE tipos_gasto IS 'Catálogo. Agua va en el canon, no se factura aparte. Electricidad se factura medida. El resto absorbe C-Krea.';
 
 -- =============================================================================
 -- 10. GASTOS — Gastos operacionales por período
@@ -307,7 +307,7 @@ COMMENT ON TABLE gastos IS 'Gastos operacionales. Sin tabla de allocations — s
 CREATE TABLE reglas_financieras (
     id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
     empresa_id      uuid NOT NULL REFERENCES empresas(id),
-    clave           text NOT NULL,                      -- 'iva_pct', 'mora_diaria', 'grace_dias', 'ipc_anual', 'pp_dias'
+    clave           text NOT NULL,                      -- live keys: iva_rate, pp_window_days, grace_period_days, ipc_increment_pct. interes_mora_diario is leftover — live mora is v2.tasa_interes_mora
     valor           numeric NOT NULL,
     descripcion     text,
     fecha_desde     date NOT NULL DEFAULT CURRENT_DATE,
@@ -319,7 +319,7 @@ CREATE TABLE reglas_financieras (
 
 CREATE INDEX idx_reglas_vigentes ON reglas_financieras (empresa_id, clave) WHERE fecha_hasta IS NULL;
 
-COMMENT ON TABLE reglas_financieras IS 'Reglas: IVA 19%, mora 0.05%/día, grace 30 días, IPC anual, PP dentro de 10 días. Versionado por fecha_desde/fecha_hasta.';
+COMMENT ON TABLE reglas_financieras IS 'Runtime knobs (IVA, PP window, grace_period_days, IPC). Mora rate is NOT here and is NOT 0.05%/día — see v2.tasa_interes_mora (DIAN / art. 635), supabase/migrations/20260710120000_tasa_interes_mora.sql.';
 
 -- =============================================================================
 -- 12. AGENTE_CHAT — Historial del copiloto AI

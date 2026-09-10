@@ -29,7 +29,7 @@ Studio: http://127.0.0.1:54623
 
 ## Docs
 
-Start at [`docs/README.md`](docs/README.md) — what to read, in what order, and what not to trust.
+Start at [`docs/README.md`](docs/README.md). Money / ERP / landmines: [`docs/context.md`](docs/context.md) only.
 
 Never-break rules: [`AGENTS.md`](AGENTS.md) (`CLAUDE.md` is the same file).
 Env var names: [`.env.example`](.env.example).

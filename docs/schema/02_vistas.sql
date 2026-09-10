@@ -3,9 +3,10 @@
 -- 02_vistas.sql — Vistas (4)
 -- Fecha: 2026-04-26
 -- =============================================================================
--- Vistas que derivan de siesa_raw.* + join a public.inquilinos/locales.
--- Aquí viven los 4 filtros canónicos de recaudo (FVS + dedup + <1B + zona).
--- Toda lectura del portal y del copiloto AI pasa por estas vistas o sus RPCs.
+-- Vistas que derivan de siesa_raw.* + join a v2.inquilinos/locales (search_path v2, public).
+-- Aquí viven los 4 filtros canónicos de recaudo (FVS + dedup row_id_mov + <1B + zona).
+-- Pagos must use vista_pagos. Other pages still read siesa_raw directly (gastos, electricity, some cartera, ocupacion).
+-- The obtener_* RPCs in 03_rpcs.sql are not called from src/.
 -- =============================================================================
 -- Lecciones aplicadas:
 --   - siesa_clasificacion (recaudo.clasificacion) NUNCA se filtra ni se expone
@@ -37,7 +38,7 @@ WITH recaudo_dedup AS (
     -- parciales/abonos legítimos hechos a la MISMA factura el MISMO día, descartando
     -- el segundo en silencio (bug 2026-06-08: 54 pagos reales / $66.137.912 perdidos,
     -- 0 duplicados verdaderos). Un inquilino paga una factura en varios recibos (RK-),
-    -- cada recibo es un pago real y debe contarse. Ver JOURNAL Session 60.
+    -- cada recibo es un pago real y debe contarse. Ver docs/history/JOURNAL.md Session 60.
     SELECT DISTINCT ON (r.row_id_mov)
         r.docto,
         r.cruce,
@@ -139,7 +140,7 @@ LEFT JOIN inquilinos i
 WHERE c.id_zona = 'Z40'                              -- C-Krea
   AND c.saldo > 0;                                   -- Cartera viva (no canceladas)
 
-COMMENT ON VIEW vista_cartera_actual IS 'Cartera abierta con buckets de mora. Grace 30 días — en_mora_real solo si dias>30.';
+COMMENT ON VIEW vista_cartera_actual IS 'Cartera abierta. en_mora_real in this view is frozen at 30 days. App buckets also use getGracePeriod() (clave grace_period_days). Mora page (mora.ts) does not use en_mora_real.';
 
 -- =============================================================================
 -- VISTA 3 — vista_facturas

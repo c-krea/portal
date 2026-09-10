@@ -1,7 +1,24 @@
 # C-Krea PayControl — Development Journal
 
 Historical session notes. **Not required reading.** Start at `docs/README.md`.
-Current rules: `docs/context.md` and `docs/financial-rules-engine-spec.md`. What shipped: `CHANGELOG.md`.
+Current rules: `docs/context.md` only. What shipped: `CHANGELOG.md`.
+This file lives in `docs/history/`.
+
+---
+
+## 2026-09-10 — Stop living docs contradicting the code
+
+Double scout (doc vs doc, doc vs code). Patched `context.md` PP window to match `isPpDateEligible` (day 0–10, no 11th-day rule) and mora due-date to the `factura+25` test. Schema comments no longer teach 0.05%/día, billed water, or juridica-as-retefuente. Isolation checklist labelled as a new-app template. Ckrea holds `service_role` server-side — said plainly. Code/UI 0.05% strings and ficha math stay WOR-316.
+
+---
+
+## 2026-09-10 — One live money page
+
+`docs/context.md` is now the only live money/ERP page. This journal and the old financial spec
+moved here. AGENTS.md no longer copies A/B/C/D. Scout found unique live facts in the spec
+(IVA on net, PP on ventas, water-in-canon, invoice chain, sync_desde_raw) and those were copied
+into context first. Spec §4.1–4.4 (0.05%/day, day 11) was not copied. Phase+PP “mutually
+exclusive” was not copied — live code applies PP to ventas even when a phase % is present.
 
 ---
 

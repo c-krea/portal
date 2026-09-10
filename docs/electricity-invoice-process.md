@@ -2,7 +2,7 @@
 
 Tenants pay electricity as a reimbursement: Reymon pays the utility, then bills each local from its meter reading. The PDF is a “Cuenta de Cobro”. Code: `src/lib/pdf/electricity-invoice.tsx`.
 
-**Current flow** (checkpoint 7 below is the short version): admin enters the utility bill at `/medidores/facturas` → tenant submits a reading → portal stores kWh and total → tenant can download the PDF. First reading with no previous row is a handover baseline at **$0**. Checkpoints 1–6 are how that was built; skip them unless you are changing the PDF.
+**Current flow:** at `/medidores/facturas` the admin enters **valor + tarifa**; kWh is derived (`valor / tarifa`). Tenant submits a reading on the **lectura day** (nominally the 9th, moved forward off Sunday and Colombian holidays — `src/lib/periodo.ts`). First reading with no previous row is a handover baseline at **$0**. The live PDF does **not** take a `tarifaKwh` prop. Checkpoints 1–6 are history; skip them unless you are changing the PDF.
 
 The “Open items” at the bottom shipped. Do not treat them as work still to do.
 
@@ -137,8 +137,8 @@ periodo:   202605
 ## Checkpoint 7 — Data Flow for Invoice
 
 **How the total is calculated:**
-1. Admin enters utility bill values at `/medidores/facturas` → stored in `v2.facturas_energia` → `tarifa_kwh = valor_factura / kwh_factura`
-2. Tenant submits meter reading on day 9 via portal. If a previous row exists → `kwh = lectura_actual - lectura_anterior`. If this is the local's first reading (no previous row) → handover baseline: `lectura_anterior = lectura_actual`, `kwh = 0`, `total_energia = 0` (see `src/lib/lectura-consumo.ts`).
+1. Admin enters **valor_factura + tarifa_kwh** at `/medidores/facturas`. Stored in `v2.facturas_energia`. `kwh_factura` is derived as valor/tarifa.
+2. Tenant submits a meter reading on the lectura day (`src/lib/periodo.ts`). If a previous row exists → `kwh = lectura_actual - lectura_anterior`. If this is the local's first reading (no previous row) → handover baseline: `lectura_anterior = lectura_actual`, `kwh = 0`, `total_energia = 0` (see `src/lib/lectura-consumo.ts`).
 3. Portal computes `total_energia = MROUND(kwh × tarifa_kwh, 50)` and saves to `v2.lecturas_medidor`. Zero-kWh baselines never appear as an energy invoice.
 
 **Source of truth per field:**

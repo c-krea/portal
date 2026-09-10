@@ -1,11 +1,14 @@
 # Shared user-admin Edge Function
 
-Canonical spec for the login-creation function. **The function’s source does not live in this repo.**
-On conflict, **§11 (red-team resolutions) wins**.
+Canonical spec for the **shared** login-creation function. **The function’s source does not live in this repo.**
+On conflict inside this spec, **§11 (red-team resolutions) wins**.
+
+**Ckrea today does not call this function.** This portal holds `SUPABASE_SERVICE_ROLE_KEY` server-side
+and creates logins in `src/app/(app)/usuarios/actions.ts`. Do not “fix” that by deleting the key
+without a migration onto this function.
 
 One shared Supabase project hosts many apps as separate schemas (`v2`/C-Krea, `rutas`, `satelites`,
 `ric_systems`, `siesa_raw`, plus future apps). All apps share **one** `auth.users` login list.
-This is how an app creates logins without holding the master key.
 
 ---
 
@@ -14,7 +17,7 @@ This is how an app creates logins without holding the master key.
 Let each app self-serve login creation, safely, in the shared database:
 
 - An app's designated **Lead** can create new logins for their own app on demand.
-- No app ever holds the Supabase **service_role** ("master") key.
+- Target: no app holds the Supabase **service_role** ("master") key. **Ckrea today still holds it** — see the banner above.
 - Every creation is tied to a named human and permanently logged.
 - One function serves **all** apps and never changes when a new app joins.
 - German seeds one Lead per app once, then steps back.

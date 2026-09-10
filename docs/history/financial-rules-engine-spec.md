@@ -1,6 +1,7 @@
-# C-Krea PayControl — Financial Rules Engine
+# C-Krea PayControl — Financial Rules Engine (archived)
 
-> If portal math does not match **this file’s rules A–D and the invoice chain**, something is wrong.
+**Archived.** Live money rules: `docs/context.md`. This file is history.
+
 > If this file does not match `docs/context.md` or the code, **the code and `docs/context.md` win**.
 
 **How to read this file**

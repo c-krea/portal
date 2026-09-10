@@ -14,8 +14,8 @@ ERP (Siesa) → push → siesa_raw.* → sync_desde_raw() RPC → v2.* → Porta
 ```
 
 - ERP writes directly to `siesa_raw.*` (role `siesa_sync`).
-- Nightly cron `v2.sync_desde_raw()` refreshes v2 from siesa_raw. Schedule lives in `vercel.json` (currently `30 5 * * *`).
-- Portal pages read from `v2.*`, except proyecciones which reads siesa_raw.ocupacion directly.
+- Three daily crons in `vercel.json`: sync-v2 `30 5 * * *` (`v2.sync_desde_raw()`), accrual `0 6 * * *`, notifications `0 8 * * *`.
+- Pagos go through `v2.vista_pagos`. Gastos, electricity, some cartera, and ocupacion still read `siesa_raw` directly.
 - Zone filter `IdZona = 'Z40'` applied upstream by ERP — all siesa_raw data is C-Krea only.
 
 ---
@@ -40,11 +40,7 @@ No RLS — not exposed via PostgREST. Access via role `siesa_sync` only.
 | `pronto_pago` | numeric | PP discount % available if paid within 10 days (usually 10) |
 | `ocupacion_natural_key` | unique | (documento, loc) |
 
-**Phase discount staircase (ERP pushes current step each month):**
-- Month 1: 50%
-- Months 2–3: 30%
-- Months 4–5: 20%
-- Month 6+: 0% (only PP option remains)
+**Phase discount:** ERP pushes the **current** step on `ocupacion.descuento`. That is not a universal 50→30→20→0 ladder for every tenant — do not hardcode the staircase. The portal applies the current %; mid-ladder steps are not modeled (WOR-78).
 
 **Critical query note:** Always filter `WHERE razon_social IS NOT NULL AND COALESCE(precio, 0) > 0` — vacant units have null razon_social.
 
@@ -115,13 +111,13 @@ WHERE fecha_factura >= DATE '2026-05-01'
 | `fecha_recaudo` | Payment date |
 | `valor_aplicado` | Amount applied |
 | `pronto_pago` | PP discount given on this payment |
-| Natural key | (docto, cruce, fecha_recaudo, valor_aplicado) |
+| Dedup key | `row_id_mov` — **not** (docto, cruce, fecha). Invoice+date collapsed real partial payments. |
 
-**4 correct filters for payment queries** (from audit in `recaudo_data_model.md`):
-1. FVS cruce pattern
-2. Dedup
-3. Values < $1B
-4. Zona filter
+**4 correct filters** — live in `v2.vista_pagos` (`docs/schema/02_vistas.sql`):
+1. `id_zona = 'Z40'`
+2. `cruce LIKE 'FVS-%'`
+3. `valor_final < 1_000_000_000`
+4. Dedup `DISTINCT ON (row_id_mov)`
 
 ---
 
@@ -276,12 +272,14 @@ Use documentos (NOT cartera) — cartera drops paid invoices mid-month so the to
 Source: `v2.vista_pagos` → `siesa_raw.recaudo`
 
 ### Payment buckets (primeros 10 días / 11 al 30 / Mora)
-Classification logic per payment:
-1. `dias_mora_al_pago > grace_period_days (30)` → **Mora**
+
+Do not reimplement from this list — `src/lib/data/pagos.ts` also treats older invoice periods as mora and excludes standalone electricity `001-` rows.
+
+1. Older invoice period **or** `dias_mora_al_pago > grace` → **Mora**
 2. `EXTRACT(DAY FROM fecha_recaudo) BETWEEN 1 AND 10` → **Primeros 10 días**
 3. Everything else → **11 al 30**
 
-`dias_mora_al_pago` = how many days overdue the invoice was when the payment was applied. Calculated by Siesa at payment time, stored in recaudo, surfaced via v2.vista_pagos.
+`dias_mora_al_pago` in `vista_pagos` is `fecha_recaudo - fecha_vencimiento` (raw ERP dates). The factura+25 / factura+30 due-date fix lives in `mora.ts` and the tenant portal, not in this view.
 
 **grace_period_days = 30** (from `v2.reglas_financieras WHERE clave = 'grace_period_days'`)
 
@@ -292,9 +290,13 @@ Classification logic per payment:
 - Once overdue April invoice is fully paid → future May payments at 0 days mora → date-bucket applies
 
 ### Mora page — who shows where
-- **Regular mora table** (`getMoraRows`): `juridica = false` AND has active/critico contract AND `vr_vencido > 0` AND `dias_mora > grace`
-- **Cartera Jurídica** (`getJuridicaRows`): `juridica = true` OR no active/critico contract — both with `vr_vencido > 0`
-- **Ex-tenants** (left without paying): show ONLY in Cartera Jurídica via the `NOT EXISTS(active contract)` branch. Never in regular mora.
+
+Implementation: `src/lib/data/mora.ts` (there are no `getMoraRows` / `getJuridicaRows` functions).
+
+- Open invoices: `vr_vencido > 0` and `factura LIKE 'FVS-%'`
+- **Cartera jurídica:** `juridica = true` **or** no contract in (`activo`,`critico`)
+- Everyone else with vencido → regular mora table
+- Grace for **pagos buckets** is `getGracePeriod()` (`clave = 'grace_period_days'`). The Mora page itself does not filter `dias_mora > grace`.
 
 ---
 
@@ -311,7 +313,7 @@ WHERE NOT EXISTS (
 )
 ```
 
-**Portal:** the `/mora` page handles this in `getJuridicaRows()` — shows tenants where `v2.inquilinos.juridica = true` OR no active/critico contract + `vr_vencido > 0`. Listed under "Cartera Jurídica", **excluded from regular mora KPIs**.
+**Portal:** `/mora` lists them under Cartera Jurídica via the same `juridica OR no active/critico contract` split in `mora.ts`.
 
 **Important:** `juridica` (cartera jurídica / legal collections) ≠ `tipo_persona = 'PJ'` (legal entity for retefuente). Do not conflate.
 

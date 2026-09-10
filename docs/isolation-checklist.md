@@ -1,8 +1,10 @@
 # DB isolation checklist
 
-This Supabase project hosts several apps. **Ckrea’s schema is `v2`.** Other schemas are off-limits.
+This file is a **template for a NEW app** on the shared Supabase project.
 
-Use the queries below (replace `SCHEMA_NAME` with `v2` for this app) in the SQL editor. A bad grant here leaks into Cartera, Rutas, Satélites, and the rest.
+**Ckrea already is schema `v2`.** Do **not** run the “revoke v2 / block v2” steps against this app — that would lock Ckrea out of its own data. Ckrea holds `SUPABASE_SERVICE_ROLE_KEY` server-side; that is an exception, not a pattern to copy.
+
+For a new app: replace `SCHEMA_NAME` below with that app’s schema. Other schemas stay off-limits. A bad grant leaks into Cartera, Rutas, Satélites, and Ckrea.
 
 ---
 

@@ -3,7 +3,7 @@
 -- 03_rpcs.sql — RPCs (5)
 -- Fecha: 2026-04-26
 -- =============================================================================
--- Tool surface del copiloto AI y del portal. Filtros canónicos enforced server-side.
+-- Copiloto tool surface. The portal does not call these from src/ — it queries vistas and siesa_raw.
 -- Naming: obtener_* (todos retornan SETOF / TABLE).
 --
 -- Reglas:
