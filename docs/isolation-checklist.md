@@ -1,7 +1,8 @@
-# DB Isolation Checklist — Reymon Multi-App Setup
+# DB isolation checklist
 
-Use this doc to verify any new or migrated app follows the isolation standard.
-Copy this file into any project repo. Run the SQL queries in Supabase SQL Editor or DbGate.
+This Supabase project hosts several apps. **Ckrea’s schema is `v2`.** Other schemas are off-limits.
+
+Use the queries below (replace `SCHEMA_NAME` with `v2` for this app) in the SQL editor. A bad grant here leaks into Cartera, Rutas, Satélites, and the rest.
 
 ---
 

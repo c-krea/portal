@@ -60,14 +60,17 @@ Read payments through `v2.vista_pagos`. The four recaudo filters live in `docs/s
 
 ## Key docs
 
+**Map (read this first):** `docs/README.md`
+
 | Need | File |
 |---|---|
 | Business, ERP, landmines | `docs/context.md` |
-| Financial math | `docs/financial-rules-engine-spec.md` |
-| Tables / views / RPCs | `docs/schema/` and `docs/db-schema-reference.md` |
-| Shared-DB isolation | `docs/isolation-checklist.md` |
+| Financial math | `docs/financial-rules-engine-spec.md` (banner first — Rule C body is stale) |
+| Tables / views / RPCs | `docs/schema/` then `docs/db-schema-reference.md` |
+| Shared-DB isolation | `docs/isolation-checklist.md` — Ckrea = `v2` |
 | Login Edge Function (source is **not** in this repo; §11 wins on conflict) | `docs/reference/user-admin-edge-function.md` |
-| Electricity PDF process | `docs/electricity-invoice-process.md` |
+| Electricity invoices | `docs/electricity-invoice-process.md` |
+| Env var names | `.env.example` |
 | What shipped | `CHANGELOG.md` |
 | Why a decision was made | `docs/JOURNAL.md` (history, not onboarding) |
 
@@ -88,4 +91,4 @@ Read payments through `v2.vista_pagos`. The four recaudo filters live in `docs/s
 
 ## Env
 
-`.env.local` (never commit) and `.env.test` (local Docker). Need Supabase URL + keys and `DATABASE_URL`.
+`.env.local` (never commit) and `.env.test` (local Docker). Names: `.env.example`.

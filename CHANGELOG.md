@@ -1,6 +1,13 @@
 # Changelog — C-Krea PayControl
 
+Newest first. Older “Session N” labels are historical names for a ship, not a required reading order.
+
 ## [Unreleased]
+
+### 2026-09-10 — Docs map for anyone (human or AI)
+
+#### Changed
+- `docs/README.md` is the reading order. Money spec banner: Rule C body is the old mora formula; counts are snapshots. `.env.example` lists required names (no secrets).
 
 ### 2026-09-09 — Repo handoff cleanup
 

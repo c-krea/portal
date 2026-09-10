@@ -7,7 +7,9 @@ Central Kreativa, a mall-like property in Bogotá. It replaced manual Excel bill
 
 ## How to read this file
 
-This holds only what the code **cannot** tell you: the business, the money rules, and the shape of
+Doc map for the whole repo: `docs/README.md`.
+
+This file holds only what the code **cannot** tell you: the business, the money rules, and the shape of
 the ERP relationship. It deliberately states **nothing countable** — no table counts, no route
 lists, no rates that change yearly.
 

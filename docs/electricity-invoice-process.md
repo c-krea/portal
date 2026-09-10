@@ -1,7 +1,10 @@
-# Electricity Invoice PDF — Build Process Log
+# Electricity invoices
 
-Tracks every decision and checkpoint in building the electricity PDF invoice feature.
-Use this to answer future questions about why things are the way they are.
+Tenants pay electricity as a reimbursement: Reymon pays the utility, then bills each local from its meter reading. The PDF is a “Cuenta de Cobro”. Code: `src/lib/pdf/electricity-invoice.tsx`.
+
+**Current flow** (checkpoint 7 below is the short version): admin enters the utility bill at `/medidores/facturas` → tenant submits a reading → portal stores kWh and total → tenant can download the PDF. First reading with no previous row is a handover baseline at **$0**. Checkpoints 1–6 are how that was built; skip them unless you are changing the PDF.
+
+The “Open items” at the bottom shipped. Do not treat them as work still to do.
 
 ---
 
@@ -150,11 +153,7 @@ periodo:   202605
 
 ---
 
-## Open Items
+## Open items — shipped
 
-- [ ] Task 2: `getPortalElectricityInvoiceData` + `getPortalElectricityPeriodos` in `portal.ts`
-- [ ] Task 3: `portal/actions.ts` server action for download button
-- [ ] Task 4: Refactor `WompiButton` — step-0 type selector + energía step
-- [ ] Task 5: `facturas-download-button.tsx` — new component
-- [ ] Task 6: Wire everything in `portal/page.tsx`
+The download button, Wompi energía step, and portal queries listed here were built. See `src/app/(portal)/portal/`.
 - [ ] Future: Add remaining ERP groups (CLL112723, CLL112747, KR24) to portal

@@ -1,7 +1,9 @@
-# C-Krea Portal — DB Schema Reference
+# C-Krea Portal — DB schema reference
 
-**Last updated:** 2026-05-03 (updated after pagos/mora/dashboard fixes)  
-**Rule:** siesa_raw = ERP source of truth. v2 = portal working layer derived from siesa_raw. When in doubt, trust siesa_raw.
+**Schema of record:** `docs/schema/` (DDL) plus the live DB. This file is column notes and join keys.
+If this file and `docs/schema/` disagree, trust `docs/schema/` and the live DB.
+
+**Rule:** `siesa_raw` = ERP source of truth. `v2` = portal working layer derived from `siesa_raw`.
 
 ---
 
@@ -12,7 +14,7 @@ ERP (Siesa) → push → siesa_raw.* → sync_desde_raw() RPC → v2.* → Porta
 ```
 
 - ERP writes directly to `siesa_raw.*` (role `siesa_sync`).
-- Nightly cron at 05:30 COT runs `v2.sync_desde_raw()` → refreshes v2 from siesa_raw.
+- Nightly cron `v2.sync_desde_raw()` refreshes v2 from siesa_raw. Schedule lives in `vercel.json` (currently `30 5 * * *`).
 - Portal pages read from `v2.*`, except proyecciones which reads siesa_raw.ocupacion directly.
 - Zone filter `IdZona = 'Z40'` applied upstream by ERP — all siesa_raw data is C-Krea only.
 

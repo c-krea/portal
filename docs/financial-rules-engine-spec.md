@@ -1,11 +1,15 @@
-# C-Krea PayControl -- Financial Rules Engine Specification
+# C-Krea PayControl — Financial Rules Engine
 
-**Version:** 1.0  
-**Date:** April 15, 2026  
-**Status:** Draft  
-**Author:** German Burgos  
+> If portal math does not match **this file’s rules A–D and the invoice chain**, something is wrong.
+> If this file does not match `docs/context.md` or the code, **the code and `docs/context.md` win**.
 
-> This is the "truth document" for every financial calculation in the C-Krea PayControl portal. If the portal's math doesn't match this document, something is wrong.
+**How to read this file**
+
+- Rules **A** (pronto pago), **B** (phase discount), **D** (gastos) and the invoice chain are the point.
+- **Rule C (mora):** use the DIAN box at the top of §4, `docs/context.md`, and `src/lib/data/mora.ts`.
+  Ignore §4.1–4.4 below that box — they describe the old 0.05%/day / day-11 rule.
+- Pronto pago window = **10 days from the invoice**. Mora due date = **invoice + 30**. Different clocks.
+- Unit counts, $ amounts, and “N tenants at X%” tables are **April 2026 snapshots**. Query the DB.
 
 ---
 
@@ -195,9 +199,8 @@ Each tenant-contract record needs:
 > The shipped Mora page (`src/lib/data/mora.ts`) and the tenant portal (`src/lib/data/portal.ts`) compute:
 > `interés = vr_vencido × (tasa_ea_mes ÷ 366) × días vencidos`, counted from the **due date** (invoice + 30).
 > The monthly effective-annual rate is admin-entered in `v2.tasa_interes_mora` (Jul 2026 = 26,79% E.A. ≈ 0,073%/day).
-> If the current month has no row, the latest `periodo <=` this month is used so a missed entry does not bill $0
-> (WOR-280). **Not** the fixed 0.05%/day described below. The 1.5%/mo content in this section is retained for historical
-> rationale only. Canonical: memory `mora_dian_interest`. Reconciled peso-for-peso vs the admin's DIAN Excel.
+> If the current month has no row, the latest `periodo <=` this month is used so a missed entry does not bill $0.
+> **Not** the fixed 0.05%/day described in §4.1–4.4 below. Those subsections are historical only.
 
 ### 4.1 Definition
 

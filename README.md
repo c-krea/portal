@@ -27,16 +27,12 @@ Studio: http://127.0.0.1:54623
 
 `db:sync` does not copy logins. Create a local staff user (see `CLAUDE.md`). Production passwords will not work here.
 
-## Docs that matter
+## Docs
 
-| Need | File |
-|---|---|
-| Business, ERP, landmines | `docs/context.md` |
-| Financial math | `docs/financial-rules-engine-spec.md` |
-| Tables / views | `docs/schema/` and `docs/db-schema-reference.md` |
-| Project facts (humans and AI) | `CLAUDE.md` |
-| What shipped | `CHANGELOG.md` |
-| Why a decision was made | `docs/JOURNAL.md` (history, not onboarding) |
+Start at [`docs/README.md`](docs/README.md) — what to read, in what order, and what not to trust.
+
+Never-break rules: [`AGENTS.md`](AGENTS.md) (`CLAUDE.md` is the same file).
+Env var names: [`.env.example`](.env.example).
 
 ## Stack
 

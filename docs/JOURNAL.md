@@ -1,7 +1,16 @@
 # C-Krea PayControl — Development Journal
 
-Historical session notes. **Not required reading.** Current rules live in `docs/context.md`
-and `docs/financial-rules-engine-spec.md`. What shipped is `CHANGELOG.md`.
+Historical session notes. **Not required reading.** Start at `docs/README.md`.
+Current rules: `docs/context.md` and `docs/financial-rules-engine-spec.md`. What shipped: `CHANGELOG.md`.
+
+---
+
+## 2026-09-10 — Docs map
+
+Added `docs/README.md` (read order + do-nots). Money spec now says: A/B/D and the invoice chain
+are live; Rule C §4.1–4.4 is the old day-11 / 0.05% rule — follow the DIAN box, `context.md`,
+and `mora.ts`. Counts in the spec are April 2026 snapshots. `.env.example` added; `.gitignore`
+allows it. Unused `form.phase2.tsx` removed. Branch `chore/docs-structure`, not the redesign.
 
 ---
 

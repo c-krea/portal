@@ -1,12 +1,11 @@
-# Shared User-Admin Edge Function — Design
+# Shared user-admin Edge Function
 
-**Date:** 2026-07-01
-**Status:** Approved design, pending implementation plan
-**Owner:** German (Reymon / C-Krea)
-**Context:** One shared Supabase project (`bosylehvmtwtqkrlievy`) hosts many apps as separate schemas
-(`v2`/C-Krea, `rutas`, `satelites`, `ric_systems`, `siesa_raw`, plus future apps). All apps share **one**
-`auth.users` login list. This spec defines a single, secure, reusable way for apps to create their own logins
-without ever holding the master key and without waiting on a human.
+Canonical spec for the login-creation function. **The function’s source does not live in this repo.**
+On conflict, **§11 (red-team resolutions) wins**.
+
+One shared Supabase project hosts many apps as separate schemas (`v2`/C-Krea, `rutas`, `satelites`,
+`ric_systems`, `siesa_raw`, plus future apps). All apps share **one** `auth.users` login list.
+This is how an app creates logins without holding the master key.
 
 ---
 
