@@ -6,6 +6,18 @@ This file lives in `docs/history/`.
 
 ---
 
+## 2026-09-10 — Tenant stale-payments warning removed
+
+German: every tenant saw "Información de pagos desactualizada". ASAP — get rid of it, app should be working.
+
+Prod `MAX(siesa_synced_at)` on Z40 cartera = 2026-09-10 11:00 UTC (~1.6h) — feed is live. Local clone last push 2026-08-26 (~367h), so `isStale` was true for every tenant on `npm run dev`. The flag is global, not per-tenant.
+
+Removed the amber banner and the "Sin confirmar" card. Still hide mora/interés while `isStale` (live-date interest against frozen balances — the original July damage). Stopped caching `getSyncFreshness`: a time-derived boolean must not live in `unstable_cache` (persists across requests and deployments).
+
+Hotfix branch off `main` (`fix/remove-stale-payments-banner`). Same UI change is also on `feat/wor-295-portal-redesign` (`portal-dashboard.tsx`). Do not merge the redesign for this.
+
+---
+
 ## 2026-09-10 — Stop living docs contradicting the code
 
 Double scout (doc vs doc, doc vs code). Patched `context.md` PP window to match `isPpDateEligible` (day 0–10, no 11th-day rule) and mora due-date to the `factura+25` test. Schema comments no longer teach 0.05%/día, billed water, or juridica-as-retefuente. Isolation checklist labelled as a new-app template. Ckrea holds `service_role` server-side — said plainly. Code/UI 0.05% strings and ficha math stay WOR-316.

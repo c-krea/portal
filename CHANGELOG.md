@@ -4,6 +4,11 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 
 ## [Unreleased]
 
+### 2026-09-10 — Tenant portal no longer warns that payments are outdated
+
+#### Fixed
+- **Every tenant saw a yellow "Información de pagos desactualizada" box.** That notice was from the July freeze, when the accounting feed had stopped. The feed is pushing again. The box is gone. Account status is **Al Día** / **En Mora** again, not "Sin confirmar". Late-interest numbers still stay hidden if the feed actually dies.
+
 ### 2026-09-10 — One live money page
 
 #### Changed

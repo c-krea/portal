@@ -419,7 +419,7 @@ export type SyncFreshness = {
 }
 
 // Siesa pushes into siesa_raw on a daily (or multi-hour) cadence. Flag stale only
-// after 48h so a normal once-a-day push doesn't flash the banner. When true,
+// after 48h so a normal once-a-day push isn't treated as a freeze. When true,
 // cartera/recaudo are frozen while interest still counts against CURRENT_DATE —
 // a tenant who paid after the freeze would look overdue with a growing charge.
 // Portal hides mora/interés while stale.
@@ -615,7 +615,9 @@ export const getPortalPagosKpis = cached(getPortalPagosKpis_uncached, ["portal:p
 export const getPortalMedidorHistory = cached(getPortalMedidorHistory_uncached, ["portal:medidorHistory"], "portal")
 export const getPortalContratos = cached(getPortalContratos_uncached, ["portal:contratos"], "portal")
 export const getPortalCartera = cached(getPortalCartera_uncached, ["portal:cartera"], "portal")
-export const getSyncFreshness = cached(getSyncFreshness_uncached, ["portal:syncFreshness"], "portal")
+// Time-derived — do not cache. Caching `isStale` kept the tenant warning up
+// after Siesa had already resumed (and on any local clone older than 48h).
+export const getSyncFreshness = getSyncFreshness_uncached
 export const getPortalMedidorRef = cached(getPortalMedidorRef_uncached, ["portal:medidorRef"], "portal")
 export const getPortalMedidorStatus = cached(getPortalMedidorStatus_uncached, ["portal:medidorStatus"], "portal")
 export const getPortalElectricityInvoiceData = cached(getPortalElectricityInvoiceData_uncached, ["portal:elecInvoice"], "portal")

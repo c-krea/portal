@@ -8,7 +8,7 @@ import {
   getPortalElectricityPeriodos,
   getSyncFreshness,
 } from "@/lib/data/portal"
-import { formatCOP, formatDate, formatDateShort } from "@/lib/formatters"
+import { formatCOP, formatDate } from "@/lib/formatters"
 import { isPpDateEligible } from "@/lib/pronto-pago"
 import { isLecturaWindow } from "@/lib/periodo"
 import Link from "next/link"
@@ -125,27 +125,6 @@ export default async function PortalPage() {
   return (
     <div className="space-y-3">
 
-      {/* ── Stale ERP data banner — auto-clears when Siesa resumes pushing ── */}
-      {dataStale && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <div className="flex items-start gap-3">
-            <TriangleAlert className="h-5 w-5 shrink-0 text-amber-500 mt-0.5" />
-            <div className="flex-1">
-              <p className="font-semibold text-amber-800">
-                Información de pagos desactualizada
-              </p>
-              <p className="mt-1 text-sm text-amber-700">
-                Por una falla en la sincronización con nuestro sistema contable, los
-                pagos posteriores al{" "}
-                <strong>{formatDateShort(sync.lastPush!)}</strong> aún no se reflejan
-                en este portal. Si ya efectuó su pago, su saldo se actualizará
-                automáticamente al restablecerse el servicio.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── Mora alert banner — suppressed while ERP data is stale ── */}
       {showMora && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
@@ -204,34 +183,26 @@ export default async function PortalPage() {
 
       {/* ── Estado de Cuenta ── */}
       <div className={`rounded-xl border p-4 shadow-sm ${
-        dataStale ? "border-slate-200 bg-slate-50"
-        : enMora  ? "border-rose-200 bg-rose-50"
-        :           "border-emerald-100 bg-emerald-50"
+        enMora ? "border-rose-200 bg-rose-50" : "border-emerald-100 bg-emerald-50"
       }`}>
         <div className="flex items-center gap-2 mb-2">
-          {dataStale
-            ? <TriangleAlert className="h-4 w-4 text-slate-400" />
-            : enMora
-              ? <AlertCircle className="h-4 w-4 text-rose-400" />
-              : <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+          {enMora
+            ? <AlertCircle className="h-4 w-4 text-rose-400" />
+            : <CheckCircle2 className="h-4 w-4 text-emerald-500" />
           }
           <p className="text-sm font-semibold text-slate-500">
             Estado de Cuenta
           </p>
         </div>
         <p className={`font-black leading-none ${
-          dataStale ? "text-3xl text-slate-500"
-          : enMora  ? "text-4xl text-rose-600"
-          :           "text-4xl text-emerald-600"
+          enMora ? "text-4xl text-rose-600" : "text-4xl text-emerald-600"
         }`}>
-          {dataStale ? "Sin confirmar" : enMora ? "En Mora" : "Al Día"}
+          {enMora ? "En Mora" : "Al Día"}
         </p>
         <p className="mt-1 text-xs text-slate-400">
-          {dataStale
-            ? "Pendiente de actualización"
-            : enMora
-              ? `${maxDiasMora} días vencido`
-              : `${pagos.length} pago${pagos.length !== 1 ? "s" : ""} registrados`}
+          {enMora
+            ? `${maxDiasMora} días vencido`
+            : `${pagos.length} pago${pagos.length !== 1 ? "s" : ""} registrados`}
         </p>
       </div>
 
