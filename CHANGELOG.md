@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 2026-09-09 — Repo handoff cleanup
+
+#### Changed
+- README and `CLAUDE.md` / `AGENTS.md` rewritten as the front door for anyone taking over the repo.
+- Removed stale docs that contradicted the running app (old PRD, old recaudo filter spec, duplicate changelog, meeting dumps, dead Excel loader).
+- `docs/JOURNAL.md` kept as history, marked not-required-reading.
+
 ### Session 80 — 2026-08-26: Mora keeps last month's DIAN rate if this month is empty
 
 #### Fixed

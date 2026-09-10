@@ -1,5 +1,21 @@
 # C-Krea PayControl — Development Journal
 
+Historical session notes. **Not required reading.** Current rules live in `docs/context.md`
+and `docs/financial-rules-engine-spec.md`. What shipped is `CHANGELOG.md`.
+
+---
+
+## 2026-09-09 — Repo handoff cleanup
+
+Ownership is moving from a single maintainer to the business. Stale and dangerous docs
+were removed from git (old PRD that said the portal writes money back to Siesa; recaudo
+filter spec that still queried `public.payments` and taught the wrong dedup; duplicate
+changelog; meeting HTML; dead Excel loader). Local Archive / Excel / DB dumps trashed —
+that data is already in the app. This journal is kept as history.
+
+README and `CLAUDE.md` rewritten as the front door. Branch: `chore/handoff-cleanup`,
+separate worktree from `main`. Does not touch the WOR-295 redesign.
+
 ---
 
 ## Session 80 — 2026-08-26: Mora uses last month's DIAN rate if this month is empty

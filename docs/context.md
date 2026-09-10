@@ -11,19 +11,17 @@ This holds only what the code **cannot** tell you: the business, the money rules
 the ERP relationship. It deliberately states **nothing countable** — no table counts, no route
 lists, no rates that change yearly.
 
-Until 2026-08-20 it did, and it had gone wrong in the way that matters most: it stated late interest
-as **"0.05%/day from day 11"**. That is not what the code does and has not been for months (see
-Money rules below). A doc that misstates a money rule is worse than no doc.
+A doc that misstates a money rule is worse than no doc. If a number can go stale, it does not belong here.
 
 | To find | Look at |
 |---|---|
 | Tables, columns, RPCs, RLS | `docs/db-schema-reference.md` and `docs/schema/` — or query the live DB. **Not** `supabase/migrations/`: it holds one file, because this schema was applied directly to the database. |
 | The money rules as implemented | `docs/financial-rules-engine-spec.md` and `src/lib/data/mora.ts` |
+| Recaudo filters | `v2.vista_pagos` in `docs/schema/02_vistas.sql` |
 | Routes | `src/app/` |
 | Cron jobs and their schedules | `vercel.json` and `src/app/api/cron/` |
 | What shipped, when | `CHANGELOG.md` |
-| Why a decision was made, and what broke | `docs/JOURNAL.md` |
-| Current phase, branches, blockers | `memory/project_state.md` |
+| Why a decision was made, and what broke | `docs/JOURNAL.md` (history, not onboarding) |
 
 ---
 
@@ -86,9 +84,11 @@ payment time** — never deducted in a projection or an invoice. Do not trust th
 once as a `documentos` row of `tipo='Descuentos'` (`RK-`/`CN-` prefix) at closing. Any query over
 `vista_facturas` that does not filter these double-counts.
 
-**`siesa_clasificacion` must never be used** for classifying payments. Four specific filters are
-correct instead — they are written down in the `recaudo_data_model` memory note and
-`docs/audits/recaudo-cartera-audit.md`.
+**`siesa_clasificacion` / `clasificacion` must never be used** for classifying payments.
+The four recaudo filters live in `v2.vista_pagos` (`docs/schema/02_vistas.sql`): zone `Z40`,
+`cruce LIKE 'FVS-%'`, `valor_final < 1_000_000_000`, and dedup by `row_id_mov`.
+Do not dedup by invoice+date — that collapsed real partial payments.
+Read payments through that view.
 
 **Identity is the NIT**, and it lives in `cartera.documento` / `documentos.doc`. The `cliente`
 column is a razón social, not an identifier. `tipo_persona` ('PJ'/'PN') drives retefuente; `juridica`
@@ -119,7 +119,7 @@ means legal collections. They are unrelated and must not be conflated.
   user sees "Error al cargar", not a 404. The Supabase MCP has no such timeout, so a query can look
   healthy in testing and fail in production.
 - **The free tier blocks direct port 5432** — local tools must use the pooler host.
-- **Commits must be authored `gburgos293@gmail.com`** or Vercel blocks the production deploy.
+- **Production deploys currently require git author `gburgos293@gmail.com`** or Vercel blocks them. Change that in Vercel when ownership moves.
 
 ## Shared-infrastructure reality
 

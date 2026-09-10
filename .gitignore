@@ -43,14 +43,16 @@ next-env.d.ts
 # Sentry Config File
 .env.sentry-build-plugin
 
-# Generated / local-only
-graphify-out/
+# Spreadsheets and local dumps — data lives in the app, do not commit
 /data/
 *.xlsx
 ~$*.xlsx
-sentry-wizard-installation-error-*.log
+*.xlsm
 Archive (DONT OPEN)/
+docs/backups/
 docs/audits/INSIGHTS_v1.md
+sentry-wizard-installation-error-*.log
+graphify-out/
 
 # Local-only tooling + DB backups
 .claude/

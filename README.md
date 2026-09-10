@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# C-Krea PayControl
 
-## Getting Started
+Payment control for ~85 commercial units at Central Kreativa, Bogotá.
 
-First, run the development server:
+Live: [ckrea.com.co](https://ckrea.com.co)
+
+Single source of truth for tenant rent, invoices, shared expenses, electricity, and late interest. Money numbers come from the Siesa ERP. **This portal reads them. It does not write money back.**
+
+## Safety
+
+This app uses a **live database with real client money**, shared with other company apps. A bad write hits them too.
+
+- Never test, seed, or experiment on production.
+- Use the local Docker copy for all development.
+- `npm run dev` (without `:test`) can point at production if `.env.local` does. Prefer `dev:test`.
+
+## Run locally
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run db:start      # local database on port 54622
+npm run db:sync       # copy Ckrea data from prod (read-only)
+npm run dev:test      # app at http://localhost:3000 — refuses anything that is not local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Studio: http://127.0.0.1:54623
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`db:sync` does not copy logins. Create a local staff user (see `CLAUDE.md`). Production passwords will not work here.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Docs that matter
 
-## Learn More
+| Need | File |
+|---|---|
+| Business, ERP, landmines | `docs/context.md` |
+| Financial math | `docs/financial-rules-engine-spec.md` |
+| Tables / views | `docs/schema/` and `docs/db-schema-reference.md` |
+| Project facts (humans and AI) | `CLAUDE.md` |
+| What shipped | `CHANGELOG.md` |
+| Why a decision was made | `docs/JOURNAL.md` (history, not onboarding) |
 
-To learn more about Next.js, take a look at the following resources:
+## Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Next.js 16 · TypeScript · Supabase · Drizzle · Tailwind v4 · Vercel
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deploy
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Vercel auto-deploys `main`. Production git author must currently be `gburgos293@gmail.com` or the deploy is blocked — change that in Vercel when ownership moves.
