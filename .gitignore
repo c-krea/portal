@@ -67,3 +67,6 @@ supabase/.env
 
 # IT (Reymon) Siesa integration — separate GitLab repo cloned here, has its own .env
 integracion_supabase/
+
+# Scout reports (find-only working notes, not repo history)
+.claude/scouts/

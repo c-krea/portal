@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { runInterestAccrual } from "@/lib/interest-engine"
+import { upsertMoraSnapshot } from "@/lib/data/mora"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
@@ -23,6 +24,11 @@ export async function GET(request: Request) {
     const empresaId = await getEmpresaCkreaId()
     const today = new Date().toISOString().slice(0, 10)
     const result = await runInterestAccrual(empresaId, today)
+    try {
+      await upsertMoraSnapshot(empresaId)
+    } catch (e) {
+      console.error("[cron/accrual] mora snapshot", e)
+    }
 
     return NextResponse.json({ success: true, date: today, results: [{ companyId: empresaId, ...result }] })
   } catch (e) {

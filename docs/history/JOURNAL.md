@@ -56,6 +56,582 @@ separate worktree from `main`. Does not touch the WOR-295 redesign.
 
 ---
 
+## Session 88 — 2026-09-11/12: WOR-295 finished, then the mora rule turned out to be seven rules (WOR-315, 321, 322, 323)
+
+**WOR-295 is complete at 10/10.** WOR-315 closed it. Two of its four success criteria were
+already met — Resumen lost its year KPIs back in WOR-306 — which is worth remembering as a
+pattern: check the criteria against the code before building, not after.
+
+### What shipped
+
+- **WOR-315** — /proyecciones was the last page on the pre-redesign language. Restyled, both
+  detail tables paged at 25, anual hero cut from 7 cards to 4. The old "Recaudo esperado" card
+  printed the *same number* as "Esperado" — the same figure twice on one screen.
+- **WOR-321** — the /mora trend chart could only ever draw **two points** (`LIMIT 2` on a
+  snapshot table a cron started filling weeks ago). Replaced with a 21-month reconstruction.
+- **WOR-322** — Resumen's recaudo split moved off the calendar month onto each invoice's own
+  30-day term.
+- **WOR-323** (built, not committed) — one mora rule.
+
+### The three findings worth keeping
+
+**1. Invoice-month vs cash-arrival month.** A bar chart keyed to when cash *arrived* lets a bad
+month hide behind late payments landing inside it. Keyed to the *invoice* month, a short bar is
+a real story. Corollary found while building it: never bound such a series by payment date —
+2025's invoices took **$80,010,282** of their cash during 2026, so a year-bounded query
+permanently understates Nov/Dec.
+
+**2. `vista_pagos.dias_mora_al_pago` is a trap.** It is the obvious field, it is named exactly
+right, and it counts from the *raw ERP* `fecha_vencimiento`. Using it overstates 2026 mora
+collections by **$153,428,496** across 121 payments that were on time under the real 30-day
+term. Lateness comes from `moraVencEfecExpr`, never from that column.
+
+**3. The ERP's due date cannot be used at all.** `cond_pago` is "CREDITO A 10 DIAS" for *every*
+tenant — contradicting the day-31 interest rule — and the same condition emits terms from 0 to
+30 days. Six open invoices still carry 10-day dates, one issued 2026-09-02, so this is ongoing,
+not legacy. Due date is computed: `fecha_factura + 30`, flat, no heuristic. Proven inert at the
+time of the change (99,501,113 both ways).
+
+### Mora had seven definitions
+
+A scout found **seven** independent definitions of "en mora" in `src/`; five read the raw ERP
+date. The canonical one, `moraEnMoraBaseSql`, was **module-private** — nobody outside `mora.ts`
+could import it. The copies were not laziness; they were the only option. Exporting it is the
+fix that stops the next copy.
+
+Two consequences the pages were showing:
+
+- `/locales` said 6, `/mora` said 10. `/locales` tested `dias_mora > grace_period_days(30)`, but
+  `dias_mora` already counts *from* the due date — a **double grace**, demanding ~60 days from
+  invoice. And its KPI counted only `status === 'en_mora'` while the CASE routed anything past 60
+  days to `'critico'`, so the **worst debtors were excluded from the count**.
+- `es_juridica` conflated "a person marked this tenant as legal collections" with "no contract row
+  exists". PUNTO ACRILICO — never marked anything, 0 contratos, **$4,818,675, 952 days overdue** —
+  was invisible on every mora screen because of a missing row. Now flag-only: it shows, and
+  PEDRAZA RIVEROS (actually marked) is the only tenant in the jurídica table.
+
+**Decision recorded:** `grace_period_days` is retired from every mora decision. Its only remaining
+job is the amber "Gracia" display chip on Pagos. A grace applied to a due date that already
+contains the 30 days is exactly what produced 6 instead of 10.
+
+### The one that reached clients
+
+`portal-dashboard.tsx` and the push notification told tenants **"0,05%/día"** — the superseded
+pre-DIAN rate — while billing **0,0756%** (27,68% E.A. ÷ 366). Quoted one rate, charged ~50% more.
+Now the portal computes the live rate from `v2.tasa_interes_mora` and the notification carries no
+number at all, so it cannot go stale again.
+
+### Numbers that move when this ships
+
+- Reportes "vencido": **37,467,795 → 92,240,457.** The difference is exactly **54,773,262**,
+  August's past-due stock, which the double grace was hiding.
+- `/mora` principal: 87,421,782 / 10 → **92,240,457 / 11**.
+- `/locales` will show **10** while `/mora` shows **11**. Not a regression: Punto Acrílico has no
+  contract, so no local to appear on. An InfoTip on that KPI now says so.
+
+### Method note
+
+Two-sided proof again earned its keep. The WOR-321 series was verified by writing the query a
+second, structurally different way (correlated day-grain vs set-based month-grain) and
+**hash-comparing the output** — identical for all 21 months. And a defect the Executor's own
+green proofs could not catch (the year-bounded payment filter) was found by reading the SQL, not
+the report.
+
+**Still open:** what PUNTO ACRILICO actually is — legal, collectable, or a write-off. It has had
+no status at all, which is why it stayed hidden.
+
+---
+
+## Session 87 — 2026-09-11: Two dead money knobs found and wired (WOR-319, WOR-320, WOR-314)
+
+**Shipped:** `67d0718`, `b1f5c8a`, `ff0fa8b`. 9/10 of WOR-295. Nothing applied to prod.
+
+### The session's real finding: a settings page can lie
+WOR-314 was supposed to be cosmetic — plain Spanish, hide the cron card. Checking the
+premise before building turned up three separate untruths on one page:
+
+1. **`interes_mora_diario` was not stale, it was still billing.** The ticket said "hide
+   or mark unused". It was in fact read live by `getTenantCartera` — the staff tenant
+   file — at the superseded flat 0.000667/day, disagreeing with /mora three ways at once:
+   rate, base (`saldo` vs `vr_vencido`) and days (`dias_financia-30` vs DIAN). Measured on
+   the local clone across 31 overdue invoices: **\$5.469.303 shown vs \$6.276.673 correct,
+   ~15% low**, worst single invoice off by \$306.900. Hiding the knob while that code still
+   read it would have produced a *hidden* knob that still moved money. → WOR-319.
+2. **`iva_rate` was read by nothing.** 19% was hardcoded in 21 places. Staff could set IVA
+   to 16, get a green ✓, and every invoice still charged 19%.
+3. **`pp_window_days` was read by nothing.** The 10-day window lived in `pronto-pago.ts`.
+
+Only `grace_period_days` and `ipc_increment_pct` were ever real. **Half the page was
+decorative, and the ticket was about to make it look more trustworthy.**
+
+### Lesson worth keeping
+A control that does nothing is worse than a missing control, and *polish makes it worse
+still* — it adds credibility to a lie. Before making a settings page prettier, grep every
+knob for a consumer. "Does this knob do anything?" is a one-minute check that changed the
+shape of three tickets.
+
+Corollary, learned twice this session: **deleting or hiding a control does not delete what
+reads it.** Check the consumers, not the UI.
+
+### One definition, three call sites
+WOR-319 found the DIAN formula existed in *three* places — mora.ts, tenant-detail.ts, and
+`portal.ts` (the tenant-facing portal). The Executor stopped and asked rather than
+half-doing it; portal.ts turned out mathematically identical but was still a private copy,
+which is precisely how the other two drifted. All three now build on shared SQL fragments
+in mora.ts. Same precedent as `moraEnMoraBaseSql` (WOR-310) — this repo has now learned the
+identical lesson twice.
+
+### Wiring a live rate means guarding the write path
+Once IVA actually drove invoices, the unguarded save form became a real risk: `190` instead
+of `19` would have followed straight through to every bill.
+
+- **Confirmation ≠ validation.** A confirmation stops carelessness; it cannot stop a typo
+  the user believes in. Both, or neither is enough.
+- German asked for a "triple check". Implemented as **three DISTINCT acknowledgements** —
+  before/after rate, scope, and a *computed* worked example — not three identical prompts.
+  Three identical "¿Está seguro?" dialogs train click-through and are worse than one.
+- A no-op save skips the dialog entirely. Confirming a non-change is the same training.
+- **Allow-list, not default-allow.** The bounds were per-key, so an unknown id — including
+  the hidden dead mora row — fell through unbounded. Caught on Planner review.
+
+### Proof discipline that paid off
+Every money change carried a two-sided proof: at today's stored values every affected query
+must be **byte-identical** (this is wiring, not new math), AND changing the stored value
+must move the number. Only the pair proves it. The byte-identical half caught nothing —
+which is the point; it is what makes the other half trustworthy.
+
+Local Docker throughout. The Executor set local IVA to 0.16 for the knob proof; the Planner
+verified the restore before reading the report, not after.
+
+## Session 86 — 2026-09-10: Usuarios polished (WOR-313, 8/10 of WOR-295) + visit recording (WOR-318)
+
+**Shipped:** `dacadf7` (usuarios polish), `2ed47c4` (visit recording). `v2.portal_visitas_diarias` applied to **production**.
+
+### The chart went donut -> bars, and the reason is the data
+The page opened with a donut splitting tenants three ways. German asked whether usage
+*over time* would be more insightful. Premise check said no -- and that "no" was the most
+valuable thing in the session:
+
+**`auth.users.last_sign_in_at` is one timestamp per user, overwritten on every login.**
+There is no login history anywhere. A trend chart built on it would be a lie -- last
+month's bar shrinks every time someone logs in again, because their old visit is erased.
+
+So the work split in two:
+- **Now (WOR-313):** a bar chart of the honest snapshot, bucketed by login recency
+  (Este mes / Mes pasado / Mas de 2 meses / Nunca). Bars beat the donut because the
+  useful question is how *cold* the inactive ones are. `Este mes` is literally the same
+  variable as the Activos KPI beside it, so the two can never disagree.
+- **Later (WOR-318):** record the history, starting today.
+
+### Gotcha: a broken donut that was really a broken local DB
+The donut rendered corrupted on localhost. Cause was not the chart: `db:sync` never
+clones the auth schema, so nearly every tenant reads as "never signed in" -> two of three
+slices were 0, and zero-value slices next to `paddingAngle` corrupt recharts. `/gastos`
+already guards this with `.filter(d => d.value > 0)`; this one did not.
+**Any new donut in this repo needs that filter.** Moot for /usuarios now it is bars.
+
+Second-order lesson, and the more general one: *a visual bug on localhost may be a
+missing-local-data bug.* Check what the local DB actually holds before debugging the
+component.
+
+### WOR-318 -- recording, deliberately without the chart
+`v2.portal_visitas_diarias`: one row per tenant per **America/Bogota** day, append-only,
+`UNIQUE (auth_user_id, dia)` with `ON CONFLICT DO NOTHING`, RLS on with no policies
+(service_role only, same shape as `mora_snapshots_mensuales`).
+
+Two decisions worth keeping:
+- **Daily grain, not per-page-view.** 40 page hits in a day leave one row. Volume stays
+  trivial forever and the data answers the only question being asked.
+- **`(now() AT TIME ZONE 'America/Bogota')::date`, never UTC `CURRENT_DATE`.** UTC rolls
+  the day ~5h early, which would have skewed every future bucket. Proven: a run at
+  03:49 UTC 2026-09-11 recorded `2026-09-10`.
+
+The write sits at the `(portal)` layout's existing auth choke point and catches
+everything: **failed telemetry logs, it never breaks a tenant's portal.** Staff
+"Ver portal" previews use `(portal-preview)` and correctly record nothing -- otherwise
+looking at a tenant's page would have faked a visit for them.
+
+**Applied to prod by psql, not MCP.** The Supabase MCP still returns Unauthorized; the
+psql/`DATABASE_URL` fallback is now the standing path, not a workaround to re-test each
+session. Additive only: one new empty table, no existing table, row or schema touched.
+
+**Still not collecting.** The table is live but the writing code is on the feature
+branch. Nothing accumulates until WOR-295 deploys -- worth remembering when the trend
+chart eventually shows a start date later than expected.
+
+### Process
+Three handoffs, three panes, each closed after judging. Two defects caught on review
+that the Executor's own report would not have surfaced: the duplicate rose fill (my
+spec's fault -- I named one colour for two buckets) and the bucket labels needing to stay
+honest about their boundaries. The pattern holds: **the Executor is good at what you
+asked for; the Planner's job is noticing what you asked for was wrong.**
+
+## Session 85 — 2026-09-11: Medidores polished (WOR-312, 7/10 of WOR-295)
+
+**The mock got rejected in the right direction.** Built the usual Artifact mock first — a full
+Rutas-density rework of `/medidores` (restyled KPI cards, tighter table). German's answer: *"this
+one we dont have to alter anything big, lets use the one already live."* The page's content and
+density were already fine; what bothered him was **placement and wording**, which a density mock
+doesn't address. Worth remembering for the remaining sub-issues: the mock-first rule exists to
+settle *design*, and when a page is already close, showing a redesign invites a "no" that costs a
+round trip. Ask what's wrong with the live page before mocking a replacement for it.
+
+**What actually shipped** (bcc276d): "Facturas de Energía" → **"Ingreso Facturas"**; the Año/Mes
+two-select row replaced by one period dropdown sitting beside the page title; **Exportar Excel
+moved up next to Ingreso Facturas** in the header. The export button and the year/month tab rows
+were deleted from `/medidores/facturas` — they were a second copy of controls that now live on the
+parent page. The unit table paginates like `pagos-table.tsx` (Filas 25/50/100), replacing an
+all-85-rows render. `periodo-dropdown` moved from `components/gastos/` to `components/layout/`
+with a `basePath` prop; Gastos and Medidores now share it.
+
+**Two things I added on review that weren't in the handoff.** The Executor did exactly what was
+asked, and exactly what was asked was slightly wrong in two places:
+- Removing the tab rows left `/medidores/facturas` with **no month shown anywhere on the page**.
+  It's a form for typing real invoice amounts; nothing on screen said which month they'd land in.
+  Put the period back into the title. Deleting a control also deletes whatever *state* that
+  control was displaying — check what the removal took with it, not just whether it's gone.
+- The paginated footer merged old and new copy into "de 85 de 85 unidades". Cheap to miss in a
+  diff, visible to the user on every load.
+
+**Deliberately not paginated: the invoice-entry form.** There are only 6 fixed electricity groups
+(`ELECTRICITY_GROUPS`), so it never needed it — but the real reason to write it down is that
+paginating it would have been a **silent money bug**. `saveFacturasEnergia` reads
+`formData.get(\`valor_${group}\`)` for every group at submit time; a native form only submits
+inputs actually mounted in the DOM, so any row paged out of view would come back `null` → `0` →
+treated as unfilled, wiping that building's invoice. Flagged it in the handoff as off-limits
+rather than discovering it later. Any future "let's paginate/virtualize this table" on a form-backed
+table deserves the same check.
+
+---
+
+## Session 84 — 2026-09-10: Gastos rebuilt (WOR-311, 6/10 of WOR-295) + a real money bug (WOR-317)
+
+**WOR-311: Gastos rebuilt to mirror Mora's layout.** Same Mora-copy request as WOR-310, but Gastos
+already had full monthly history in `siesa_raw.estado_resultados` — no new snapshot table/cron
+needed, unlike Mora. Landed as: 2 KPI hero cards (mes actual, total mensual promedio) with
+InfoTip-only explanations; a Tendencia line chart (5 months) + Distribución donut (same geometry as
+Resumen's `OrigenChart`) side by side; a flat expense table (one row per line item, Categoría
+column) replacing the old grouped-category table + click-to-expand detail panel.
+
+**The Año/Mes selector was dead — real bug, not UI polish.** Root cause, found by the Executor:
+Siesa posts the ERP's year-end closing as **period 13** (e.g. `2025-13`). The old year-picker
+sorted months as text, so "13" always won as "latest," but the page only accepts calendar months
+01–12 — so picking a past year always silently snapped back to the current month. Fixed by
+replacing the two `<select>`s with a single scrollable period dropdown that only ever lists real
+01–12 periods, so the failure mode can't recur structurally.
+
+**Chasing that bug surfaced a much bigger one: WOR-317, income accounts leaking into every gasto
+total.** While explaining what "period 13" actually contains, a read-only prod query showed most of
+its rows were large *negative* amounts in the same categories as regular months — looked at first
+like a year-end closing/reversal entry that nets to zero. It doesn't: there's no Jan–Dec 2025 data
+for this cost center to net against at all. The real explanation: `gastos.ts`'s queries filtered
+only by `ccosto = '285'`, with no restriction on account type (PUC: `5` = gastos, `4` = ingresos).
+Account `42201006` "Locales" (rent income) and `42201090` "Descuentos Financieros" were both
+landing in the `otros` catch-all — Sep 2026 real categorized gastos totalled ~$11.4M, but the page
+reported **-$196M** net for `otros` alone, dominated by -$202M of rent income summed in as if it
+were an expense. Not limited to period 13 — present in every regular month checked.
+
+Opened as its own ticket (WOR-317, not folded into WOR-311's layout-only scope) since it's a money
+bug, not a redesign. German approved an independent Executor investigation + fix: `LEFT(cuenta, 1)
+= '5'` added to all 8 `WHERE ccosto = '285'` sites in the file. The Executor's full-range scan (all
+10 periods with data, not a sample) found a *third* leaking account (`42750502` Devoluciones en
+Arrendamiento, $51,756, immaterial) beyond the two already found — exactly why "scan the whole
+range, don't blacklist the two you found" was the instruction. Real effect: Sep 2026 flipped from
+-$184.7M (wrong) to +$14.2M (correct); Jul/Aug similarly flip from large negatives to tens of
+millions — a plausible real monthly gasto for the building. Read this diff personally (money path)
+on top of the Executor's own fresh-eyes review.
+
+**Local test DB had two separate rot problems this session, both self-inflicted by earlier `db:sync`
+runs:**
+1. `siesa_raw.estado_resultados` is deliberately excluded from `npm run db:sync` (189MB, drops the
+   pooler's SSL on a long COPY — see `scripts/test-db-sync.sh`'s own comment, written before Gastos
+   read this table). Worked around with a *scoped* pull: `\copy` just `ccosto='285'` rows (1,844,
+   trivial) from prod to local — same safe read-only principle as `db:sync`, just narrower. Worth
+   fixing the sync script for real if another session hits this.
+2. `db:sync`'s schema reload drops and recreates `v2.perfiles` (cascade), which silently deletes the
+   local-only `dev-local@ckrea.test` test login's profile row even though its `auth.users` row
+   survives. Symptom: login form resets with no visible error. Fixed by recreating both the
+   `auth.users` entry (GoTrue admin API) and the `v2.perfiles` row from scratch, then verified via
+   the GoTrue token endpoint directly (not just clicking the form) before handing it back.
+
+**A real Next.js dev-cache trap:** after loading fresh local data, the page kept showing $0 even
+after killing the dev server, clearing `.next/cache`, and restarting. Root cause: some deeper
+Turbopack-managed cache survives a `.next/cache`-only wipe. Fix that actually worked: `rm -rf .next`
+(the whole build directory, not just `cache/`) before restarting. Confirmed the data layer itself
+was correct throughout by calling the app's `exec_sql` RPC directly via curl, matching page.tsx's
+exact query text — isolated "is it the DB or is it Next.js" before touching anything else.
+
+**Layout iteration, several rounds — worth remembering the actual lesson, not just the final
+state.** German's asks moved through: hide filters → make the page non-scrollable → (overshot:
+shrank everything, left a dead gap below short content) → make the table's card actually fill its
+given height (`h-full` on a native `<table>` distributes leftover height across `<tr>`s — a genuine,
+underused CSS trick, no JS needed) → grow KPIs/charts back up, table takes less → (overshot again:
+proportional flex-grow ratios on the chart row combined with the trend chart's `height="100%"` let
+it balloon and push everything else off-screen) → **reset to fixed, bounded heights instead of
+flex-grow ratios** (chart row: `h-[300px]`, not `flex-[3]`) → "no page 2, all rows must fit" → a
+native `<table>` can't compress row height below content's natural minimum for arbitrary row counts,
+so the expense table was rewritten from `<table>` to a CSS grid (`display: contents` row wrappers,
+`grid-template-rows: repeat(N, minmax(0, 1fr))`) so N rows always divide whatever height the card
+has, however many there are, with no pagination and no scroll. The pattern worth keepin: **flex-grow
+ratios are unpredictable without seeing the real render; fixed/bounded dimensions are what "reset to
+something that works" actually means when live-iterating blind** (German asked not to use
+claude-in-chrome partway through — subsequent changes were made and reasoned about from principles,
+not verified pixel-by-pixel before handing back, which is exactly why the ratio approach overshot
+twice before landing on fixed heights).
+
+Both closed via the two-commit pattern (UI in one commit, the money fix isolated in its own) —
+`4b7521b` (WOR-311 initial build), `3b8b62b` (WOR-317 fix), `c3d936e` (WOR-311 live-polish rounds).
+
+---
+
+## Session 83 — 2026-09-10: Mora tightened + first-ever mora history (WOR-310, 5/10 of WOR-295)
+
+**WOR-310: Gestión de Mora polish, "who to call."** Same Artifact-mock-first process, several
+rounds of live iteration (4 KPIs → 2, three-bucket row → a donut, added and then removed a
+teléfono/click-to-call column, trend chart cut from 9 months to 3). Landed as: 2 full-width hero
+KPI cards (Total en Mora, Total Clientes Mora) with `InfoTip` hovers instead of static captions; a
+chart row with a trend line next to a donut, both styled to match Resumen's `SemanalChart`/
+`OrigenChart` exactly; tables and the DIAN rate box untouched.
+
+**No historical mora data existed anywhere — this is genuinely new.** `siesa_raw.cartera` only
+ever holds today's live snapshot (paid invoices vanish from it immediately), so "is mora trending
+down" had no data source at all. Added `v2.mora_snapshots_mensuales` (new migration, second file
+ever in `supabase/migrations/` — see the corrected note in AGENTS.md, the "exactly one file"
+claim was stale), upserted daily by the existing accrual cron. Chart shows up to 2 frozen closed
+months plus one **live** point for the current month — sourced from the same `summary` object the
+KPI card already renders, not from the once-daily snapshot, so it moves in step with "Total en
+Mora" instead of lagging up to a day behind. A single point (month 1, nothing closed yet) now
+renders as a real dot instead of a "not enough history" placeholder — the placeholder only fires
+on truly zero data.
+
+**Independent audit caught a real bug before prod, not busywork.** German explicitly asked for a
+second Executor with no memory of building this to review the infra, given it's money-adjacent.
+It found: the "who counts as en mora" population (jurídica exclusion, overdue-invoice filter) had
+been copy-pasted verbatim into both `getMoraData` and the new snapshot writer — correct today,
+but the kind of duplication that silently drifts the next time someone edits the rule in only one
+place. Also flagged: the table was missing `empresa_id` (project's own "every table carries
+company scoping, mandatory from day 1" rule), the migration wasn't re-runnable, and the snapshot
+write never busted its own cache tag. Fixed all four in one pass — `moraEnMoraBaseSql(empresaId)`
+is now the single source of the population rule (documented in AGENTS.md so it doesn't happen
+again), table got `empresa_id` in a composite PK, migration got `IF NOT EXISTS`, write now busts
+`"mora"`. Verified byte-identical numbers (11 clientes / $66,419,291) before and after the fix —
+this was a dedup, not a redefinition.
+
+**Migration applied to prod this session, with German's explicit yes on the exact DDL shown
+first.** The generic Supabase MCP tools (`supabase`, `supabase-ro`) both failed with the same
+"Unauthorized" in this environment — not a credentials problem (the project's `.env.local` token
+is real and correctly scoped), just this session's MCP connection not routing through the
+project's own wrapper script. Fell back to `psql` directly against `DATABASE_URL` from
+`.env.local` — confirmed the connection string's project ref matched `SUPABASE_PROJECT_REF`
+before running anything. Table is live and empty on prod now; the code that writes to it
+(`upsertMoraSnapshot` in the accrual cron) is still only on `feat/wor-295-portal-redesign`, so
+prod won't actually see data until WOR-295 ships as a whole — noted this sequencing to German so
+it isn't a surprise.
+
+**Showing localhost safely.** German asked to preview on `localhost:3000` — a dev server was
+already running, started outside this session, with no way to tell from the process list alone
+whether it pointed at local or prod. Verified by logging in through the browser with the
+local-Docker-only test account (`dev-local@ckrea.test`) rather than assuming from uptime/uneven
+signals — success proved local, since that account cannot exist anywhere else. Cheap, certain,
+no prod risk.
+
+---
+
+## Session 82 — 2026-09-10: Locales restyle + Ver portal (WOR-308/309, 4/10 of WOR-295)
+
+**WOR-308: Locales restyled to the Pagos table pattern.** Same Artifact-mock-first process, one
+round of iteration before handoff. German's asks, in order: real filtering he could actually see
+data through (not the old tab bar), then — once the mock showed it — reshaped the KPI row three
+times live: first cut down Vacantes/Por vencer in favor of Al Día/En Mora counts with Ya salieron
+dropped from this page entirely; then asked for all 4 as equal cards instead of two as corner
+pills; then reordered to Al Día → En Mora → Canon Mensual Neto → Ocupación, added a percentage to
+each count (denominator = the same active-rows population Ocupación's own percentage uses), moved
+Canon's "sin IVA" note behind an `InfoTip` hover instead of a permanent subtitle line, dropped
+Ocupación's progress bar down to just a percentage, and renamed the two count cards "Locales Al
+Día" / "Locales En Mora". Shipped: `clientes-table.tsx` rebuilt on `pagos-table.tsx`'s pattern
+(floating single-open Estado + Entrada panels, ring-pill status, matching pagination footer) —
+Estado went from a URL-driven single-select tab bar to a client-side multi-select, same "empty =
+show all" rule as Pagos. Commits `07c079d`, `b01368e`, `883a492`. Linear: Done.
+
+**WOR-309: "Ver portal" — read-only staff preview of a tenant's actual portal.** Ticket explicitly
+money-path (preview must show the tenant's real figures, not a second formula). The mechanism:
+`getPortalProfileByTenantId` in `src/lib/data/portal.ts`, the *same* SELECT list as the existing
+`getPortalProfile(userId)`, keyed by `v2.inquilinos.id` instead of the login's `v2.perfiles` row —
+verified field-for-field identical against a real local-test-DB tenant (MORALES CLAVIJO, 2 units)
+before shipping. The real `/portal/page.tsx` body was extracted byte-identical into
+`PortalDashboard({ profile, readOnly })`; in `readOnly` mode the Wompi pay button and the medidor
+"Enviar ahora" CTA are **omitted from the DOM**, not just disabled. New staff route at
+`/locales/[id]/portal`, gated by `requireStaff()`. Commit `6cd58b9`.
+
+Caught in review, not in the original brief: the energy-invoice download button silently broke in
+preview, because its server action resolved "which tenant" from the *viewer's own login*
+(`getAuthUser()` → `getPortalProfile(user.id)`), which is `null` for staff. Fixed in the same pass
+— `fetchElectricityInvoiceForDownload` takes an optional `previewTenantId`, authorized via the
+existing `requireStaffAction()` pattern and scoped to the previewed tenant's own `allUnitIds` with
+the same ownership check the tenant path already had.
+
+German's next two asks were both direct polish on the shipped page, no new mock: (1) collapse the
+two-bar banner ("Estás viendo a…" + a separate amber read-only strip) into one dark bar reading
+"Vista previa" with an `InfoTip` hover carrying both facts — `a6b4606`. (2) The preview was
+rendering inside the staff admin shell (left sidebar still visible) — wrong, it should feel like
+actually being logged in as the tenant, full page, plus the tenant's own header and bottom nav, not
+just the dashboard card. Root cause: the page lived physically inside the `(app)` route group,
+whose layout unconditionally wraps every route in `<Sidebar>` — no per-route opt-out from inside
+the same group. Fix: relocated the page into a new sibling route group, `(portal-preview)`, same
+URL (route groups add no URL segments — confirmed `[id]` used independently across two top-level
+groups for an overlapping `/locales/[id]…` prefix builds cleanly, checked before touching anything
+else). Rebuilt the chrome: unchanged Vista previa banner, a *static* replica of the tenant header
+(non-interactive profile icon tile — never the real `PortalProfileDropdown`, which can trigger the
+tenant's own `signOut()`/notification toggle), and a *static, link-free* replica of
+`PortalBottomNav` (Inicio shown active; the other 3 tabs point at `requireInquilino()`-gated
+routes that would bounce a staff viewer, so they're visual-only for now). Commit `3ba3285`. Asked
+afterward whether Medidor/Pagos/Perfil should get the same preview treatment — same mechanism,
+fully buildable — German said leave it for later. Linear: Done, both comments note this.
+
+**Cross-agent collision, second instance — this one resolved cleanly.** Mid-task, `git diff`
+showed unstaged edits to `portal-dashboard.tsx` and `src/lib/data/portal.ts` (deleting the tenant
+portal's stale-ERP-data banner, de-caching `getSyncFreshness`) that neither this session nor its
+Executor pane had made. Turned out to be German's own emergency fix, running in a **separate chat
+session sharing this same working directory** — he confirmed and said he'd commit it himself
+(landed as `9792a66`, on this branch since the folder happens to be checked out on
+`feat/wor-295-portal-redesign`, flagged to him so he could redirect it to `main` if that's not what
+he wanted). Handled by never touching those two files and staging only-by-explicit-path for every
+commit this session made — `git status` confirmed the foreign edits were gone (the other session
+had already committed) before this session's own commit landed, so nothing needed reverting. Same
+underlying hazard as the WOR-306 grok-pane incident, opposite direction (there: another agent
+discarded *this* session's edit; here: this session almost swept up *another* session's edit) —
+the fix both times is the same discipline: check `git status`/diff --stat before trusting what's
+about to be committed, stage by explicit path, never `git add -A`.
+
+**State at compact.** Branch `feat/wor-295-portal-redesign`, tree clean, `3ba3285` HEAD. WOR-306
+through WOR-309 (4/10 of WOR-295) shipped and Done in Linear. Next: WOR-310 — Polish Mora ("who to
+call"), same design-mock-first pattern for a new sub-issue.
+
+---
+
+## Session 81 — 2026-09-09: Resumen rebuilt as this-month dashboard (WOR-306, 1/10 of WOR-295)
+
+**Trigger.** German kicked off WOR-295 — port Rutas Reymon's dashboard layout (KPI row, chart
+card with inner toggle, short table) onto Ckrea's Resumen page, keeping Ckrea's own sidebar/colors.
+10 sub-issues, one at a time. This session did the first: WOR-306, Resumen = this month.
+
+**Design pass (Artifact mock, several rounds with German before any code).** Built a static HTML
+mock (Tailwind CDN) reproducing the sidebar exactly and iterating the content area live — German
+does not want a subagent building UI blind; he wants to see it and correct it. Landed on: title +
+working month picker on one line ("Resumen — {mes}"), Facturación del mes as a pill chip (matching
+the occupancy chip, not a full KPI card), 3 hero tiles (Recaudo Facturado / Recaudo Mora → renamed
+Recaudo meses anteriores per the ticket's "never label Mora" / Total Recaudo), a 50/50 chart row
+(single-color weekly bar + 3-way donut: recaudado del mes / de mora / pendiente), and an 8-row
+"Pagos del mes" table. Colors darkened from the first bright emerald/rose pass to navy/amber/slate
+for a more professional chart palette. No page scroll — German was explicit the whole point is a
+one-screen morning view, not another scrollable dashboard.
+
+**Handoff caught two real things a human read would have missed.** Sent to the Executor (pi) with
+the mock's exact markup as the visual spec, told to reuse existing plumbing instead of writing new
+SQL — `getPagosKPIs`/`getPagos` (`src/lib/data/pagos.ts`) already carry `proyectadoMes`/
+`totalEsteMes`/`invoicePeriodo` per row, and `MonthFilter` (`src/components/pagos/month-filter.tsx`)
+already does the month picker. It:
+1. Read WOR-306 itself (not just the send) and correctly overrode the send's "Recaudo Mora" label
+   with the ticket's actual mandate ("Never label Mora") → shipped "Recaudo meses anteriores".
+2. Broke its own build once — a classifier it first placed in `pagos.ts` pulled `next/cache` into
+   the client-side pagos table's bundle — caught it via self-review, moved the rule to a new
+   dependency-free `src/lib/pago-bucket.ts`, rebuilt clean. Never reported the broken state as done.
+
+**Verified on local `:54622`, never prod.** Month 2026-07: Facturación 242.460.573 · Recaudo
+facturado 164.178.403 · Recaudo meses anteriores 53.465.662 · Total recaudo 217.644.065
+(facturado + mora = total ✔). Electricity exclusion confirmed by reading the existing
+`electricityTenantsSubquery`/`EXCLUDE_ELECTRICITY` path, not re-derived. eslint + `tsc --noEmit` +
+`npm run build` all clean, real output pasted each time. Deleted the old annual dashboard
+(`RecaudoCard`, `RendimientoChart`, `getDashboardData`/`getMoraStats`/`getTotalRecaudado` in
+`dashboard.ts`) — nothing else imported them.
+
+**Gotcha discovered while previewing: the local test DB has no login.** `npm run db:sync` clones
+`v2` + `siesa_raw` only — the `auth` schema (Supabase GoTrue) is never cloned, so prod credentials
+were never going to work on `localhost:3000/login`, and there was no seeded local user either. Fixed
+by creating a local-only Supabase Auth user via the GoTrue admin API (`.env.test`'s local
+service-role key against `http://127.0.0.1:54621`) plus a matching `v2.perfiles` row
+(`rol='admin'`) pointed at Ckrea's `empresa_id`. Login: `dev-local@ckrea.test` /
+`DevLocal123!` — **local Docker instance only, does not exist on prod.** Written into
+`CLAUDE.md`'s Local test DB section so the next sub-issue's preview doesn't hit the same wall.
+
+**Also surfaced, not this session's fix:**
+- Local snapshot's newest data is **2026-08** — the page defaults to the real current month
+  (September), which is empty locally. Not a bug; re-run `db:sync` or pick August in the picker.
+- `getProyectadoVsReal` in `src/lib/data/reportes.ts` now has zero callers (Resumen was its only
+  caller). Left alone — that file is off-limits for WOR-306 — natural home is WOR-315
+  (Proyecciones absorbs year-level data next).
+- Two untracked files sitting in the repo root (`Borrador Cuenta de Cobro - Ingresos para
+  terceros.pdf`, `SIESA connexion.xlsm`) look like real client/ERP documents in a git working
+  tree, pre-existing (not from this session). Flagged to German, not yet moved or resolved.
+
+**Superseded below — WOR-306 did not stay uncommitted on `main`.** German explicitly chose to wait
+until all 10 WOR-295 sub-issues are done before running `/ship-session`, and asked for one branch
+to hold the whole epic instead: `feat/wor-295-portal-redesign`. WOR-306's diff was committed there
+(`f5f2d3c`), `main` never touched. Two follow-up fixes landed on the same branch after: the info-icon
+hover tooltips didn't show on localhost (`title` attribute's hit target was the bare 14px icon with
+zero padding — `579a4ae`), then didn't show even after that (native `title` needs the cursor to sit
+still ~1s, rarely happens in practice — replaced with an instant custom hover tooltip, matching the
+pattern already used in `usuarios/email-editor.tsx` — `0554d5f`). The two untracked repo-root
+business files (PDF + xlsm, flagged above) were moved to `~/Desktop/ckrea-repo-root-cleanup/` — they
+were never in git history, so nothing to scrub, tree is clean (`e6afb63` for an unrelated `.gitignore`
+line caught in the same pass).
+
+**WOR-307 (2/10 of WOR-295): Pagos becomes the Ver-todos drill.** Same Artifact-mock-first process.
+Ticket as written: pull Pagos out of the nav, keep `/pagos` working as Resumen's "Ver todos →"
+target, paginate instead of dumping everything, no second KPI-hero row. German approved the first
+mock, then — mid-review, seeing the Rutas `Formularios` screenshots (checkbox `MultiSelect` +
+Fecha preset/range dropdown) — asked for real flexibility beyond the ticket's "filters stay simple":
+a genuine date-range filter (not locked to Resumen's one month) and a proper multi-select for Estado,
+because *"I need actual data to see which filters or views are more important... I need real data"*
+before deciding what to keep. Also: floating dropdowns must never push the table down, only one
+dropdown open at a time (closing one when opening the other, selections still combine), and sortable
+column headers on every column (not just Fecha).
+
+Shipped: `getPagosRange(from, to)` added to `src/lib/data/pagos.ts` — a new function, not a rewrite
+of `getPagos`/`getPagosKPIs`/`getPagosBuckets`, which Resumen depends on untouched. The real
+engineering piece was generalizing `electricityTenantsSubquery` (built for one month + its previous
+month) to an arbitrary range: the range version keys `electricity_tenants` by **(tenant, month)**
+instead of just tenant, so a tenant whose standalone 001- entries get excluded in September keeps
+those entries everywhere else in the range. Verified two ways: read the SQL by hand (this is the
+money path — CLAUDE.md's own review rule), and the Executor's own equivalence tests — new range vs
+old single-month function on 2026-08 (identical: 83 rows / $186.514.029) and on 2026-01 where the
+electricity exclusion actually fires (identical: 147 / $192.867.355, 7 tenants excluded), plus a
+Dec+Jan range matching the sum of the two separate month calls exactly. `siesa_raw.documentos`
+being a rolling window means old rows legitimately come back with `invoicePeriodo = null` — expected,
+noted in the code, not a bug. Confirmed live on localhost (logged in as `dev-local@ckrea.test`):
+nav has no Pagos link, KPI/bucket cards gone, one-line total, Fecha/Estado floating panels (only one
+open at a time, Estado's own multi-select selection persists across opening Fecha), sortable headers,
+"Mostrando 1–50 de 83" pagination footer. `npx eslint` + `npx tsc --noEmit` clean. Committed
+`29d5d35` on `feat/wor-295-portal-redesign`. Linear: Done, comment notes the scope grew live past the
+ticket text and why.
+
+**Cross-agent gotcha, worth remembering.** A second, unrelated agent (`grok`, its own "Ckrea Linear
+cleanup" task) shares this same working directory (`Portal Ckrea`) in another Herdr pane. Its own
+git/npm actions silently discarded this file's uncommitted edit once mid-session — no data lost
+(caught by re-checking `git status`/`git log`/timestamps before trusting the write), but the lesson
+is real: **commit or stash docs/state edits promptly when another agent has a live pane in the same
+folder** — don't leave them sitting uncommitted across a turn boundary.
+
+**WOR-307 polish round, direct fixes after German used it live (commit `92e8fff`).** Real bugs and
+requests from actually clicking around, not a new design-mock cycle — small enough to fix directly
+rather than round-trip through the Executor: Fecha panel's Hasta date input overflowed its box
+(native `<input type=date>` needs `min-w-0` to actually shrink in a flex row, not just `flex-1`);
+Estado started with all 3 boxes pre-checked instead of none (inverted the default and the "no
+filter" semantics — empty selection now means "show everything," not "show nothing"); the total
+appeared twice (page title + card subtitle) — consolidated to one page title, one total, and moved
+the new "Fuente: CSF ERP" info icon there too. Then two more asks in the same pass: a Local filter
+(multi-select, options derived from the loaded rows, same as Estado) and a back-arrow to Resumen
+next to the title, since Pagos no longer has a sidebar entry to navigate back from. Extracted the
+`InfoTip` pattern to its own file (`src/components/pagos/info-tip.tsx`) rather than duplicate it a
+third time, and widened the shared `PageHeader`'s `title` prop from `string` to `React.ReactNode`
+so the back-arrow + icon could sit inline with it — checked all 12 other pages using `PageHeader`
+still pass plain strings, confirmed by a project-wide `tsc --noEmit`, before touching a component
+that many other pages depend on.
+
+**State at compact.** Branch `feat/wor-295-portal-redesign` is 6 commits ahead of the point WOR-306
+was Done, tree clean. WOR-306 + WOR-307 (2/10 of WOR-295) shipped, verified, and polished after live
+use. Next: WOR-308, same design-mock-first pattern German has now approved twice.
+
 ## Session 80 — 2026-08-26: Mora uses last month's DIAN rate if this month is empty
 
 **Trigger.** German: the DIAN box on Mora is manual, he does not know when it was last edited, and if it is empty the mora numbers never show.

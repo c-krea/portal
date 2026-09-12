@@ -1,5 +1,7 @@
 import { execute } from "@/lib/db/executor"
+import { getIvaRate } from "@/lib/data/configuracion"
 import { assertUuid } from "@/lib/security/validators"
+import { moraDiasVencidosExpr, moraInteresExpr, moraRateCteSql, moraVencEfecExpr } from "@/lib/data/mora"
 
 export type TenantDetail = {
   id: string
@@ -80,6 +82,7 @@ export type TenantContract = {
 
 export async function getTenantContracts(tenantId: string): Promise<TenantContract[]> {
   assertUuid(tenantId)
+  const iva = await getIvaRate()
 
   const rows = await execute(`
     SELECT
@@ -89,7 +92,7 @@ export async function getTenantContracts(tenantId: string): Promise<TenantContra
       COALESCE((
         SELECT
           o.precio * (1 - COALESCE(o.descuento, 0) / 100.0)
-          * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
+          * ((1 + ${iva}) - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
         FROM siesa_raw.ocupacion o
         WHERE o.documento = t.nit
           AND o.loc = u.unidad
@@ -131,10 +134,12 @@ export async function getTenantContracts(tenantId: string): Promise<TenantContra
 
 export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]> {
   assertUuid(tenantId)
+  // Interés DIAN compartido con /mora (ver mora.ts): vr_vencido × (tasa ÷ 366) ×
+  // GREATEST(0, CURRENT_DATE − venc_efec). Se reutiliza la FÓRMULA, no el filtro
+  // de mora: esto lista TODA la cartera del inquilino y lo no vencido da interés 0.
+  const vencEfec = moraVencEfecExpr("v.fecha_vencimiento", "v.fecha_factura::date")
   const rows = await execute(`
-    WITH r AS (
-      SELECT valor::numeric AS rate FROM v2.reglas_financieras WHERE clave = 'interes_mora_diario' LIMIT 1
-    )
+    WITH ${moraRateCteSql()}
     SELECT
       v.row_id::text                                              AS id,
       v.factura                                                   AS siesa_factura,
@@ -142,11 +147,11 @@ export async function getTenantCartera(tenantId: string): Promise<CarteraItem[]>
       v.fecha_vencimiento                                         AS fecha_vence,
       REVERSE(SPLIT_PART(REVERSE(v.sucursal), ' ', 1))            AS unidad,
       COALESCE(v.dias_mora, 0)                                    AS dias_mora,
-      GREATEST(0, COALESCE(v.dias_financia, 0) - 30)             AS dias_interest,
+      ${moraDiasVencidosExpr(vencEfec)}                           AS dias_interest,
       COALESCE(v.saldo, 0)::numeric                              AS saldo,
       ROUND(d.ventas)::numeric                                   AS ventas,
       COALESCE(v.vr_vencido, 0)::numeric                         AS valor_vencido,
-      (COALESCE(v.saldo, 0) * GREATEST(0, COALESCE(v.dias_financia, 0) - 30) * (SELECT rate FROM r))::numeric AS interes
+      ${moraInteresExpr("COALESCE(v.vr_vencido, 0)", vencEfec)}   AS interes
     FROM v2.vista_cartera_actual v
     LEFT JOIN siesa_raw.documentos d
       ON d.documento = '001-' || v.factura AND d.tipo = 'Facturas'

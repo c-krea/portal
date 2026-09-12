@@ -1,24 +1,11 @@
 import { execute } from "@/lib/db/executor"
-import { getProyectadoVsReal } from "@/lib/data/reportes"
-import { getGracePeriod } from "@/lib/data/configuracion"
-import { getEmpresaCkreaId } from "@/lib/empresa"
+import { getIvaRate } from "@/lib/data/configuracion"
 import { cached } from "@/lib/cache"
 
-async function getDashboardData_uncached() {
-  const empresaId = await getEmpresaCkreaId()
-  const [portfolio, mora, totalRecaudado, chart] = await Promise.all([
-    getPortfolioStats(empresaId),
-    getMoraStats(empresaId),
-    getTotalRecaudado(empresaId, 2026),
-    getProyectadoVsReal(2026),
-  ])
-  return { portfolio, mora, totalRecaudado, chart, computedAt: new Date().toISOString() }
-}
+export const getPortfolioStats = cached(getPortfolioStats_uncached, ["dashboard:portfolio"], "dashboard")
 
-// Cached (30-min window; busts via ERP sync + financial-rule edits)
-export const getDashboardData = cached(getDashboardData_uncached, ["dashboard"], "dashboard")
-
-async function getPortfolioStats(empresaId: string) {
+async function getPortfolioStats_uncached(empresaId: string) {
+  const iva = await getIvaRate()
   const [rows1, rows2, rows3] = await Promise.all([
     execute(`
       WITH base AS (
@@ -59,11 +46,11 @@ async function getPortfolioStats(empresaId: string) {
       SELECT
         ROUND(COALESCE(SUM(
           canon_mes * (active - dcto_eff) * (1 - pp_pct)
-          * (1.19 - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
+          * ((1 + ${iva}) - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
         ), 0))::numeric AS piso_realista,
         ROUND(COALESCE(SUM(
           canon_mes * (active - dcto_eff)
-          * (1.19 - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
+          * ((1 + ${iva}) - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
         ), 0))::numeric AS techo_maximo
       FROM expanded
     `),
@@ -84,53 +71,5 @@ async function getPortfolioStats(empresaId: string) {
     portfolioTecho: Number(rows1[0]?.techo_maximo ?? 0),
     activeClients:  Number(rows2[0]?.active_clients ?? 0),
     totalUnits:     Number(rows3[0]?.total_units ?? 0),
-  }
-}
-
-async function getTotalRecaudado(empresaId: string, year: number) {
-  const rows = await execute(`
-    WITH vp AS MATERIALIZED (
-      SELECT * FROM v2.vista_pagos
-      WHERE EXTRACT(YEAR FROM fecha_recaudo) = ${year}
-        AND empresa_id = '${empresaId}'
-    )
-    SELECT
-      COALESCE(SUM(valor_final), 0)::numeric          AS recaudado,
-      COALESCE(SUM(pronto_pago_aplicado), 0)::numeric AS pp_otorgado
-    FROM vp
-  `)
-  const r = (rows as Array<Record<string, unknown>>)[0] ?? {}
-  return {
-    recaudado:  Number(r.recaudado ?? 0),
-    ppOtorgado: Number(r.pp_otorgado ?? 0),
-  }
-}
-
-async function getMoraStats(empresaId: string) {
-  const grace = await getGracePeriod()
-
-  const rows = await execute(`
-    SELECT
-      COALESCE(SUM(vr_vencido), 0)::numeric                                             AS total_mora,
-      COALESCE(SUM(saldo), 0)::numeric                                                  AS total_saldo,
-      COUNT(DISTINCT inquilino_id)::int                                                 AS clientes_en_mora,
-      ROUND(AVG(NULLIF(dias_mora, 0)), 0)::numeric                                      AS avg_dias_mora,
-      COALESCE(SUM(CASE WHEN dias_mora > 60 THEN vr_vencido ELSE 0 END), 0)::numeric    AS mora_critica,
-      COALESCE(SUM(CASE WHEN dias_mora BETWEEN ${grace + 1} AND 60 THEN vr_vencido ELSE 0 END), 0)::numeric AS mora_activa
-    FROM v2.vista_cartera_actual
-    WHERE vr_vencido > 0 AND dias_mora > ${grace}
-      AND juridica = false
-      AND empresa_id = '${empresaId}'
-  `)
-
-  const r = (rows as Array<Record<string, unknown>>)[0] ?? {}
-  return {
-    totalMora:       Number(r.total_mora ?? 0),
-    totalSaldo:      Number(r.total_saldo ?? 0),
-    totalInteres:    0,
-    clientesEnMora:  Number(r.clientes_en_mora ?? 0),
-    avgDiasMora:     Number(r.avg_dias_mora ?? 0),
-    moraCritica:     Number(r.mora_critica ?? 0),
-    moraActiva:      Number(r.mora_activa ?? 0),
   }
 }

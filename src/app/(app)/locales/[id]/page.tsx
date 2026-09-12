@@ -11,9 +11,10 @@ import { PageHeader } from "@/components/layout/page-header"
 import { CarteraTable } from "@/components/clientes/cartera-table"
 import { formatCOP, formatDate, formatDateShort } from "@/lib/formatters"
 import { isPpDateEligible } from "@/lib/pronto-pago"
+import { getPpWindowDays } from "@/lib/data/configuracion"
 import { cn } from "@/lib/utils"
 import { isValidUuid } from "@/lib/security/validators"
-import { BadgePercent } from "lucide-react"
+import { BadgePercent, Eye } from "lucide-react"
 
 const CONTRACT_STATUS_CONFIG = {
   activo: { cls: "bg-emerald-50 text-emerald-700", label: "Activo" },
@@ -60,11 +61,12 @@ export default async function ClienteDetailPage({
 
   const rawPage = Math.max(1, parseInt(ppage ?? "1", 10) || 1)
 
-  const [detail, contracts, cartera, { pagos, totalCount, totals }] = await Promise.all([
+  const [detail, contracts, cartera, { pagos, totalCount, totals }, ppWindow] = await Promise.all([
     getTenantDetail(id),
     getTenantContracts(id),
     getTenantCartera(id),
     getTenantPayments(id, rawPage, PAGE_SIZE),
+    getPpWindowDays(),
   ])
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE) || 1
@@ -77,9 +79,10 @@ export default async function ClienteDetailPage({
   const interesTotal = cartera.reduce((s, c) => s + c.interesAcumulado, 0)
   const maxDias = cartera.length ? Math.max(...cartera.map((c) => c.diasInterest)) : 0
 
-  // Pronto pago: per-unit rate, valid within 10 calendar days of each invoice's OWN
-  // date (invoice on the 1st → last valid day is the 11th). Shared date rule in
-  // src/lib/pronto-pago.ts; Bogotá time so this matches the tenant portal exactly.
+  // Pronto pago: per-unit rate, valid within the stored pp_window_days of each
+  // invoice's OWN date (10 today: invoice on the 1st → last valid day is the 11th).
+  // Shared date rule in src/lib/pronto-pago.ts; Bogotá time so this matches the
+  // tenant portal exactly.
   const nowCO = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }))
   const todayDay = nowCO.getDate()
   const todayMidnight = new Date(nowCO.getFullYear(), nowCO.getMonth(), nowCO.getDate())
@@ -88,7 +91,7 @@ export default async function ClienteDetailPage({
     if (c.unitNumber && c.prontoPagoPct > 0) ppByUnit[c.unitNumber] = c.prontoPagoPct
   }
   const ppDiscountTotal = cartera
-    .filter(item => isPpDateEligible(item.fechaFactura, todayMidnight))
+    .filter(item => isPpDateEligible(item.fechaFactura, todayMidnight, ppWindow))
     .reduce((sum, item) => {
       const ppPct = item.unidad ? (ppByUnit[item.unidad] ?? 0) : 0
       // PP applies to the net canon (ventas, pre-IVA), never the full balance
@@ -100,6 +103,13 @@ export default async function ClienteDetailPage({
   return (
     <>
       <PageHeader title={detail.razonSocial}>
+        <Link
+          href={`/locales/${id}/portal`}
+          className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
+        >
+          <Eye className="h-4 w-4" />
+          Ver portal
+        </Link>
         <BackButton label="Locales" />
       </PageHeader>
 
@@ -177,12 +187,20 @@ export default async function ClienteDetailPage({
                         <span className="text-xs text-slate-400">
                           Desde {con.fechaInicio ? formatDate(con.fechaInicio) : "—"}
                         </span>
-                        <span className="text-sm font-semibold text-slate-800">
-                          {formatCOP(con.canonReal > 0 ? con.canonReal : con.canonBase)}
-                          <span className="ml-1 text-xs font-normal text-slate-400">
-                            {con.canonReal > 0 ? "c/IVA" : "s/IVA"}
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-800">
+                            {formatCOP(con.canonReal > 0 ? con.canonReal : con.canonBase)}
+                            <span className="ml-1 text-xs font-normal text-slate-400">
+                              {con.canonReal > 0 ? "c/IVA" : "s/IVA"}
+                            </span>
                           </span>
-                        </span>
+                          <Link
+                            href={`/locales/${id}/portal`}
+                            className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
+                          >
+                            Ver portal
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   )

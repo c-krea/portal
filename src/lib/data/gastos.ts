@@ -94,7 +94,7 @@ async function getGastoPeriodos_uncached(): Promise<GastoPeriodo[]> {
     SELECT DISTINCT
       LEFT(periodo::text, 4) || '-' || RIGHT(periodo::text, 2) AS periodo
     FROM siesa_raw.estado_resultados
-    WHERE ccosto = '285'
+    WHERE ccosto = '285' AND LEFT(cuenta, 1) = '5'
     ORDER BY periodo DESC
   `)
   return rows.map((r) => {
@@ -119,12 +119,12 @@ async function getGastoRows_uncached(periodo?: string): Promise<GastoRow[]> {
       WITH raw AS (
         SELECT valor, desc_cuenta, ${CATEGORY_CASE} AS cat
         FROM siesa_raw.estado_resultados
-        WHERE ccosto = '285' AND periodo = ${periodoToSiesa(periodo)}
+        WHERE ccosto = '285' AND LEFT(cuenta, 1) = '5' AND periodo = ${periodoToSiesa(periodo)}
       ),
       prev_raw AS (
         SELECT valor, ${CATEGORY_CASE} AS cat
         FROM siesa_raw.estado_resultados
-        WHERE ccosto = '285' AND periodo = ${periodoToSiesa(prev)}
+        WHERE ccosto = '285' AND LEFT(cuenta, 1) = '5' AND periodo = ${periodoToSiesa(prev)}
       ),
       by_cuenta AS (
         SELECT cat, desc_cuenta, SUM(valor)::numeric AS sub_total
@@ -173,7 +173,7 @@ async function getGastoRows_uncached(periodo?: string): Promise<GastoRow[]> {
         desc_cuenta,
         ${CATEGORY_CASE} AS cat
       FROM siesa_raw.estado_resultados
-      WHERE ccosto = '285'
+      WHERE ccosto = '285' AND LEFT(cuenta, 1) = '5'
     ),
     by_cuenta AS (
       SELECT periodo_str, cat, desc_cuenta, SUM(valor)::numeric AS sub_total
@@ -218,7 +218,7 @@ async function getGastoSummary_uncached(year: string): Promise<GastoSummary> {
         LEFT(periodo::text, 4) || '-' || RIGHT(periodo::text, 2) AS periodo_str,
         SUM(valor)::numeric AS total
       FROM siesa_raw.estado_resultados
-      WHERE ccosto = '285'
+      WHERE ccosto = '285' AND LEFT(cuenta, 1) = '5'
         AND LEFT(periodo::text, 4) = '${year}'
       GROUP BY periodo
     )
@@ -246,7 +246,7 @@ async function getGastosForPeriodo_uncached(periodo: string): Promise<GastoChart
     WITH raw AS (
       SELECT valor, ${CATEGORY_CASE} AS cat
       FROM siesa_raw.estado_resultados
-      WHERE ccosto = '285'
+      WHERE ccosto = '285' AND LEFT(cuenta, 1) = '5'
         AND periodo = ${periodoToSiesa(periodo)}
     )
     SELECT
@@ -285,7 +285,7 @@ async function getGastosHistorico_uncached(periodo: string, nMeses = 6): Promise
     WITH months AS (
       SELECT DISTINCT periodo
       FROM siesa_raw.estado_resultados
-      WHERE ccosto = '285'
+      WHERE ccosto = '285' AND LEFT(cuenta, 1) = '5'
         AND LEFT(periodo::text, 4) || '-' || RIGHT(periodo::text, 2) <= '${periodo}'
       ORDER BY periodo DESC
       LIMIT ${nMeses}
@@ -296,7 +296,7 @@ async function getGastosHistorico_uncached(periodo: string, nMeses = 6): Promise
         e.valor,
         ${CATEGORY_CASE} AS cat
       FROM siesa_raw.estado_resultados e
-      WHERE e.ccosto = '285' AND e.periodo IN (SELECT periodo FROM months)
+      WHERE e.ccosto = '285' AND LEFT(e.cuenta, 1) = '5' AND e.periodo IN (SELECT periodo FROM months)
     )
     SELECT
       periodo_str                                                              AS periodo,

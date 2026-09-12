@@ -84,3 +84,14 @@ Siesa is the legal record. This portal reads; it does not write money back. Paym
 ## Env
 
 `.env.local` (never commit) and `.env.test` (local Docker). Names: `.env.example`.
+
+## Reusable helpers
+
+Reach for these before writing a second copy.
+
+- `src/lib/data/mora.ts` | `moraVencEfecExpr` · `moraEnMoraBaseSql` · `moraEsJuridicaExpr` | the ONE mora rule: due date is `fecha_factura + 30`, jurídica is the flag only. Never re-inline — a scout once found 7 independent definitions. The ERP's `fecha_vencimiento`, `dias_mora_al_pago` and `grace_period_days` must never decide mora.
+- `src/components/pagos/info-tip.tsx` | `InfoTip({ text })` | instant hover tooltip. Its card must not have `overflow-hidden` or the tooltip is clipped.
+- `src/components/layout/page-header.tsx` | `PageHeader({ title, children })` | `title` takes a ReactNode, so a page can compose an icon or tooltip inline.
+- `src/components/layout/periodo-dropdown.tsx` | `PeriodoDropdown({ periodos, periodo, basePath })` | shared period picker (Gastos, Medidores).
+- `src/lib/data/portal.ts` | `getPortalProfileByTenantId(tenantId)` | tenant-shaped portal data without that tenant's session — used by the staff Ver-portal preview.
+- `src/app/(portal)/portal/portal-dashboard.tsx` | `PortalDashboard({ profile, readOnly? })` | the tenant dashboard body, shared by the real route and the staff preview so both render identical money math.

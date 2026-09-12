@@ -1,7 +1,8 @@
-import { execute } from "@/lib/db/executor"
+import { execute, executeDml } from "@/lib/db/executor"
 import { cached } from "@/lib/cache"
 import { assertUuid, assertPeriodo } from "@/lib/security/validators"
 import { ELECTRICITY_GROUPS } from "@/lib/data/electricity"
+import { moraDiasVencidosExpr, moraInteresExpr, moraRateCteSql, moraVencEfecExpr } from "@/lib/data/mora"
 
 export type PortalProfile = {
   fullName: string
@@ -94,6 +95,83 @@ async function getPortalProfile_uncached(userId: string): Promise<PortalProfile 
     JOIN v2.contratos  c ON c.inquilino_id = t.id AND c.estado IN ('activo','critico')
     JOIN v2.locales    u ON u.id = c.local_id
     WHERE p.id = '${userId}'::uuid
+    ORDER BY u.unidad
+    LIMIT 1
+  `)
+  const r = rows[0]
+  if (!r) return null
+  return {
+    fullName: String(r.full_name),
+    tenantId: String(r.tenant_id),
+    companyId: String(r.company_id),
+    razonSocial: String(r.razon_social),
+    nombreCorto: r.nombre_corto ? String(r.nombre_corto) : null,
+    unitNumber: String(r.unit_number),
+    unitCode: String(r.unit_code),
+    unitId: String(r.unit_id),
+    allUnits:    Array.isArray(r.all_units)    ? (r.all_units as string[])    : [String(r.unit_number)],
+    allUnitIds:  Array.isArray(r.all_unit_ids) ? (r.all_unit_ids as string[]) : [String(r.unit_id)],
+    entrada: r.entrada ? String(r.entrada) : null,
+    fechaInicio: String(r.fecha_inicio),
+    fechaFin: r.fecha_fin ? String(r.fecha_fin) : null,
+    canonBase: Number(r.canon_base),
+    contractStatus: String(r.contract_status),
+    nit: r.nit ? String(r.nit) : null,
+    email: r.email ? String(r.email) : null,
+    telefono: r.telefono ? String(r.telefono) : null,
+    contactoNombre: r.contacto_nombre ? String(r.contacto_nombre) : null,
+    tipoCliente: r.tipo_cliente ? String(r.tipo_cliente) : null,
+    tipoPersona: r.tipo_persona ? String(r.tipo_persona) : null,
+    descuentoPct: r.descuento_pct != null ? Number(r.descuento_pct) : null,
+    prontoPagoPct: r.pronto_pago_pct != null ? Number(r.pronto_pago_pct) : null,
+    incrementoIpc: r.incremento_ipc != null ? Number(r.incremento_ipc) : null,
+    descripcionDescuentos: r.descripcion_descuentos ? String(r.descripcion_descuentos) : null,
+  }
+}
+
+async function getPortalProfileByTenantId_uncached(tenantId: string): Promise<PortalProfile | null> {
+  assertUuid(tenantId)
+  const rows = await execute(`
+    SELECT
+      COALESCE(t.nombre_corto, t.razon_social)              AS full_name,
+      t.id                                                 AS tenant_id,
+      t.empresa_id                                         AS company_id,
+      t.razon_social,
+      t.nombre_corto,
+      t.nit,
+      COALESCE(t.email_contacto, t.portal_email)         AS email,
+      t.telefono,
+      t.contacto_nombre,
+      t.tipo_cliente,
+      t.tipo_persona,
+      u.unidad                                           AS unit_number,
+      u.codigo                                           AS unit_code,
+      u.entrada,
+      u.id                                               AS unit_id,
+      (
+        SELECT ARRAY_AGG(lu.unidad ORDER BY lu.unidad)
+        FROM v2.contratos cc
+        JOIN v2.locales lu ON lu.id = cc.local_id
+        WHERE cc.inquilino_id = t.id AND cc.estado IN ('activo','critico')
+      )                                                  AS all_units,
+      (
+        SELECT ARRAY_AGG(lu.id::text ORDER BY lu.unidad)
+        FROM v2.contratos cc
+        JOIN v2.locales lu ON lu.id = cc.local_id
+        WHERE cc.inquilino_id = t.id AND cc.estado IN ('activo','critico')
+      )                                                  AS all_unit_ids,
+      c.fecha_inicio,
+      c.fecha_fin,
+      c.canon_base::numeric                              AS canon_base,
+      c.estado                                           AS contract_status,
+      c.descuento_pct::numeric                           AS descuento_pct,
+      c.pronto_pago_pct::numeric                         AS pronto_pago_pct,
+      c.incremento_ipc::numeric                          AS incremento_ipc,
+      c.descripcion_descuentos
+    FROM v2.inquilinos t
+    JOIN v2.contratos  c ON c.inquilino_id = t.id AND c.estado IN ('activo','critico')
+    JOIN v2.locales    u ON u.id = c.local_id
+    WHERE t.id = '${tenantId}'::uuid
     ORDER BY u.unidad
     LIMIT 1
   `)
@@ -345,16 +423,10 @@ const NIT_RE = /^\d{5,12}(-\d)?$/
 
 async function getPortalCartera_uncached(nit: string): Promise<PortalCartera> {
   if (!NIT_RE.test(nit)) return { saldoTotal: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }
-  // Interest uses the SAME DIAN method as the admin Mora page (see mora.ts):
-  // vr_vencido × (tasa DIAN del mes ÷ 366) × días vencidos, counted from the
-  // effective due date (fecha_vence, or factura+30 for the old ERP fecha_vence bug).
+  // Interés DIAN compartido con /mora (ver mora.ts): misma tasa, misma base
+  // (vr_vencido) y mismos días (venc_efec con la corrección +25/+30 del bug ERP).
   const rows = await execute(`
-    WITH rate AS (
-      SELECT COALESCE(
-        (SELECT tasa_ea FROM v2.tasa_interes_mora WHERE periodo <= to_char(CURRENT_DATE,'YYYY-MM') ORDER BY periodo DESC LIMIT 1),
-        0
-      ) / 366 AS r
-    ),
+    WITH ${moraRateCteSql()},
     base AS (
       SELECT
         (EXTRACT(YEAR FROM c.fecha_factura) * 100 + EXTRACT(MONTH FROM c.fecha_factura))::int AS periodo,
@@ -362,9 +434,7 @@ async function getPortalCartera_uncached(nit: string): Promise<PortalCartera> {
         ROUND(c.saldo)::numeric                                     AS saldo,
         ROUND(c.vr_vencido)::numeric                                AS vencido,
         c.vr_vencido                                                AS vr_vencido_raw,
-        CASE WHEN c.fecha_vence::date >= c.fecha_factura::date + 25
-             THEN c.fecha_vence::date
-             ELSE c.fecha_factura::date + 30 END                    AS venc_efec,
+        ${moraVencEfecExpr("c.fecha_vence::date", "c.fecha_factura::date")} AS venc_efec,
         c.fecha_vence::date                                         AS fecha_vence,
         c.fecha_factura::date                                       AS fecha_factura,
         ROUND(d.ventas)::numeric      AS ventas,
@@ -381,9 +451,9 @@ async function getPortalCartera_uncached(nit: string): Promise<PortalCartera> {
     )
     SELECT
       periodo, unidad, saldo, vencido,
-      GREATEST(0, CURRENT_DATE - venc_efec)::int  AS dias_mora,
-      GREATEST(0, CURRENT_DATE - venc_efec)::int  AS dias_interest,
-      ROUND(vr_vencido_raw * (SELECT r FROM rate) * GREATEST(0, CURRENT_DATE - venc_efec))::numeric AS interes_est,
+      ${moraDiasVencidosExpr("venc_efec")}::int  AS dias_mora,
+      ${moraDiasVencidosExpr("venc_efec")}::int  AS dias_interest,
+      ${moraInteresExpr("vr_vencido_raw", "venc_efec")}::numeric AS interes_est,
       fecha_factura, fecha_vence, ventas, impuesto, retenciones
     FROM base
     ORDER BY fecha_factura DESC, unidad
@@ -607,8 +677,32 @@ async function getPortalElectricityPeriodos_uncached(
   return (rows as Record<string, unknown>[]).map(r => String(r.periodo))
 }
 
+// ── Portal visit recording (WOR-318) ───────────────────────────────────────────
+// Append-only daily grain for the usage-over-time chart. Single INSERT...SELECT
+// so no extra lookup is needed: empresa_id/inquilino_id come from v2.perfiles
+// and dia is the Bogota calendar day. ON CONFLICT DO NOTHING means 40 page
+// hits in one day still leave exactly one row. Never throws: a failed
+// telemetry write must not break the tenant portal, so failures are logged,
+// not re-thrown.
+export async function recordPortalVisita(userId: string): Promise<void> {
+  try {
+    assertUuid(userId)
+    await executeDml(`
+      INSERT INTO v2.portal_visitas_diarias (empresa_id, inquilino_id, auth_user_id, dia)
+      SELECT p.empresa_id, p.inquilino_id, p.id, (now() AT TIME ZONE 'America/Bogota')::date
+      FROM v2.perfiles p
+      WHERE p.id = '${userId}'::uuid
+        AND p.inquilino_id IS NOT NULL
+      ON CONFLICT (auth_user_id, dia) DO NOTHING
+    `)
+  } catch (e) {
+    console.error("[portal-visita] failed to record visit:", e)
+  }
+}
+
 // ── cached exports (auto)
 export const getPortalProfile = cached(getPortalProfile_uncached, ["portal:profile"], "portal")
+export const getPortalProfileByTenantId = cached(getPortalProfileByTenantId_uncached, ["portal:profileByTenant"], "portal")
 export const getPortalPagos = cached(getPortalPagos_uncached, ["portal:pagos"], "portal")
 export const getPortalPagosPage = cached(getPortalPagosPage_uncached, ["portal:pagosPage"], "portal")
 export const getPortalPagosKpis = cached(getPortalPagosKpis_uncached, ["portal:pagosKpis"], "portal")

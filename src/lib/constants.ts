@@ -2,9 +2,7 @@ import {
   LayoutDashboard,
   AlertTriangle,
   Users,
-  CreditCard,
   Receipt,
-  FileText,
   Zap,
   TrendingUp,
   UserCog,
@@ -13,14 +11,13 @@ import {
 
 export const NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Resumen",       href: "/" },
-  { icon: TrendingUp,      label: "Proyecciones",  href: "/proyecciones" },
   { icon: AlertTriangle,   label: "Mora",          href: "/mora" },
-  { icon: CreditCard,      label: "Pagos",         href: "/pagos" },
   { icon: Users,           label: "Locales",       href: "/locales" },
   { icon: Receipt,         label: "Gastos",        href: "/gastos" },
   { icon: Zap,             label: "Medidores",     href: "/medidores" },
   { icon: FolderOpen,      label: "Archivos",      href: "/archivos" },
   { icon: UserCog,         label: "Usuarios",      href: "/usuarios" },
+  { icon: TrendingUp,      label: "Proyecciones",  href: "/proyecciones" },
 ] as const
 
 export const STATUS_COLORS = {

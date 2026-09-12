@@ -20,10 +20,12 @@ export function FacturasDownloadButton({
   nombre,
   nit,
   units,
+  previewTenantId,
 }: {
   nombre: string
   nit: string
   units: UnitOption[]
+  previewTenantId?: string
 }) {
   const [open, setOpen]               = useState(false)
   const [selectedUnit, setSelectedUnit] = useState<UnitOption | null>(null)
@@ -69,7 +71,7 @@ export function FacturasDownloadButton({
     setError(null)
     setLoading(true)
     try {
-      const data = await fetchElectricityInvoiceForDownload(selectedUnit.unitId, periodo)
+      const data = await fetchElectricityInvoiceForDownload(selectedUnit.unitId, periodo, previewTenantId)
       if (!data) setError("No se encontró factura para este período.")
       else setInvoiceData(data)
     } catch {

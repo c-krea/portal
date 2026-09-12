@@ -1,12 +1,12 @@
 import { PageHeader } from "@/components/layout/page-header"
+import { PeriodoDropdown } from "@/components/layout/periodo-dropdown"
 import { getMedidoresAdmin, getUnitsWithMeters, getMeterYears } from "@/lib/data/medidores"
 import { formatCOP } from "@/lib/formatters"
 import { getEmpresaCkreaId } from "@/lib/empresa"
-import { CheckCircle, Clock, AlertCircle, Zap, FileText } from "lucide-react"
+import { CheckCircle, Clock, AlertCircle, Zap, FileText, Download } from "lucide-react"
 import { MedidoresAdminTable } from "@/components/medidores/medidores-admin-table"
 import Link from "next/link"
-import { isValidPeriodo, isValidYear } from "@/lib/security/validators"
-import { MedidoresFilter } from "@/components/medidores/medidores-filter"
+import { isValidPeriodo } from "@/lib/security/validators"
 import { lecturaPeriodo } from "@/lib/periodo"
 
 const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
@@ -30,15 +30,12 @@ function buildPeriodos(year: number) {
 export default async function MedidoresPage({
   searchParams,
 }: {
-  searchParams: Promise<{ periodo?: string; year?: string }>
+  searchParams: Promise<{ periodo?: string }>
 }) {
-  const { periodo: periodoParam, year: yearParam } = await searchParams
-  const now = new Date()
-  const selectedYear = isValidYear(yearParam) ? Number(yearParam) : now.getFullYear()
+  const { periodo: periodoParam } = await searchParams
   // Default to the measurement month: day-9 readings are stored under the PREVIOUS month
   const defaultPeriodo = lecturaPeriodo()
   const periodo = isValidPeriodo(periodoParam) ? periodoParam : defaultPeriodo
-  const PERIODOS = buildPeriodos(selectedYear)
 
   const empresaId = await getEmpresaCkreaId()
 
@@ -47,6 +44,12 @@ export default async function MedidoresPage({
     getUnitsWithMeters(empresaId),
     getMeterYears(),
   ])
+
+  // Period list from already-fetched years (no new query): every valid month of
+  // every known year, newest first. The dropdown only ever pushes ?periodo=.
+  const PERIODOS = years
+    .flatMap((y) => buildPeriodos(y))
+    .sort((a, b) => b.value.localeCompare(a.value))
 
   const registradas  = rows.filter((r) => r.status === "registrada")
   const sinLectura   = rows.filter((r) => r.status === "sin_lectura")
@@ -57,22 +60,29 @@ export default async function MedidoresPage({
 
   return (
     <>
-      <PageHeader title="Medidores de Energía">
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            Medidores de Energía
+            <PeriodoDropdown periodos={PERIODOS} periodo={periodo} basePath="/medidores" />
+          </span>
+        }
+      >
         <Link
           href={`/medidores/facturas?periodo=${periodo}`}
           className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
         >
           <FileText className="h-4 w-4 text-slate-500" />
-          Facturas de Energía
+          Ingreso Facturas
         </Link>
+        <a
+          href={`/api/medidores/export-energia?periodo=${periodo}`}
+          className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm hover:bg-emerald-100 transition-colors"
+        >
+          <Download className="h-4 w-4" />
+          Exportar Excel
+        </a>
       </PageHeader>
-
-      <MedidoresFilter
-        years={years}
-        periodos={PERIODOS}
-        selectedYear={selectedYear}
-        selectedPeriodo={periodo}
-      />
 
       {/* KPI strip */}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">

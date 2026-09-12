@@ -10,14 +10,20 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
 
-export function AccrualForm() {
+// Tasa DIAN vigente (decimal, ej. 0.2768). El padre server la lee con
+// getTasaMoraVigente() y la pasa; sin tasa se muestra texto sin número (nunca la
+// 0.05% pre-DIAN hardcodeada).
+export function AccrualForm({ tasaEa }: { tasaEa?: number | null }) {
   const [state, action, pending] = useActionState(calcularIntereses, initial)
+  const tasaDiaria = tasaEa != null ? `${(tasaEa / 366 * 100).toFixed(4)}%` : null
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <h2 className="mb-1 text-sm font-semibold text-slate-800">Calcular Intereses de Mora</h2>
       <p className="mb-4 text-xs text-slate-400">
-        Acumula 0.05%/día sobre saldo vencido (Regla C). Idempotente — seguro repetir por fecha.
+        {tasaDiaria
+          ? `Acumula ${tasaDiaria}/día sobre saldo vencido (Regla C, tasa DIAN vigente). Idempotente — seguro repetir por fecha.`
+          : `Acumula intereses de mora según la tasa DIAN vigente (Regla C) sobre saldo vencido. Idempotente — seguro repetir por fecha.`}
       </p>
 
       <form action={action} className="space-y-3">

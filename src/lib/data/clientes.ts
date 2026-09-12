@@ -1,5 +1,6 @@
 import { execute } from "@/lib/db/executor"
-import { getGracePeriod } from "@/lib/data/configuracion"
+import { getIvaRate } from "@/lib/data/configuracion"
+import { moraVencEfecExpr } from "@/lib/data/mora"
 import { cached } from "@/lib/cache"
 
 const ENTRADA_RE = /^[A-Za-z0-9 ]{1,8}$/
@@ -68,7 +69,12 @@ async function getLocalesKPIs_uncached(entrada?: string): Promise<LocalesKPIs> {
 }
 
 async function getClienteRows_uncached(entrada?: string): Promise<ClienteRow[]> {
-  const grace = await getGracePeriod()
+  const iva = await getIvaRate()
+  // Regla canónica de mora (mora.ts): venc_efec = fecha_factura + 30, sin gracia.
+  // ca.dias_mora es CURRENT_DATE − vencimiento ERP crudo y grace_period_days=30
+  // se sumaba encima (doble gracia ≈60 días desde factura). El estado y max usan
+  // la fecha corregida y solo FVS (igual que /mora); el saldo mostrado sigue
+  // siendo todo vr_vencido>0 para no esconder deuda no-FVS en la tabla.
   const e = safeEntrada(entrada)
   const entradaExists = e
     ? `AND EXISTS (
@@ -92,7 +98,7 @@ async function getClienteRows_uncached(entrada?: string): Promise<ClienteRow[]> 
       COALESCE((
         SELECT SUM(
           o.precio * (1 - COALESCE(o.descuento, 0) / 100.0)
-          * (1.19 - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
+          * ((1 + ${iva}) - CASE WHEN t.tipo_persona = 'PJ' THEN 0.035 ELSE 0 END)
         )
         FROM siesa_raw.ocupacion o
         WHERE o.documento = t.nit
@@ -104,17 +110,17 @@ async function getClienteRows_uncached(entrada?: string): Promise<ClienteRow[]> 
         WHERE ca.inquilino_id = t.id AND ca.vr_vencido > 0
       ), 0)::numeric                                                     AS saldo_vencido,
       COALESCE((
-        SELECT MAX(ca.dias_mora) FROM v2.vista_cartera_actual ca
-        WHERE ca.inquilino_id = t.id AND ca.vr_vencido > 0
+        SELECT MAX(GREATEST(0, CURRENT_DATE - (${moraVencEfecExpr("ca.fecha_vencimiento", "ca.fecha_factura")}))) FROM v2.vista_cartera_actual ca
+        WHERE ca.inquilino_id = t.id AND ca.vr_vencido > 0 AND ca.factura LIKE 'FVS-%'
       ), 0)                                                              AS max_dias_mora,
       CASE
         WHEN bool_or(con.estado IN ('activo', 'critico'))
-          AND (SELECT COALESCE(MAX(ca.dias_mora), 0) FROM v2.vista_cartera_actual ca
-               WHERE ca.inquilino_id = t.id AND ca.vr_vencido > 0) > 60
+          AND (SELECT COALESCE(MAX(GREATEST(0, CURRENT_DATE - (${moraVencEfecExpr("ca.fecha_vencimiento", "ca.fecha_factura")}))), 0) FROM v2.vista_cartera_actual ca
+               WHERE ca.inquilino_id = t.id AND ca.vr_vencido > 0 AND ca.factura LIKE 'FVS-%') > 60
           THEN 'critico'
         WHEN bool_or(con.estado IN ('activo', 'critico'))
-          AND (SELECT COALESCE(MAX(ca.dias_mora), 0) FROM v2.vista_cartera_actual ca
-               WHERE ca.inquilino_id = t.id AND ca.vr_vencido > 0) > ${grace}
+          AND (SELECT COALESCE(MAX(GREATEST(0, CURRENT_DATE - (${moraVencEfecExpr("ca.fecha_vencimiento", "ca.fecha_factura")}))), 0) FROM v2.vista_cartera_actual ca
+               WHERE ca.inquilino_id = t.id AND ca.vr_vencido > 0 AND ca.factura LIKE 'FVS-%') > 0
           THEN 'en_mora'
         WHEN bool_or(con.estado IN ('activo', 'critico')) THEN 'al_dia'
         ELSE 'inactivo'

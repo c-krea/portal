@@ -382,3 +382,42 @@ END $$;
 ALTER TABLE perfiles
     ADD CONSTRAINT perfiles_inquilino_fk
     FOREIGN KEY (inquilino_id) REFERENCES inquilinos(id) ON DELETE SET NULL;
+
+-- =============================================================================
+-- 13. MORA_SNAPSHOTS_MENSUALES — Historial mensual de cartera vencida (WOR-310)
+-- Añadida vía supabase/migrations/20260910094905_mora_snapshots_mensuales.sql
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS mora_snapshots_mensuales (
+    empresa_id     uuid NOT NULL REFERENCES empresas(id),
+    periodo        text NOT NULL,        -- 'YYYY-MM'
+    clientes       integer NOT NULL,
+    saldo_vencido  numeric NOT NULL,
+    created_at     timestamptz NOT NULL DEFAULT now(),
+    updated_at     timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (empresa_id, periodo)
+);
+ALTER TABLE mora_snapshots_mensuales ENABLE ROW LEVEL SECURITY;
+
+COMMENT ON TABLE mora_snapshots_mensuales IS 'Daily upsert of the current month''s mora totals (WOR-310). Feeds the /mora trend chart. Grain is one row per calendar month, overwritten daily until the month closes — not a daily time series. Mutable derived cache from vista_cartera_actual, not a ledger record, never audit-relied-upon. RLS enabled with no policies, service_role-only by design.';
+
+-- =============================================================================
+-- 14. PORTAL_VISITAS_DIARIAS — Historial de ingresos de inquilinos (WOR-318)
+-- Añadida vía supabase/migrations/20260911035000_portal_visitas_diarias.sql
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS portal_visitas_diarias (
+    id              uuid PRIMARY KEY DEFAULT uuid_generate_v4(),
+    empresa_id      uuid NOT NULL REFERENCES empresas(id),
+    inquilino_id    uuid NOT NULL REFERENCES inquilinos(id),
+    auth_user_id    uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    dia             date NOT NULL,  -- día calendario America/Bogota, nunca UTC
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (auth_user_id, dia)
+);
+ALTER TABLE portal_visitas_diarias ENABLE ROW LEVEL SECURITY;
+
+CREATE INDEX IF NOT EXISTS idx_portal_visitas_empresa_dia
+    ON portal_visitas_diarias (empresa_id, dia);
+
+COMMENT ON TABLE portal_visitas_diarias IS 'Tenant portal visits, one row per tenant per America/Bogota day (WOR-318). Append-only: inserts use ON CONFLICT DO NOTHING, nothing ever updates or deletes a row. Written from the (portal) layout auth choke point; exists because auth.users.last_sign_in_at is overwritten on every login and keeps no history. RLS enabled with no policies, service_role-only by design.';

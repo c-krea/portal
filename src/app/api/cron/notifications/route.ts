@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { execute, executeDml } from "@/lib/db/executor"
+import { moraVencEfecExpr } from "@/lib/data/mora"
 import { sendPushToUser } from "@/lib/push"
 
 export const dynamic = "force-dynamic"
@@ -86,12 +87,16 @@ export async function GET(req: Request) {
     const inquilinoId = String(user.inquilino_id)
 
     // ── Cartera checks ──────────────────────────────────────────────
+    // Vencimiento canónico (mora.ts): fecha_factura + 30. El ERP aún emite
+    // fechas a 10 días en 6 facturas abiertas, que avisaban ~20 días antes.
+    // El trigger "first overdue" (financia=31, día-31) ya es correcto y no se toca.
     if (nit) {
+      const vencEfec = moraVencEfecExpr("c.fecha_vence::date", "c.fecha_factura::date")
       const cartera = await execute(`
         SELECT
           c.factura,
           ROUND(c.saldo)::int                                        AS saldo,
-          c.fecha_vence::date                                        AS fecha_vence,
+          (${vencEfec})::date                                        AS fecha_vence_efec,
           GREATEST(0, CURRENT_DATE - c.fecha_vence::date)::int      AS dias_mora,
           COALESCE(c.financia, 0)::int                               AS financia
         FROM siesa_raw.cartera c
@@ -101,7 +106,7 @@ export async function GET(req: Request) {
       `)
 
       // Payment due in 3 days — once per invoice
-      for (const row of cartera.filter((r) => String(r.fecha_vence) === in3DaysStr)) {
+      for (const row of cartera.filter((r) => String(r.fecha_vence_efec) === in3DaysStr)) {
         await notify(userId, "due3d", `${nit}-${row.factura}`, {
           title: "Pago próximo a vencer",
           body: `${nombre}, tu factura de ${cop(Number(row.saldo))} vence en 3 días.`,
@@ -110,7 +115,7 @@ export async function GET(req: Request) {
       }
 
       // Payment due today — once per invoice
-      for (const row of cartera.filter((r) => String(r.fecha_vence) === todayStr)) {
+      for (const row of cartera.filter((r) => String(r.fecha_vence_efec) === todayStr)) {
         await notify(userId, "due0d", `${nit}-${row.factura}`, {
           title: "Pago vence hoy",
           body: `${nombre}, tu factura de ${cop(Number(row.saldo))} vence hoy. Evita intereses de mora.`,
@@ -122,7 +127,7 @@ export async function GET(req: Request) {
       for (const row of cartera.filter((r) => Number(r.financia) === 31)) {
         await notify(userId, "overdue", `${nit}-${row.factura}`, {
           title: "Pago vencido",
-          body: `${nombre}, tu factura de ${cop(Number(row.saldo))} entró en mora. Interés del 0.05% diario.`,
+          body: `${nombre}, tu factura de ${cop(Number(row.saldo))} entró en mora, con intereses de mora según la tasa vigente de la Superintendencia Financiera.`,
           url: "/portal/pagos",
         }, results)
       }

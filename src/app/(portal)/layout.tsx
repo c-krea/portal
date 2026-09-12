@@ -1,4 +1,5 @@
 import { requireInquilino } from "@/lib/auth/session"
+import { recordPortalVisita } from "@/lib/data/portal"
 import { signOut } from "@/app/(auth)/login/actions"
 import Image from "next/image"
 import { PortalBottomNav } from "@/components/layout/portal-bottom-nav"
@@ -10,6 +11,10 @@ export default async function PortalLayout({
   children: React.ReactNode
 }) {
   const profile = await requireInquilino()
+  // Visit telemetry (WOR-318): awaited so the write completes before the
+  // response finishes. recordPortalVisita catches all errors internally, so a
+  // failed write only logs and the page still renders normally.
+  await recordPortalVisita(profile.userId)
 
   return (
     <div className="w-full min-h-screen bg-slate-50">

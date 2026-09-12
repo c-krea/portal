@@ -9,19 +9,27 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table"
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import { useSearchParams, useRouter, usePathname } from "next/navigation"
-import { ArrowUpDown, ArrowUp, ArrowDown, ChevronRight, SlidersHorizontal, X } from "lucide-react"
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight, X } from "lucide-react"
 import { formatCOP } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
 import type { ClienteRow } from "@/lib/data/clientes"
 
-const STATUS_CONFIG = {
-  al_dia:   { dot: "bg-emerald-500", label: "Al Día" },
-  en_mora:  { dot: "bg-rose-500",    label: "En Mora" },
-  critico:  { dot: "bg-rose-700",    label: "Crítico" },
-  inactivo: { dot: "bg-slate-300",   label: "Inactivo" },
-} as const
+type StatusKey = ClienteRow["status"]
+type Panel = "estado" | "entrada" | null
+
+// Same ring-pill language as PagosTable's ESTADO_META, mapped onto the 4
+// locales statuses. Colors keep the existing dot semantics (al_dia emerald,
+// en_mora rose, critico stronger rose, inactivo slate) — only the shape
+// changes from dot+label to pill. inactivo renders as "Vacante" to match the
+// Estado filter option.
+const ESTADO_META: Record<StatusKey, { label: string; pill: string; checkbox: string }> = {
+  al_dia:   { label: "Al día",  pill: "bg-emerald-50 text-emerald-700 ring-emerald-200", checkbox: "accent-emerald-600" },
+  en_mora:  { label: "En mora", pill: "bg-rose-50 text-rose-700 ring-rose-200",          checkbox: "accent-rose-600" },
+  critico:  { label: "Crítico", pill: "bg-rose-100 text-rose-800 ring-rose-300",         checkbox: "accent-rose-700" },
+  inactivo: { label: "Vacante", pill: "bg-slate-100 text-slate-600 ring-slate-200",      checkbox: "accent-slate-500" },
+}
 
 const ENTRADAS = [
   { value: "1",      label: "Entrada 1" },
@@ -32,32 +40,19 @@ const ENTRADAS = [
   { value: "ZONA 8", label: "Zona 8"    },
 ]
 
-type Tab = "todos" | "al_dia" | "en_mora" | "criticos" | "inactivos"
-
-const ESTADO_OPTIONS: { id: Tab; label: string }[] = [
-  { id: "todos",     label: "Todos" },
-  { id: "al_dia",    label: "Al Día" },
-  { id: "en_mora",   label: "En Mora" },
-  { id: "criticos",  label: "Críticos" },
-  { id: "inactivos", label: "Vacantes" },
-]
-
-const TAB_DEFAULT_SORT: Record<Tab, SortingState> = {
-  todos:     [{ id: "unitNumbers",  desc: false }],
-  al_dia:    [{ id: "canonTotal",   desc: true }],
-  en_mora:   [{ id: "saldoVencido", desc: true }],
-  criticos:  [{ id: "saldoVencido", desc: true }],
-  inactivos: [{ id: "unitNumbers",  desc: false }],
-}
-
-function filterByTab(rows: ClienteRow[], tab: Tab, vacantUnits: ClienteRow[]): ClienteRow[] {
-  switch (tab) {
-    case "al_dia":    return rows.filter((r) => r.status === "al_dia")
-    case "en_mora":   return rows.filter((r) => r.status === "en_mora")
-    case "criticos":  return rows.filter((r) => r.status === "critico")
-    case "inactivos": return vacantUnits
-    default:          return rows
-  }
+// Windowed page numbers: 1 … (c-1) c (c+1) … N with a 2-page edge.
+// Copied from src/components/pagos/pagos-table.tsx.
+function pageWindow(current: number, total: number): (number | "…")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages = [...new Set(
+    [1, 2, current - 1, current, current + 1, total - 1, total].filter((n) => n >= 1 && n <= total),
+  )].sort((a, b) => a - b)
+  const out: (number | "…")[] = []
+  pages.forEach((n, i) => {
+    if (i > 0 && n - pages[i - 1] > 1) out.push("…")
+    out.push(n)
+  })
+  return out
 }
 
 declare module "@tanstack/react-table" {
@@ -124,12 +119,11 @@ const columns: ColumnDef<ClienteRow>[] = [
     size: 110,
     cell: ({ getValue }) => {
       const s = getValue<ClienteRow["status"]>()
-      const { dot, label } = STATUS_CONFIG[s]
+      const meta = ESTADO_META[s]
       return (
-        <div className="flex items-center gap-2">
-          <span className={cn("h-2 w-2 rounded-full shrink-0", dot)} />
-          <span className="text-slate-700">{label}</span>
-        </div>
+        <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1", meta.pill)}>
+          {meta.label}
+        </span>
       )
     },
   },
@@ -186,52 +180,74 @@ export function ClientesTable({
   const router = useRouter()
   const pathname = usePathname()
 
-  const rawTab = searchParams.get("tab")
-  const tab: Tab = (["todos","al_dia","en_mora","criticos","inactivos"].includes(rawTab ?? "") ? rawTab : "todos") as Tab
-
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [sorting, setSorting] = useState<SortingState>(TAB_DEFAULT_SORT[tab])
+  // Empty = no filter applied (shows everything). Same rule as PagosTable.
+  const [estados, setEstados] = useState<StatusKey[]>([])
+  const [sorting, setSorting] = useState<SortingState>([{ id: "unitNumbers", desc: false }])
   const [globalFilter, setGlobalFilter] = useState("")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
+  const [openPanel, setOpenPanel] = useState<Panel>(null)
+  const toolbarRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { setSorting(TAB_DEFAULT_SORT[tab]) }, [tab])
+  // Panels are floating (absolute): opening one never moves the table.
+  // Copied from PagosTable.
+  useEffect(() => {
+    if (!openPanel) return
+    const onDown = (e: PointerEvent) => {
+      if (toolbarRef.current && !toolbarRef.current.contains(e.target as Node)) setOpenPanel(null)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenPanel(null)
+    }
+    document.addEventListener("pointerdown", onDown)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("pointerdown", onDown)
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [openPanel])
 
-  const activeFilterCount = (tab !== "todos" ? 1 : 0) + (activeEntrada ? 1 : 0)
+  // Narrowed page resets when any filter or the underlying rows change.
+  useEffect(() => {
+    setPage(1)
+  }, [estados, globalFilter, pageSize, activeEntrada, data, vacantUnits])
 
-  function setTab(next: Tab) {
-    const params = new URLSearchParams(searchParams.toString())
-    if (next === "todos") params.delete("tab")
-    else params.set("tab", next)
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false })
+  function togglePanel(p: Exclude<Panel, null>) {
+    setOpenPanel((prev) => (prev === p ? null : p))
   }
 
+  function toggleEstado(s: StatusKey) {
+    setEstados((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
+  }
+
+  // Entrada stays a server round-trip via URL param (narrows KPIs + rows) —
+  // only the trigger is restyled to the floating-panel look. Single-select,
+  // closes on pick.
   function setEntrada(next: string | undefined) {
+    setOpenPanel(null)
     const params = new URLSearchParams(searchParams.toString())
     if (!next) params.delete("entrada")
     else params.set("entrada", next)
     params.delete("tab")
-    router.push(`${pathname}?${params.toString()}`, { scroll: false })
+    const qs = params.toString()
+    router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
   }
 
   function clearAll() {
-    router.push(pathname, { scroll: false })
+    setEstados([])
     setGlobalFilter("")
+    router.push(pathname, { scroll: false })
   }
 
-  const tabCounts = useMemo(
-    () => ({
-      todos:     data.length,
-      al_dia:    data.filter((r) => r.status === "al_dia").length,
-      en_mora:   data.filter((r) => r.status === "en_mora").length,
-      criticos:  data.filter((r) => r.status === "critico").length,
-      inactivos: vacantUnits.length,
-    }),
-    [data, vacantUnits]
+  const allRows = useMemo(() => [...data, ...vacantUnits], [data, vacantUnits])
+
+  const estadoFiltered = useMemo(
+    () => (estados.length === 0 ? allRows : allRows.filter((r) => estados.includes(r.status))),
+    [allRows, estados],
   )
 
-  const filtered = useMemo(() => filterByTab(data, tab, vacantUnits), [data, tab, vacantUnits])
-
   const table = useReactTable({
-    data: filtered,
+    data: estadoFiltered,
     columns,
     state: { sorting, globalFilter },
     onSortingChange: setSorting,
@@ -241,177 +257,150 @@ export function ClientesTable({
     getFilteredRowModel: getFilteredRowModel(),
   })
 
+  const sortedRows = table.getRowModel().rows
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize))
+  const safePage = Math.min(page, totalPages)
+  const paginated = sortedRows.slice((safePage - 1) * pageSize, safePage * pageSize)
+  const rangeA = sortedRows.length === 0 ? 0 : (safePage - 1) * pageSize + 1
+  const rangeB = Math.min(safePage * pageSize, sortedRows.length)
+
+  const hasActiveFilters = estados.length > 0 || !!activeEntrada || globalFilter !== ""
+  const entradaLabel = activeEntrada
+    ? (ENTRADAS.find((e) => e.value === activeEntrada)?.label ?? `Entrada ${activeEntrada}`)
+    : "Entrada"
+
   return (
-    <div>
-      {/* Toolbar */}
-      <div className="mb-3 flex items-center gap-2">
-        <input
-          type="text"
-          placeholder="Buscar cliente o NIT..."
-          value={globalFilter}
-          onChange={(e) => setGlobalFilter(e.target.value)}
-          className="w-full max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
-
-        <button
-          onClick={() => setFiltersOpen((o) => !o)}
-          className={cn(
-            "flex shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-medium shadow-sm transition-colors",
-            filtersOpen || activeFilterCount > 0
-              ? "border-blue-500 bg-blue-50 text-blue-700"
-              : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-          )}
-        >
-          <SlidersHorizontal className="h-3.5 w-3.5" />
-          Filtros
-          {activeFilterCount > 0 && (
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">
-              {activeFilterCount}
-            </span>
-          )}
-        </button>
-
-        {activeFilterCount > 0 && (
-          <button
-            onClick={clearAll}
-            className="flex shrink-0 items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
-          >
-            <X className="h-3 w-3" />
-            Limpiar
-          </button>
-        )}
-      </div>
-
-      {/* Filter panel */}
-      {filtersOpen && (
-        <div className="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-4">
-
-          {/* Estado */}
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Estado</p>
-            <div className="flex flex-wrap gap-2">
-              {ESTADO_OPTIONS.map(({ id, label }) => (
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 px-5 py-4">
+        {/* Floating filter panels live inside `relative` wrappers below, so the
+            toolbar keeps its height whether a panel is open or not. Same
+            pattern as PagosTable: only one panel open at a time,
+            outside-click / Escape to close. */}
+        <div ref={toolbarRef} className="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            placeholder="Buscar cliente o NIT..."
+            value={globalFilter}
+            onChange={(e) => setGlobalFilter(e.target.value)}
+            className="h-10 w-full max-w-xs rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-700 placeholder:text-slate-400 hover:border-slate-300 focus:border-slate-400 focus:outline-none"
+          />
+          <div className="relative">
+            <button
+              onClick={() => togglePanel("estado")}
+              className="flex h-10 min-w-[120px] items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-700 hover:border-slate-300"
+            >
+              Estado{estados.length > 0 ? `: ${estados.length}` : ""}
+              <ChevronDown className="h-4 w-4 text-slate-400" />
+            </button>
+            {openPanel === "estado" && (
+              <div className="absolute left-0 top-full z-20 mt-1 w-48 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
+                {(Object.keys(ESTADO_META) as StatusKey[]).map((s) => (
+                  <label
+                    key={s}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-100"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={estados.includes(s)}
+                      onChange={() => toggleEstado(s)}
+                      className={cn("h-4 w-4 rounded", ESTADO_META[s].checkbox)}
+                    />
+                    {ESTADO_META[s].label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="relative">
+            <button
+              onClick={() => togglePanel("entrada")}
+              className="flex h-10 min-w-[140px] items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm text-slate-700 hover:border-slate-300"
+            >
+              {entradaLabel}
+              <ChevronDown className="h-4 w-4 text-slate-400" />
+            </button>
+            {openPanel === "entrada" && (
+              <div className="absolute left-0 top-full z-20 mt-1 w-44 rounded-lg border border-slate-200 bg-white p-2 shadow-lg">
                 <button
-                  key={id}
-                  onClick={() => setTab(id)}
+                  onClick={() => setEntrada(undefined)}
                   className={cn(
-                    "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-                    tab === id
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    "w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-100",
+                    !activeEntrada ? "font-semibold text-slate-900" : "text-slate-600",
                   )}
                 >
-                  {label}
-                  <span className={cn(
-                    "rounded-full px-1.5 py-0.5 text-[10px]",
-                    tab === id ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-500"
-                  )}>
-                    {tabCounts[id]}
-                  </span>
+                  Todas
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Entrada */}
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Entrada</p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setEntrada(undefined)}
-                className={cn(
-                  "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-                  !activeEntrada
-                    ? "border-blue-500 bg-blue-50 text-blue-700"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                )}
-              >
-                Todas
-              </button>
-              {ENTRADAS.map(({ value, label }) => (
-                <button
-                  key={value}
-                  onClick={() => setEntrada(activeEntrada === value ? undefined : value)}
-                  className={cn(
-                    "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-                    activeEntrada === value
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-        </div>
-      )}
-
-      {/* Active filter chips */}
-      {activeFilterCount > 0 && (
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {tab !== "todos" && (
-            <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-              {ESTADO_OPTIONS.find((o) => o.id === tab)?.label}
-              <button onClick={() => setTab("todos")} className="ml-0.5 hover:text-blue-900">
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          )}
-          {activeEntrada && (
-            <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
-              {ENTRADAS.find((e) => e.value === activeEntrada)?.label}
-              <button onClick={() => setEntrada(undefined)} className="ml-0.5 hover:text-blue-900">
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full text-xs">
-          <thead>
-            {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id} className="border-b border-slate-100">
-                {hg.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    onClick={header.column.getToggleSortingHandler()}
-                    style={{ width: header.column.columnDef.size }}
+                {ENTRADAS.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => setEntrada(activeEntrada === value ? undefined : value)}
                     className={cn(
-                      "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500",
-                      header.column.getCanSort() && "cursor-pointer select-none hover:text-slate-700",
-                      header.column.columnDef.meta?.className,
+                      "w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-100",
+                      activeEntrada === value ? "font-semibold text-slate-900" : "text-slate-600",
                     )}
                   >
-                    <div className="flex items-center gap-1">
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                      {header.column.getCanSort() &&
-                        (header.column.getIsSorted() === "asc" ? (
-                          <ArrowUp className="h-3 w-3 text-slate-500" />
-                        ) : header.column.getIsSorted() === "desc" ? (
-                          <ArrowDown className="h-3 w-3 text-slate-500" />
-                        ) : (
-                          <ArrowUpDown className="h-3 w-3 text-slate-300" />
-                        ))}
-                    </div>
-                  </th>
+                    {label}
+                  </button>
                 ))}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {table.getRowModel().rows.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="py-12 text-center text-slate-400">
-                  No hay clientes en esta categoría
-                </td>
-              </tr>
-            ) : (
-              table.getRowModel().rows.map((row) => (
+              </div>
+            )}
+          </div>
+          {hasActiveFilters && (
+            <button
+              onClick={clearAll}
+              className="flex shrink-0 items-center gap-1 text-xs text-slate-400 hover:text-slate-600"
+            >
+              <X className="h-3 w-3" />
+              Limpiar
+            </button>
+          )}
+          <span className="ml-auto whitespace-nowrap text-sm text-slate-500">
+            {sortedRows.length} de {allRows.length} locales
+          </span>
+        </div>
+      </div>
+
+      {sortedRows.length === 0 ? (
+        <div className="px-5 py-12 text-center">
+          <p className="text-sm text-slate-400">
+            {allRows.length === 0 ? "No hay locales registrados aún" : "Sin resultados para este filtro"}
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              {table.getHeaderGroups().map((hg) => (
+                <tr key={hg.id} className="border-b border-slate-100">
+                  {hg.headers.map((header) => (
+                    <th
+                      key={header.id}
+                      onClick={header.column.getToggleSortingHandler()}
+                      style={{ width: header.column.columnDef.size }}
+                      className={cn(
+                        "px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500",
+                        header.column.getCanSort() && "cursor-pointer select-none hover:text-slate-700",
+                        header.column.columnDef.meta?.className,
+                      )}
+                    >
+                      <div className="flex items-center gap-1">
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        {header.column.getCanSort() &&
+                          (header.column.getIsSorted() === "asc" ? (
+                            <ArrowUp className="h-3 w-3 text-slate-500" />
+                          ) : header.column.getIsSorted() === "desc" ? (
+                            <ArrowDown className="h-3 w-3 text-slate-500" />
+                          ) : (
+                            <ArrowUpDown className="h-3 w-3 text-slate-300" />
+                          ))}
+                      </div>
+                    </th>
+                  ))}
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {paginated.map((row) => (
                 <tr
                   key={row.original.tenantId ?? `vacant-${row.original.unitNumbers[0]}`}
                   className={`border-b border-slate-50 hover:bg-slate-50 ${row.original.isVacant ? "" : "cursor-pointer"}`}
@@ -426,15 +415,69 @@ export function ClientesTable({
                     </td>
                   ))}
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      <p className="mt-2 text-xs text-slate-400">
-        {table.getFilteredRowModel().rows.length} de {filtered.length} clientes
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3">
+        <p className="text-xs text-slate-400">
+          Mostrando {rangeA}–{rangeB} de {sortedRows.length}
+        </p>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 text-xs text-slate-400">
+            Filas
+            <select
+              value={pageSize}
+              onChange={(e) => setPageSize(Number(e.target.value))}
+              className="rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs text-slate-700 focus:border-slate-400 focus:outline-none"
+            >
+              {[25, 50, 100].map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </label>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(Math.max(1, safePage - 1))}
+                disabled={safePage === 1}
+                aria-label="Página anterior"
+                className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-40"
+              >
+                ‹
+              </button>
+              {pageWindow(safePage, totalPages).map((n, i) =>
+                n === "…" ? (
+                  <span key={`gap-${i}`} className="px-1 text-xs text-slate-400">…</span>
+                ) : (
+                  <button
+                    key={n}
+                    onClick={() => setPage(n)}
+                    className={cn(
+                      "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                      n === safePage
+                        ? "bg-slate-900 text-white"
+                        : "bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50",
+                    )}
+                  >
+                    {n}
+                  </button>
+                ),
+              )}
+              <button
+                onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+                disabled={safePage === totalPages}
+                aria-label="Página siguiente"
+                className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-40"
+              >
+                ›
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

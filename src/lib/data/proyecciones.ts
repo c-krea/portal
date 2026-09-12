@@ -1,4 +1,7 @@
 import { execute } from "@/lib/db/executor"
+import { getIvaRate } from "@/lib/data/configuracion"
+import { moraVencEfecExpr } from "@/lib/data/mora"
+import { assertUuid, assertYear } from "@/lib/security/validators"
 import { cached } from "@/lib/cache"
 
 export type ProyeccionSummary = {
@@ -71,6 +74,88 @@ export type MensualDetalle = {
   valorTotal: number
 }
 
+export type RecaudoAnual = {
+  ytd: number       // cash with fecha_recaudo in YEAR, any invoice (pesos, no %)
+  preYear: number   // …of which fecha_factura is before Jan 1 of YEAR
+  porMes: number[]  // 12 totals keyed by INVOICE month (index 0 = Jan), 0 when none
+}
+
+async function getRecaudoAnual_uncached(empresaId: string, year: number): Promise<RecaudoAnual> {
+  assertUuid(empresaId)
+  assertYear(year)
+  // Invoice-month attribution reads vista_pagos.fecha_factura directly — NO join
+  // to siesa_raw.documentos (rolling ~4-month window; early-year months would
+  // go wrong). Each statement touches vista_pagos ONCE, so no MATERIALIZED
+  // fence is needed — plain grouped aggregates, one row per month max.
+  //
+  // The monthly series is deliberately NOT bounded by fecha_recaudo: a bar is
+  // "cash collected on THIS month's invoices", whenever it arrived. Bounding it
+  // to the year would permanently understate Nov/Dec, whose tail lands in
+  // January — 2025's invoices took $80,010,282 of their cash in 2026.
+  const totals = await execute(`
+    SELECT
+      ROUND(COALESCE(SUM(p.valor_final), 0)) AS ytd,
+      ROUND(COALESCE(SUM(CASE WHEN p.fecha_factura < DATE '${year}-01-01' THEN p.valor_final ELSE 0 END), 0)) AS pre_year
+    FROM v2.vista_pagos p
+    WHERE p.empresa_id = '${empresaId}'::uuid
+      AND p.fecha_recaudo >= DATE '${year}-01-01'
+      AND p.fecha_recaudo <  DATE '${year + 1}-01-01'
+  `)
+  const monthly = await execute(`
+    SELECT
+      EXTRACT(MONTH FROM p.fecha_factura)::int AS m,
+      ROUND(SUM(p.valor_final)) AS total
+    FROM v2.vista_pagos p
+    WHERE p.empresa_id = '${empresaId}'::uuid
+      AND p.fecha_factura >= DATE '${year}-01-01'
+      AND p.fecha_factura <  DATE '${year + 1}-01-01'
+    GROUP BY 1
+  `)
+  const porMes = Array(12).fill(0) as number[]
+  for (const r of monthly as Array<Record<string, unknown>>) {
+    const m = Number(r.m)
+    if (m >= 1 && m <= 12) porMes[m - 1] = Number(r.total ?? 0)
+  }
+  const t = (totals as Array<Record<string, unknown>>)[0] ?? {}
+  return {
+    ytd:     Number(t.ytd      ?? 0),
+    preYear: Number(t.pre_year ?? 0),
+    porMes,
+  }
+}
+
+export type VencidoSinPagar = {
+  total: number   // past-due open, non-juridica, invoices of YEAR
+  previo: number  // same scope, invoices before YEAR (named, not counted)
+}
+
+async function getVencidoSinPagar_uncached(empresaId: string, year: number): Promise<VencidoSinPagar> {
+  assertUuid(empresaId)
+  assertYear(year)
+  // Effective due date reuses moraVencEfecExpr — the single home of the
+  // invoice+10 vs invoice+30 rule. Do NOT re-inline it here.
+  const vencEfec = moraVencEfecExpr("c.fecha_vencimiento", "c.fecha_factura")
+  const rows = await execute(`
+    SELECT
+      ROUND(COALESCE(SUM(CASE
+        WHEN c.fecha_factura >= DATE '${year}-01-01' AND c.fecha_factura < DATE '${year + 1}-01-01'
+        THEN c.vr_vencido ELSE 0 END), 0)) AS total,
+      ROUND(COALESCE(SUM(CASE
+        WHEN c.fecha_factura < DATE '${year}-01-01'
+        THEN c.vr_vencido ELSE 0 END), 0)) AS previo
+    FROM v2.vista_cartera_actual c
+    WHERE c.empresa_id = '${empresaId}'::uuid
+      AND COALESCE(c.juridica, false) = false
+      AND c.vr_vencido > 0
+      AND (${vencEfec}) < CURRENT_DATE
+  `)
+  const r = (rows as Array<Record<string, unknown>>)[0] ?? {}
+  return {
+    total:  Number(r.total  ?? 0),
+    previo: Number(r.previo ?? 0),
+  }
+}
+
 export type ContractForProjection = {
   contractId: string
   unitId: string
@@ -88,12 +173,13 @@ export type ContractForProjection = {
 const MONTH_LABELS = ["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"]
 
 export async function getProyeccionSummaries(empresaId: string): Promise<ProyeccionSummary[]> {
+  const iva = await getIvaRate()
   const rows = await execute(`
     SELECT
       p.anio                                            AS year,
       COUNT(DISTINCT p.contrato_id)::int                AS contract_count,
       COUNT(DISTINCT p.local_id)::int                   AS unit_count,
-      ROUND(SUM(p.canon_proyectado - p.descuento_proyectado)::numeric * 1.19 / 12) AS total_canon_avg
+      ROUND(SUM(p.canon_proyectado - p.descuento_proyectado)::numeric * (1 + ${iva}) / 12) AS total_canon_avg
     FROM v2.proyecciones p
     WHERE p.empresa_id = '${empresaId}'::uuid
     GROUP BY p.anio
@@ -109,12 +195,13 @@ export async function getProyeccionSummaries(empresaId: string): Promise<Proyecc
 }
 
 async function getProyeccionBreakdown_uncached(empresaId: string, year: number): Promise<ProyeccionBreakdown> {
+  const iva = await getIvaRate()
   // LIVE source: siesa_raw.ocupacion (ERP truth).
   // Phase-discount expiry IS modeled: if c.descuento_hasta_mes ends mid-year,
   // o.descuento applies only for months 1..mes_dcto_end of YEAR, then 0%.
   // If phase ended before YEAR, o.descuento treated as persistent loyalty (flat).
   // Mid-YEAR contract starts prorate canon. IPC bumps NOT modeled.
-  // PJ: retefuente 3.5% → multiplier 1.155. PN: 1.19.
+  // PJ: retefuente 3.5% descontado del multiplicador IVA. PN: sin retefuente.
   const rows = await execute(`
     WITH base AS (
       SELECT
@@ -159,22 +246,22 @@ async function getProyeccionBreakdown_uncached(empresaId: string, year: number):
       ROUND(COALESCE(SUM(canon_mes * active), 0))::numeric                                AS canon_bruto,
       ROUND(COALESCE(SUM(canon_mes * dcto_eff), 0))::numeric                              AS total_descuentos,
       0::numeric                                                                           AS total_pp,
-      ROUND(COALESCE(SUM(canon_mes * (active - dcto_eff) * 0.19), 0))::numeric            AS total_iva,
+      ROUND(COALESCE(SUM(canon_mes * (active - dcto_eff) * ${iva}), 0))::numeric            AS total_iva,
       ROUND(COALESCE(SUM(
         canon_mes * (active - dcto_eff) * (1 - pp_pct)
-        * (1.19 - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
+        * ((1 + ${iva}) - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
       ), 0))::numeric                                                                      AS piso_con_iva,
       ROUND(COALESCE(SUM(
         canon_mes * (active - dcto_eff) * pp_pct * pp_hist_pct
-        * (1.19 - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
+        * ((1 + ${iva}) - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
       ), 0))::numeric                                                                      AS pp_esperado,
       ROUND(COALESCE(SUM(
         canon_mes * (active - dcto_eff) * (1 - pp_pct * pp_hist_pct)
-        * (1.19 - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
+        * ((1 + ${iva}) - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
       ), 0))::numeric                                                                      AS neto_esperado,
       ROUND(COALESCE(SUM(
         canon_mes * (active - dcto_eff)
-        * (1.19 - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
+        * ((1 + ${iva}) - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
       ), 0))::numeric                                                                      AS techo_con_iva
     FROM expanded
   `)
@@ -192,9 +279,10 @@ async function getProyeccionBreakdown_uncached(empresaId: string, year: number):
 }
 
 async function getProyeccionDetalle_uncached(empresaId: string, year: number): Promise<ProyeccionDetalle[]> {
+  const iva = await getIvaRate()
   // LIVE source: siesa_raw.ocupacion. One row per occupied unit.
   // Phase-discount expiry modeled the same way as breakdown.
-  // PJ → multiplier 1.155. PN → 1.19.
+  // PJ: retefuente 3.5% descontado del multiplicador IVA. PN: sin retefuente.
   const rows = await execute(`
     WITH base AS (
       SELECT
@@ -266,12 +354,12 @@ async function getProyeccionDetalle_uncached(empresaId: string, year: number): P
       b.pp_hist_pagos                                                  AS pp_historico_pagos,
       ROUND(
         (b.canon_mes * a.meses_active - b.canon_mes * a.dcto_eff_total)
-        * (1.19 - CASE WHEN b.tipo_persona='PJ' THEN 0.035 ELSE 0 END)
+        * ((1 + ${iva}) - CASE WHEN b.tipo_persona='PJ' THEN 0.035 ELSE 0 END)
       )::numeric                                                       AS neto_anual_iva,
       ROUND(
         (b.canon_mes * a.meses_active - b.canon_mes * a.dcto_eff_total)
         * (1 - b.pp_pct * b.pp_hist_pct)
-        * (1.19 - CASE WHEN b.tipo_persona='PJ' THEN 0.035 ELSE 0 END)
+        * ((1 + ${iva}) - CASE WHEN b.tipo_persona='PJ' THEN 0.035 ELSE 0 END)
       )::numeric                                                       AS neto_esperado_iva,
       b.status
     FROM base b
@@ -300,10 +388,11 @@ async function getProyeccionDetalle_uncached(empresaId: string, year: number): P
 }
 
 async function getProyeccionMensual_uncached(empresaId: string, year: number): Promise<ProyeccionMes[]> {
+  const iva = await getIvaRate()
   // LIVE source: siesa_raw.ocupacion. Per-month aggregation: phase-discount
   // expiry produces a step-up after the phase ends. Mid-year contract starts
   // produce zero canon for months before mes_start. IPC bumps NOT modeled.
-  // PJ → multiplier 1.155. PN → 1.19.
+  // PJ: retefuente 3.5% descontado del multiplicador IVA. PN: sin retefuente.
   const rows = await execute(`
     WITH base AS (
       SELECT
@@ -351,18 +440,18 @@ async function getProyeccionMensual_uncached(empresaId: string, year: number): P
       ROUND(COALESCE(SUM(canon_mes * dcto_eff), 0))::numeric                            AS descuentos,
       0::numeric                                                                         AS pronto_pago,
       ROUND(COALESCE(SUM(canon_mes * (active - dcto_eff)), 0))::numeric                 AS base_neta,
-      ROUND(COALESCE(SUM(canon_mes * (active - dcto_eff) * 0.19), 0))::numeric          AS iva,
+      ROUND(COALESCE(SUM(canon_mes * (active - dcto_eff) * ${iva}), 0))::numeric          AS iva,
       ROUND(COALESCE(SUM(
         canon_mes * (active - dcto_eff) * (1 - pp_pct)
-        * (1.19 - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
+        * ((1 + ${iva}) - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
       ), 0))::numeric                                                                    AS proyectado_piso,
       ROUND(COALESCE(SUM(
         canon_mes * (active - dcto_eff) * pp_pct * pp_hist_pct
-        * (1.19 - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
+        * ((1 + ${iva}) - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
       ), 0))::numeric                                                                    AS pp_esperado,
       ROUND(COALESCE(SUM(
         canon_mes * (active - dcto_eff) * (1 - pp_pct * pp_hist_pct)
-        * (1.19 - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
+        * ((1 + ${iva}) - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
       ), 0))::numeric                                                                    AS proyectado_esperado
     FROM expanded
     GROUP BY mes
@@ -535,3 +624,5 @@ export async function getContractsForProjection(
 export const getProyeccionBreakdown = cached(getProyeccionBreakdown_uncached, ["proyecciones:breakdown"], "proyecciones")
 export const getProyeccionDetalle   = cached(getProyeccionDetalle_uncached,   ["proyecciones:detalle"],   "proyecciones")
 export const getProyeccionMensual   = cached(getProyeccionMensual_uncached,   ["proyecciones:mensual"],   "proyecciones")
+export const getRecaudoAnual       = cached(getRecaudoAnual_uncached,       ["proyecciones:recaudo"],    "proyecciones")
+export const getVencidoSinPagar    = cached(getVencidoSinPagar_uncached,    ["proyecciones:vencido"],    "proyecciones")

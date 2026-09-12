@@ -1,5 +1,6 @@
 import { execute } from "@/lib/db/executor"
-import { getGracePeriod } from "@/lib/data/configuracion"
+import { getIvaRate } from "@/lib/data/configuracion"
+import { moraPastDueExpr, moraVencEfecExpr } from "@/lib/data/mora"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 
 const MONTH_LABELS = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"]
@@ -41,12 +42,18 @@ export type ReporteSummary = {
 
 export async function getAgingBuckets(): Promise<AgingBucket[]> {
   const empresaId = await getEmpresaCkreaId()
+  // Regla canónica (mora.ts): días = CURRENT_DATE − (fecha_factura+30), sin gracia;
+  // vencido = solo FVS + flag-only no-jurídica + vencido. Lo no-FVS lista en '0'
+  // (Al día) aunque esté vencido por fecha — el VENCIDO (1_30+31_60+critica)
+  // iguala a /mora (WOR-323 amendment).
+  const venc = moraVencEfecExpr("fecha_vencimiento", "fecha_factura")
   const rows = await execute(`
     SELECT
       CASE
-        WHEN dias_mora <= 0  THEN '0'
-        WHEN dias_mora <= 30 THEN '1_30'
-        WHEN dias_mora <= 60 THEN '31_60'
+        WHEN factura NOT LIKE 'FVS-%' THEN '0'
+        WHEN GREATEST(0, CURRENT_DATE - (${venc})) <= 0  THEN '0'
+        WHEN GREATEST(0, CURRENT_DATE - (${venc})) <= 30 THEN '1_30'
+        WHEN GREATEST(0, CURRENT_DATE - (${venc})) <= 60 THEN '31_60'
         ELSE 'critica'
       END AS bucket,
       COUNT(*)::int                              AS count,
@@ -55,7 +62,7 @@ export async function getAgingBuckets(): Promise<AgingBucket[]> {
     FROM v2.vista_cartera_actual
     WHERE saldo > 0
       AND empresa_id = '${empresaId}'
-      AND juridica = false
+      AND COALESCE(juridica, false) = false
     GROUP BY bucket
     ORDER BY bucket
   `)
@@ -111,6 +118,7 @@ export async function getMonthlyCollections(year = 2026): Promise<MonthlyCollect
 
 export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal[]> {
   const empresaId = await getEmpresaCkreaId()
+  const iva = await getIvaRate()
   const [proyRows, recRows] = await Promise.all([
     execute(`
       WITH base AS (
@@ -153,11 +161,11 @@ export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal
         mes AS month,
         ROUND(COALESCE(SUM(
           canon_mes * (active - dcto_eff) * (1 - pp_pct)
-          * (1.19 - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
+          * ((1 + ${iva}) - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
         ), 0))::numeric AS piso,
         ROUND(COALESCE(SUM(
           canon_mes * (active - dcto_eff)
-          * (1.19 - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
+          * ((1 + ${iva}) - CASE WHEN tipo_persona='PJ' THEN 0.035 ELSE 0 END)
         ), 0))::numeric AS techo
       FROM expanded
       GROUP BY mes
@@ -200,16 +208,20 @@ export async function getProyectadoVsReal(year = 2026): Promise<ProyectadoVsReal
 
 export async function getReporteSummary(year = 2026): Promise<ReporteSummary> {
   const empresaId = await getEmpresaCkreaId()
-  const grace = await getGracePeriod()
+  // Regla canónica (mora.ts): vencido = solo FVS + flag-only no-jurídica +
+  // CURRENT_DATE − (fecha_factura+30) > 0, sin gracia. Iguala a /mora
+  // (WOR-323 amendment). totalCartera sigue siendo todo saldo>0 no-jurídico.
 
+  const vencSum = moraVencEfecExpr("fecha_vencimiento", "fecha_factura")
+  const pastSum = moraPastDueExpr(vencSum)
   const [carteraRow, pagosRow] = await Promise.all([
     execute(`
       SELECT
         COALESCE(SUM(saldo) FILTER (WHERE saldo > 0), 0)::numeric AS total_cartera,
-        COALESCE(SUM(vr_vencido) FILTER (WHERE dias_mora > ${grace}), 0)::numeric AS total_vencido
+        COALESCE(SUM(vr_vencido) FILTER (WHERE vr_vencido > 0 AND factura LIKE 'FVS-%' AND ${pastSum}), 0)::numeric AS total_vencido
       FROM v2.vista_cartera_actual
       WHERE empresa_id = '${empresaId}'
-        AND juridica = false
+        AND COALESCE(juridica, false) = false
     `),
     execute(`
       WITH vp AS MATERIALIZED (
