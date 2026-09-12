@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 24.x matches the Vercel project's Node version — a CI pass on a
+      # different major would not mean the deploy builds.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - run: npm ci
+
+      # The one that matters. A missing bracket inside a template-string SQL
+      # query is invisible until the query runs, but a type error in the code
+      # around it is not — and this is the cheapest gate that catches it.
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Report-only for now: the repo carries 10 pre-existing eslint errors and
+      # 17 warnings that predate this workflow. Gating on them would make CI red
+      # on day one and train everyone to ignore it. Clear the backlog, then drop
+      # continue-on-error and let it bite.
+      - name: Lint (report only)
+        continue-on-error: true
+        run: npm run lint
+
+# Deliberately no `next build` step: this app reads a live database at render
+# time, so a build here would either need production credentials in CI or fail
+# on prerender. Vercel builds every push anyway, and that build is the real one.

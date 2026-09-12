@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "sync-csf": "npx tsx scripts/sync-csf.ts",
     "dev:test": "bash scripts/dev-local.sh",
     "test:local": "bash scripts/test-local.sh",
