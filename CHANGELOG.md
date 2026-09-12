@@ -4,6 +4,16 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 
 ## [Unreleased]
 
+### 2026-09-12 — Repo de referencia: gburgos293/Ckrea-Portal
+
+El repositorio se movió a la cuenta `ginreymon`, y con eso Vercel dejó de recibir avisos de
+GitHub: **la producción quedó congelada en la compilación del 28 de agosto** y los PR #10 a #14
+nunca salieron al aire, incluida la corrección del aviso amarillo en el portal del inquilino.
+
+Desde hoy **`gburgos293/Ckrea-Portal` es el repositorio de referencia** y `ginreymon` queda como
+copia. Trabajar sobre la copia no despliega nada.
+
+
 ### 2026-09-12 — Portal redesign, and one mora rule
 
 Every page rebuilt to the Rutas layout, plus the money corrections found while doing it. PR #14.
