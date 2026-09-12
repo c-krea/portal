@@ -4,6 +4,31 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 
 ## [Unreleased]
 
+### 2026-09-12 — Portal redesign, and one mora rule
+
+Every page rebuilt to the Rutas layout, plus the money corrections found while doing it. PR #14.
+
+#### Números que cambian — léase antes de responderle a un inquilino
+
+Son correcciones a propósito. Cada uno va a parecer un error si no se sabe que venía.
+
+- **La mora que ve el inquilino sube ~15%.** Al inquilino se le mostraba 0,05%/día (la tasa vieja, anterior a la DIAN) mientras se le cobraba 0,0756% (27,68% E.A. ÷ 366). Ahora ve la tasa que realmente paga. Nadie cobró de más; lo que estaba mal era el número en pantalla.
+- **"Vencido" en Reportes pasa de $37.467.795 a $92.240.457.** Leía la fecha de vencimiento del ERP, que no sirve: todos los inquilinos figuran con "CREDITO A 10 DIAS", lo que contradice la regla de interés desde el día 31.
+- **/locales muestra 10 en mora y /mora muestra 11.** No es un error. Punto Acrílico no tiene contrato y /locales solo cuenta inquilinos con contrato. Hay un ícono de ayuda en la página que lo dice.
+- **La gráfica de tendencia de mora se corrió un mes.** Cada punto era el saldo al *inicio* del mes, así que el punto rotulado septiembre era en realidad el cierre de agosto. Ahora cada punto es el cierre de su mes y el mes en curso va en vivo, igual al total de arriba.
+
+#### Changed
+- Una sola regla de mora. La fecha de vencimiento se calcula `fecha_factura + 30` y vive en un solo archivo. Antes había **7 definiciones distintas** de "en mora" regadas por el código.
+- `es_juridica` ahora es solo la marca. Antes también significaba "no tiene contrato", lo que escondía a **Punto Acrílico — $4.818.675, 952 días vencido, nunca se marcó nada**. Queda por decidir: jurídico, cobrable o castigo.
+- Resumen separa el recaudo por atraso real (30 días desde la fecha de cada factura) y no por mes calendario.
+- Proyecciones pasa al final del menú, con 4 tarjetas y una gráfica de proyectado vs recaudado.
+
+#### Fixed
+- IVA y la ventana de pronto pago no los leía nadie; ahora sí mueven el cálculo.
+- `/locales` no cargaba: faltaba un paréntesis en la consulta.
+- El recaudo mensual ya no se corta por año — las facturas de noviembre y diciembre que se cobran en enero dejaban de contarse.
+
+
 ### 2026-09-10 — Tenant portal no longer warns that payments are outdated
 
 #### Fixed

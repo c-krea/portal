@@ -56,6 +56,70 @@ separate worktree from `main`. Does not touch the WOR-295 redesign.
 
 ---
 
+## Session 89 — 2026-09-12: WOR-295 shipped — the mora chart was off by a month, and a squash ate the proofs
+
+**PR #14 merged to main as `d5fa5e3`.** 49 commits, 106 files, +12.661 / −3.092. WOR-295 Done.
+
+### Read the PR, not the history
+
+It was **squash-merged**, so all 49 commit messages collapsed into one. The per-commit proofs —
+the md5 match on the trend rewrite, the 20/20 month-end check, the $153.428.496 that
+`dias_mora_al_pago` overstated — exist **only on PR #14** now. If that reasoning is ever needed,
+it is at github.com/ginreymon/Ckrea-Portal/pull/14, not in `git log`.
+
+Verified the squash was faithful before trusting it: `d5fa5e3^{tree}` == `f58e5e2^{tree}`
+(`8e57dc2…`). Same tree, so main is byte-identical to what the proofs ran against.
+
+### The trend chart was off by one month, in public
+
+Each point was the balance at the **start** of its month. So the dot labelled September was
+really August's close — sitting next to a KPI showing today's number, 22M lighter. It read as a
+bug and wasn't; it was two honest numbers answering different questions with the same label.
+
+Now each point is its month's **close**, and the month in progress is cut at `CURRENT_DATE`, so
+the last point equals the /mora KPI exactly and freezes when the month turns.
+
+Two things this forced, both easy to miss:
+
+- **The cutoff had to go day-grain.** The old query compared whole months — exact only while every
+  cutoff lands on the 1st. A live mid-month cutoff would have silently rounded September back to
+  the 1st and reproduced the old number. Looks like it works; isn't.
+- **Resumen shares the series and needs the opposite end.** Its mora % divides by the *opening*
+  balance. Left alone it would have grabbed the live figure and inflated the percentage. It now
+  reads the previous month's point. Denominator unchanged at 114.042.040 — verified, not assumed.
+
+Once aligned, the history says something it couldn't say before: **mora roughly doubled at the
+end of July** (42,1M → 111,6M) and has not come down. Before the fix that jump appeared under
+August, a month after it happened.
+
+### Two conflicts on merge, both structural
+
+- `portal/page.tsx` — main's #13 removed the stale-ERP banner from the dashboard body; this
+  branch removed **the same banner** after extracting that body into `portal-dashboard.tsx`. The
+  same fix done twice, independently. Kept ours; verified nothing from #13 was lost.
+- `AGENTS.md` — main rewrote it shorter for a corporate handoff and dropped the then-empty
+  Reusable Functions stub, which had since filled with six real entries. Took main's structure,
+  re-appended the six trimmed. Flagged it: deleting an empty stub is not rejecting six helpers,
+  but if the brevity was the point, cut it.
+
+### Still true, still unresolved
+
+- **No production deploy fired on merge.** Newest Vercel deploy is 14 days old. GitHub says the
+  repo moved to `ginreymon/Ckrea-Portal` while the local remote still says `gburgos293/` —
+  likely the git integration pointing at a stale path. **The redesign is on main and in front of
+  nobody**, and WOR-318 cannot leave In Progress until it deploys.
+- **No CI on this repo.** `gh pr checks` reports nothing configured. Local `tsc --noEmit` and DB
+  proofs were the only gate on a 106-file money PR.
+- **Punto Acrílico** — $4.818.675, 952 days overdue, no contract, never marked jurídica. Visible
+  for the first time. Business decision open: legal, collectable, or write-off.
+
+### Gotcha worth keeping
+
+`overflow-hidden` clipped an InfoTip for the **fourth** time this feature. It is never a z-index
+problem. If a card holds a tooltip, that class cannot be on the card.
+
+---
+
 ## Session 88 — 2026-09-11/12: WOR-295 finished, then the mora rule turned out to be seven rules (WOR-315, 321, 322, 323)
 
 **WOR-295 is complete at 10/10.** WOR-315 closed it. Two of its four success criteria were
