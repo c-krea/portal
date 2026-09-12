@@ -2,7 +2,6 @@ import { PageHeader } from "@/components/layout/page-header"
 import { ClientesTable } from "@/components/clientes/clientes-table"
 import { InfoTip } from "@/components/pagos/info-tip"
 import { getClienteRows, getVacantUnitRows, getLocalesKPIs } from "@/lib/data/clientes"
-import { formatCOP } from "@/lib/formatters"
 
 export default async function ClientesPage({
   searchParams,
@@ -55,14 +54,14 @@ export default async function ClientesPage({
           </p>
         </div>
 
-        {/* Canon mensual neto */}
+        {/* Locales vacíos */}
         <div className="rounded-[10px] border border-slate-200 bg-white p-4">
-          <p className="text-[22px] font-bold tracking-tight tabular-nums text-slate-900">
-            {formatCOP(kpis.canonMensual)}
+          <p className="text-[26px] font-bold tracking-tight tabular-nums text-slate-900">
+            {kpis.vacantes}
           </p>
           <p className="mt-1 flex items-center gap-1 text-sm text-slate-600">
-            Canon mensual neto
-            <InfoTip text="Sin IVA · neto descuentos de fase" />
+            Locales vacíos
+            <InfoTip text="Locales sin contrato activo. Los demás KPI de esta fila cuentan inquilinos, no locales: un inquilino puede tener varios locales." />
           </p>
         </div>
 

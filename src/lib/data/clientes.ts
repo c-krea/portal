@@ -26,7 +26,6 @@ export type LocalesKPIs = {
   totalUnits: number
   occupiedUnits: number
   vacantes: number
-  canonMensual: number
   contratosPorVencer: number
 }
 
@@ -46,11 +45,6 @@ async function getLocalesKPIs_uncached(entrada?: string): Promise<LocalesKPIs> {
           SELECT 1 FROM v2.contratos c WHERE c.local_id = l.id
             AND c.estado IN ('activo','critico')
         ) ${ef})                                                            AS vacantes,
-      (SELECT COALESCE(SUM(o.precio * (1 - COALESCE(o.descuento,0)/100.0)),0)
-        FROM siesa_raw.ocupacion o
-        JOIN v2.locales l ON l.unidad = o.loc
-        WHERE o.razon_social IS NOT NULL
-          AND COALESCE(o.precio,0) > 0 ${ef})                              AS canon_mensual,
       (SELECT COUNT(*) FROM v2.contratos c
         JOIN v2.locales l ON l.id = c.local_id
         WHERE c.estado IN ('activo','critico')
@@ -63,7 +57,6 @@ async function getLocalesKPIs_uncached(entrada?: string): Promise<LocalesKPIs> {
     totalUnits:         Number(r.total_units          ?? 0),
     occupiedUnits:      Number(r.occupied_units       ?? 0),
     vacantes:           Number(r.vacantes             ?? 0),
-    canonMensual:       Number(r.canon_mensual        ?? 0),
     contratosPorVencer: Number(r.contratos_por_vencer ?? 0),
   }
 }
