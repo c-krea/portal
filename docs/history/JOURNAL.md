@@ -102,12 +102,30 @@ August, a month after it happened.
   re-appended the six trimmed. Flagged it: deleting an empty stub is not rejecting six helpers,
   but if the brevity was the point, cut it.
 
-### Still true, still unresolved
+### Production had not deployed since Aug 28 — resolved
 
-- **No production deploy fired on merge.** Newest Vercel deploy is 14 days old. GitHub says the
-  repo moved to `ginreymon/Ckrea-Portal` while the local remote still says `gburgos293/` —
-  likely the git integration pointing at a stale path. **The redesign is on main and in front of
-  nobody**, and WOR-318 cannot leave In Progress until it deploys.
+The merge fired no build. Neither had PRs #10-#13 on Sep 10, including the tenant banner fix:
+`ckrea.com.co` served an **Aug 28** build for two weeks and nobody noticed, because there were
+**zero failed deploys**. Vercel was simply never told.
+
+Cause: the repo moved to GitHub user `ginreymon`, and Vercel's GitHub App is installed **per
+account**. The installation stayed on `gburgos293`, so no webhook fired. Vercel kept *displaying*
+the correct repo — the link even clicks through — which is what made it look fine.
+
+German is not admin on `ginreymon/Ckrea-Portal` (push/pull/triage only), so he could not repair
+the app installation himself. Fix taken instead: mirror-push to a repo he owns.
+
+- `gburgos293/Ckrea-Portal` is now the **repo of record**; `ginreymon` holds the copy.
+- All 7 branches mirrored, each tip verified against the source sha before trusting it.
+- `refs/pull/*` cannot be pushed (GitHub generates them), so **PR #14's discussion — where the
+  squashed proofs live — stays on `ginreymon` only.**
+- Creating the repo at the old path **shadowed GitHub's redirect**: any old clone still pointing
+  at `gburgos293/Ckrea-Portal` now silently hits the new repo instead of forwarding.
+
+Lesson: a **Redeploy would have shipped the code and left the webhook dead**. Only a real push
+proves the integration. Two pushes have since built automatically (56s, 1m).
+
+### Still unresolved
 - **No CI on this repo.** `gh pr checks` reports nothing configured. Local `tsc --noEmit` and DB
   proofs were the only gate on a 106-file money PR.
 - **Punto Acrílico** — $4.818.675, 952 days overdue, no contract, never marked jurídica. Visible
