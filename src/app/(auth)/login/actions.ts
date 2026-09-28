@@ -1,6 +1,7 @@
 "use server"
 
 import { ROLE_COOKIE, roleCookieOptions } from "@/lib/auth/session-cookie"
+import { bustProfileCache } from "@/lib/auth/session"
 import { supabaseAdmin, sqlStr } from "@/lib/db/executor"
 import { createClient } from "@/lib/supabase/server"
 import { cookies } from "next/headers"
@@ -34,7 +35,7 @@ export async function signIn(
     data: { user },
   } = await supabase.auth.getUser()
 
-  let rol = "visor"
+  let rol: string | null = null
   let home = "/"
   if (user) {
     const { data: roleRows } = await supabaseAdmin.rpc("exec_sql", {
@@ -42,6 +43,14 @@ export async function signIn(
     })
     if (Array.isArray(roleRows) && roleRows[0]?.rol) {
       rol = String(roleRows[0].rol)
+    }
+    // Evict this user's cached profile so the first page after login refetches.
+    bustProfileCache(user.id)
+    if (!rol) {
+      await supabase.auth.signOut()
+      const cookieStore = await cookies()
+      cookieStore.set(ROLE_COOKIE, "", roleCookieOptions(0))
+      return { error: "Tu usuario no tiene acceso a C-Krea. Contacta al administrador." }
     }
     home = rol === "inquilino" ? "/portal" : "/"
 

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { execute } from "@/lib/db/executor"
 import { assertUuid } from "@/lib/security/validators"
-import { unstable_cache, revalidateTag } from "next/cache"
+import { unstable_cache, updateTag } from "next/cache"
 import { CACHE_TTL_SECONDS } from "@/lib/cache"
 import type { User } from "@supabase/supabase-js"
 
@@ -67,13 +67,25 @@ async function loadProfileRow(userId: string): Promise<ProfileRow | null> {
   }
 }
 
-/** Cross-request cache: role/name almost never change mid-day. */
+/** Thrown inside the cross-request cache so a missing profile is never stored.
+ *  Only this sentinel maps to null — real DB errors still propagate. */
+class ProfileMissingError extends Error {}
+
+/** Cross-request cache: role/name almost never change mid-day.
+ *  A miss throws so null is never stored — the next request refetches. */
 function getCachedProfileRow(userId: string): Promise<ProfileRow | null> {
   return unstable_cache(
-    () => loadProfileRow(userId),
+    async () => {
+      const row = await loadProfileRow(userId)
+      if (!row) throw new ProfileMissingError()
+      return row
+    },
     ["session-profile", userId],
     { revalidate: CACHE_TTL_SECONDS, tags: ["profiles", `profile:${userId}`] },
-  )()
+  )().catch((e) => {
+    if (e instanceof ProfileMissingError) return null
+    throw e
+  })
 }
 
 /** Layout + pages share this within one request; profile row cached 60 min across requests. */
@@ -130,8 +142,11 @@ export async function requireAdminOrFinanzasAction(): Promise<
   return requireStaffAction(["admin", "finanzas"])
 }
 
-/** Call after role/name changes so the next page load refetches perfil. */
+/** Call after role/name changes so the next page load refetches perfil.
+ *  updateTag expires immediately (next request blocks for fresh data).
+ *  revalidateTag(tag, "max") would serve the stale row once — wrong here.
+ *  Server Actions only (login, admin writes); never call during page render. */
 export function bustProfileCache(userId?: string): void {
-  revalidateTag("profiles", "max")
-  if (userId) revalidateTag(`profile:${userId}`, "max")
+  updateTag("profiles")
+  if (userId) updateTag(`profile:${userId}`)
 }

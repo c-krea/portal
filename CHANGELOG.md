@@ -4,6 +4,15 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 
 ## [Unreleased]
 
+### 2026-09-28 — Login: usuarios nuevos entran sin esperar
+
+#### Fixed
+- **Un usuario recién agregado a C-Krea entra en su siguiente intento.** Antes, si alguien intentaba entrar antes de tener perfil, el portal recordaba "sin acceso" hasta 60 minutos y lo devolvía al login sin mensaje, aunque ya lo hubieran agregado.
+- **Cambiar el rol o nombre de un usuario en /usuarios aplica de inmediato.** Antes el rol anterior seguía activo hasta 60 minutos.
+
+#### Changed
+- **Contraseña correcta pero sin acceso a C-Krea** → ahora muestra "Tu usuario no tiene acceso a C-Krea. Contacta al administrador." en vez de devolver al login en silencio.
+
 ### 2026-09-28 — Resumen: dona de mora
 
 #### Added
