@@ -44,6 +44,16 @@ function lastSignInLabel(iso: string | null): string {
   })
 }
 
+export type IngresoBucket = "este_mes" | "mes_pasado" | "mas_de_dos" | "nunca"
+
+// Same labels and colors as the "Uso del portal" chart on this page.
+const INGRESO_LABELS: Record<IngresoBucket, { label: string; cls: string }> = {
+  este_mes:   { label: "Este mes",       cls: "bg-emerald-50 text-emerald-700" },
+  mes_pasado: { label: "Mes pasado",     cls: "bg-amber-50 text-amber-700" },
+  mas_de_dos: { label: "Más de 2 meses", cls: "bg-rose-50 text-rose-700" },
+  nunca:      { label: "Nunca",          cls: "bg-slate-100 text-slate-500" },
+}
+
 const ROLE_LABELS: Record<string, { label: string; cls: string }> = {
   admin:    { label: "Admin",    cls: "bg-violet-100 text-violet-800" },
   finanzas: { label: "Finanzas", cls: "bg-blue-100 text-blue-800" },
@@ -68,9 +78,11 @@ function pageWindow(current: number, total: number): (number | "…")[] {
 export function TabSwitcher({
   tenants,
   admins,
+  ingresoPorTenant,
 }: {
   tenants: PortalTenantRow[]
   admins: UsuarioRow[]
+  ingresoPorTenant: Record<string, IngresoBucket>
 }) {
   const [tab, setTab] = useState<"inquilinos" | "admins">("inquilinos")
 
@@ -150,6 +162,7 @@ export function TabSwitcher({
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Inquilino</th>
                   <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Email Portal</th>
                   <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Estado</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Ingreso</th>
                   <th className="hidden md:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Último Acceso</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -184,6 +197,16 @@ export function TabSwitcher({
                             <CircleDashed className="h-3 w-3" /><span className="hidden sm:inline">Sin configurar</span><span className="sm:hidden">—</span>
                           </span>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const ing = INGRESO_LABELS[ingresoPorTenant[t.tenantId] ?? "nunca"]
+                          return (
+                            <span className={cn("inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium", ing.cls)}>
+                              {ing.label}
+                            </span>
+                          )
+                        })()}
                       </td>
                       <td className="hidden md:table-cell px-4 py-3 text-xs text-slate-400">{lastSignInLabel(t.lastSignIn)}</td>
                       <td className="px-3 py-3">
