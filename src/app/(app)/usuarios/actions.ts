@@ -288,6 +288,7 @@ export async function updateAdminUser(
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) }
   }
+  bustProfileCache(userId)
 
   const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
     userId,

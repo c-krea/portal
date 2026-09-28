@@ -6,6 +6,26 @@ This file lives in `docs/history/`.
 
 ---
 
+## 2026-09-28 — Login lockout: cached "no profile"
+
+- **Symptom:** cartera@reymon.com.co (auth user since 2026-09-04, created by another Reymon app)
+  could not enter for days. Password always accepted (auth logs: every `/token` 200); Vercel logs
+  showed `POST /login 303` → `GET /` → `GET /login` 0.4 s later. IT's guesses (RLS, other table)
+  were wrong: the role lookup runs as service_role and reads only `v2.perfiles`.
+- **Cause 1:** no `v2.perfiles` row. `v2.handle_new_user()` only creates one when signup metadata
+  has `app = 'ckrea'`; users created by other apps never get one (123 of 197 auth users have none —
+  mostly expected). Row added 2026-09-28 15:48 UTC.
+- **Cause 2:** after the row existed she still bounced — `getCachedProfileRow` (`unstable_cache`,
+  60 min) had stored `null`. Every retry got the stale null. `bustProfileCache` was imported in
+  `usuarios/actions.ts` but never called, and it used `revalidateTag(tag, "max")`, which is
+  stale-while-revalidate in Next 16 (serves the old value once). Unblocked live by a Vercel tag purge
+  (`profile:<uuid>`, Runtime and Data Cache) — worked on first try.
+- **Fix:** a miss throws a sentinel inside `unstable_cache` so null is never stored; login calls
+  `bustProfileCache` (now `updateTag`, immediate); no-profile login signs out with a clear message
+  instead of defaulting to "visor"; `updateAdminUser` busts the cache so role changes apply at once.
+
+---
+
 ## 2026-09-28 — Pagos estado: Al día / Mora only; Resumen mora donut
 
 - **"Gracia" was never a grace period.** It meant "paid day 11+ of this month, not late" — on-time
