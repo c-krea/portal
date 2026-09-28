@@ -102,10 +102,11 @@ The rate lives in `v2.tasa_interes_mora` and is entered by an admin. If this cal
 row, Mora and the tenant portal use the latest earlier month so interest is not billed as zero.
 The box stays editable and warns when it is using last month.
 
-Days count from the **effective due date** (same in `mora.ts` and the tenant portal): if ERP
-`fecha_vencimiento` is at least factura+25 days, use it; otherwise use factura+30. That catches
-the old Siesa bug where due was factura+10, and any other too-short due date. That is **not** the
-pronto-pago 10-day window. Two clocks.
+Days count from the **effective due date** = `fecha_factura + 30`, always (`moraVencEfecExpr` in
+`mora.ts`, used by Mora, the tenant portal and the Pagos estado). The ERP's `fecha_vencimiento` and
+`dias_mora_al_pago` are never used — Siesa's due dates are misconfigured (the old bug set due at
+factura+10). There is no grace period on top: a payment is late from day 31 after its invoice.
+That is **not** the pronto-pago 10-day window. Two clocks.
 
 The old rule — **0.05%/day from day 11** — is wrong twice (method and start day). Some UI strings
 still say `0.05%/día`; the math does not.

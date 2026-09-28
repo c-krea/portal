@@ -424,7 +424,7 @@ const NIT_RE = /^\d{5,12}(-\d)?$/
 async function getPortalCartera_uncached(nit: string): Promise<PortalCartera> {
   if (!NIT_RE.test(nit)) return { saldoTotal: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }
   // Interés DIAN compartido con /mora (ver mora.ts): misma tasa, misma base
-  // (vr_vencido) y mismos días (venc_efec con la corrección +25/+30 del bug ERP).
+  // (vr_vencido) y mismos días (venc_efec = fecha_factura + 30).
   const rows = await execute(`
     WITH ${moraRateCteSql()},
     base AS (

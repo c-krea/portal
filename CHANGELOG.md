@@ -4,6 +4,15 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 
 ## [Unreleased]
 
+### 2026-09-28 — Estado de pagos: solo "Al día" o "Mora"
+
+#### Changed
+- **Historial de pagos y Resumen: el Estado ahora tiene dos valores**, "Al día" y "Mora". Se quitó "Gracia", que en realidad marcaba pagos hechos a tiempo después del día 10.
+- **Mora = pagó más de 30 días después de la fecha de la factura**, la misma regla única de `/mora` y el portal. Antes decidían la fecha de vencimiento del ERP, el "período de gracia" y "factura de un mes anterior": 20 pagos a tiempo ($37,5M) salían como Mora y 6 pagos tarde ($1,1M) como Al día (copia local, ene-2025 a sep-2026, 2.554 pagos).
+
+#### Removed
+- **/configuracion: "Período de gracia"**. Ya nada lo leía. La fila sigue en la base de datos, oculta y no editable.
+
 ### 2026-09-28 — Pantalla de carga en Locales, columna Ingreso en Usuarios
 
 #### Added
