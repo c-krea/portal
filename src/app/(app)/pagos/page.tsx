@@ -2,7 +2,6 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 import { PageHeader } from "@/components/layout/page-header"
 import { getPagosRange } from "@/lib/data/pagos"
-import { getGracePeriod } from "@/lib/data/configuracion"
 import { PagosTable } from "@/components/pagos/pagos-table"
 import { InfoTip } from "@/components/pagos/info-tip"
 import { formatDateShort } from "@/lib/formatters"
@@ -96,10 +95,7 @@ export default async function PagosPage({
 }) {
   const fecha = resolveFecha(await searchParams)
 
-  const [pagos, gracePeriod] = await Promise.all([
-    getPagosRange(fecha.from, fecha.to),
-    getGracePeriod(),
-  ])
+  const pagos = await getPagosRange(fecha.from, fecha.to)
 
   return (
     <>
@@ -118,7 +114,7 @@ export default async function PagosPage({
           </span>
         }
       />
-      <PagosTable data={pagos} gracePeriod={gracePeriod} fecha={fecha} />
+      <PagosTable data={pagos} fecha={fecha} />
     </>
   )
 }

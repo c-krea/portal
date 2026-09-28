@@ -22,7 +22,6 @@ export const NAV_ITEMS = [
 
 export const STATUS_COLORS = {
   al_dia: "emerald-500",
-  gracia: "amber-500",
   mora: "rose-500",
   proyectado: "blue-500",
   inactivo: "slate-400",

@@ -1,5 +1,4 @@
 import { execute } from "@/lib/db/executor"
-import { getGracePeriod } from "@/lib/data/configuracion"
 import { assertPeriodo } from "@/lib/security/validators"
 import { cached } from "@/lib/cache"
 import { getEmpresaCkreaId } from "@/lib/empresa"
@@ -11,10 +10,10 @@ export type PagoRow = {
   clienteName: string
   unitNumber: string | null
   fechaRecaudo: string
+  fechaFactura: string | null
   valorFinal: number
   siesaDocto: string | null
   siesaCruce: string | null
-  diasMoraAlPago: number
   invoicePeriodo: number | null
 }
 
@@ -330,10 +329,10 @@ async function getPagos_uncached(month: string): Promise<PagoRow[]> {
          AND c2.estado IN ('activo','critico','vencido','terminado')
        ORDER BY c2.created_at DESC LIMIT 1) AS unit_number,
       p.fecha_recaudo,
+      p.fecha_factura::date::text AS fecha_factura,
       p.valor_final::numeric AS valor_final,
       p.docto AS siesa_docto,
       p.cruce AS siesa_cruce,
-      COALESCE(p.dias_mora_al_pago, 0) AS dias_mora_al_pago,
       inv.periodo AS invoice_periodo
     FROM vp p
     LEFT JOIN v2.inquilinos t ON t.id = p.inquilino_id
@@ -351,10 +350,10 @@ async function getPagos_uncached(month: string): Promise<PagoRow[]> {
     clienteName:   String(r.cliente_name ?? ""),
     unitNumber:    r.unit_number ? String(r.unit_number) : null,
     fechaRecaudo:  String(r.fecha_recaudo),
+    fechaFactura: r.fecha_factura ? String(r.fecha_factura) : null,
     valorFinal:    Number(r.valor_final ?? 0),
     siesaDocto:    r.siesa_docto ? String(r.siesa_docto) : null,
     siesaCruce:    r.siesa_cruce ? String(r.siesa_cruce) : null,
-    diasMoraAlPago: Number(r.dias_mora_al_pago ?? 0),
     invoicePeriodo: r.invoice_periodo != null ? Number(r.invoice_periodo) : null,
   }))
 }
@@ -383,10 +382,10 @@ async function getPagosRange_uncached(from: string, to: string): Promise<PagoRow
          AND c2.estado IN ('activo','critico','vencido','terminado')
        ORDER BY c2.created_at DESC LIMIT 1) AS unit_number,
       p.fecha_recaudo,
+      p.fecha_factura::date::text AS fecha_factura,
       p.valor_final::numeric AS valor_final,
       p.docto AS siesa_docto,
       p.cruce AS siesa_cruce,
-      COALESCE(p.dias_mora_al_pago, 0) AS dias_mora_al_pago,
       inv.periodo AS invoice_periodo
     FROM vp p
     LEFT JOIN v2.inquilinos t ON t.id = p.inquilino_id
@@ -404,10 +403,10 @@ async function getPagosRange_uncached(from: string, to: string): Promise<PagoRow
     clienteName:   String(r.cliente_name ?? ""),
     unitNumber:    r.unit_number ? String(r.unit_number) : null,
     fechaRecaudo:  String(r.fecha_recaudo),
+    fechaFactura: r.fecha_factura ? String(r.fecha_factura) : null,
     valorFinal:    Number(r.valor_final ?? 0),
     siesaDocto:    r.siesa_docto ? String(r.siesa_docto) : null,
     siesaCruce:    r.siesa_cruce ? String(r.siesa_cruce) : null,
-    diasMoraAlPago: Number(r.dias_mora_al_pago ?? 0),
     // Rolling-window note: siesa_raw.documentos holds recent months only —
     // NULL here is expected for old rows, not a bug.
     invoicePeriodo: r.invoice_periodo != null ? Number(r.invoice_periodo) : null,
@@ -423,27 +422,24 @@ export type BucketRow = {
 }
 
 export type PagosBuckets = {
-  temprano: BucketRow[]
-  tardio:   BucketRow[]
-  mora:     BucketRow[]
+  al_dia: BucketRow[]
+  mora:   BucketRow[]
 }
 
+// No live caller outside pagos.ts (pre-existing dead code, kept for parity):
+// same estado rule as classifyPagoBucket — mora iff fecha_recaudo > fecha_factura + 30.
 async function getPagosBuckets_uncached(month: string): Promise<PagosBuckets> {
   assertPeriodo(month)
   const [y, m] = month.split("-").map(Number)
   const prev = prevMonthStr(y, m)
   const monthExpr = `DATE '${month}-01'`
-  const grace = await getGracePeriod()
+  const vencEfec = moraVencEfecExpr("d.fecha_vencimiento", "d.fecha_factura")
 
   const rows = await execute(`
     WITH ${electricityTenantsSubquery(monthExpr, prev)},
     deduped AS (
-      SELECT p.inquilino_id, p.fecha_recaudo, p.valor_final, p.dias_mora_al_pago,
-             inv.periodo AS invoice_periodo
+      SELECT p.inquilino_id, p.fecha_recaudo, p.fecha_factura, p.fecha_vencimiento, p.valor_final
       FROM vp p
-      LEFT JOIN siesa_raw.documentos inv
-        ON inv.documento = '001-' || p.cruce
-        AND inv.tipo     = 'Facturas'
       WHERE date_trunc('month', p.fecha_recaudo) = ${monthExpr}
         ${EXCLUDE_ELECTRICITY}
     ),
@@ -453,10 +449,8 @@ async function getPagosBuckets_uncached(month: string): Promise<PagosBuckets> {
         d.fecha_recaudo,
         d.valor_final,
         CASE
-          WHEN d.invoice_periodo IS NOT NULL AND d.invoice_periodo < ${y * 100 + m} THEN 'mora'
-          WHEN COALESCE(d.dias_mora_al_pago, 0) > ${grace} THEN 'mora'
-          WHEN EXTRACT(DAY FROM d.fecha_recaudo) BETWEEN 1 AND 10 THEN 'temprano'
-          ELSE 'tardio'
+          WHEN d.fecha_recaudo::date > ${vencEfec} THEN 'mora'
+          ELSE 'al_dia'
         END AS bucket
       FROM deduped d
     ),
@@ -497,8 +491,7 @@ async function getPagosBuckets_uncached(month: string): Promise<PagosBuckets> {
 
   const all = rows as Record<string, unknown>[]
   return {
-    temprano: mapRows(all.filter((r) => r.bucket === 'temprano')),
-    tardio:   mapRows(all.filter((r) => r.bucket === 'tardio')),
+    al_dia:   mapRows(all.filter((r) => r.bucket === 'al_dia')),
     mora:     mapRows(all.filter((r) => r.bucket === 'mora')),
   }
 }

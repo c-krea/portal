@@ -5,7 +5,6 @@ import { getPagos, getResumenKPIs } from "@/lib/data/pagos"
 import { getMoraTrendReconstruido } from "@/lib/data/mora"
 import { classifyPagoBucket } from "@/lib/pago-bucket"
 import { getPortfolioStats } from "@/lib/data/dashboard"
-import { getGracePeriod } from "@/lib/data/configuracion"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { formatCOP, formatDateShort } from "@/lib/formatters"
 import { isValidPeriodo } from "@/lib/security/validators"
@@ -17,12 +16,12 @@ import {
   type SemanaDatum,
 } from "@/components/resumen/resumen-charts"
 
-// Row-level Estado shares the single classifier in src/lib/data/pagos.ts
-// (same rule as the SQL CASE in getPagosBuckets).
+// Row-level Estado shares the single classifier in src/lib/pago-bucket.ts
+// (same rule as the SQL CASE in getPagosBuckets): mora iff
+// fecha_recaudo > fecha_factura + 30, else Al día.
 
 const ESTADO_META = {
-  temprano: { dot: "bg-emerald-500", label: "Al día" },
-  tardio: { dot: "bg-amber-500", label: "Gracia" },
+  al_dia: { dot: "bg-emerald-500", label: "Al día" },
   mora: { dot: "bg-rose-500", label: "Mora" },
 } as const
 
@@ -46,14 +45,12 @@ export default async function ResumenPage({
 }) {
   const { month: rawMonth } = await searchParams
   const month = isValidPeriodo(rawMonth) ? rawMonth : currentPeriodo()
-  const yyyymm = Number(month.replace("-", ""))
   const [yy, mm] = month.split("-").map(Number)
 
   const empresaId = await getEmpresaCkreaId()
-  const [kpis, pagos, gracePeriod, portfolio, moraTrend] = await Promise.all([
+  const [kpis, pagos, portfolio, moraTrend] = await Promise.all([
     getResumenKPIs(month),
     getPagos(month),
-    getGracePeriod(),
     getPortfolioStats(empresaId),
     // Mora denominator: balance at the START of the selected month, rebuilt the
     // same way as the /mora trend (still open today + paid after that date).
@@ -206,7 +203,7 @@ export default async function ResumenPage({
               </tr>
             ) : (
               ultimos.map((p) => {
-                const estado = classifyPagoBucket(p, gracePeriod, yyyymm)
+                const estado = classifyPagoBucket(p)
                 const meta = ESTADO_META[estado]
                 return (
                   <tr key={p.id} className="hover:bg-slate-50">

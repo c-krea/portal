@@ -8,18 +8,18 @@ import { cn } from "@/lib/utils"
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown } from "lucide-react"
 import type { PagoRow } from "@/lib/data/pagos"
 import type { FechaSelection } from "@/app/(app)/pagos/page"
+import type { EstadoPago } from "@/lib/pago-bucket"
 import { classifyPagoBucket } from "@/lib/pago-bucket"
 
-type BucketKey = "temprano" | "tardio" | "mora"
+type BucketKey = EstadoPago
 type SortKey = "fecha" | "local" | "inquilino" | "estado" | "factura" | "valor"
 type Panel = "fecha" | "estado" | "local" | null
 
 const ESTADO_META: Record<BucketKey, { label: string; pill: string; checkbox: string }> = {
-  temprano: { label: "Al día", pill: "bg-emerald-50 text-emerald-700 ring-emerald-200", checkbox: "accent-emerald-600" },
-  tardio:   { label: "Gracia", pill: "bg-amber-50 text-amber-700 ring-amber-200",       checkbox: "accent-amber-600" },
-  mora:     { label: "Mora",   pill: "bg-rose-50 text-rose-700 ring-rose-200",          checkbox: "accent-rose-600" },
+  al_dia: { label: "Al día", pill: "bg-emerald-50 text-emerald-700 ring-emerald-200", checkbox: "accent-emerald-600" },
+  mora:   { label: "Mora",   pill: "bg-rose-50 text-rose-700 ring-rose-200",          checkbox: "accent-rose-600" },
 }
-const ESTADO_ORDER: Record<BucketKey, number> = { temprano: 0, tardio: 1, mora: 2 }
+const ESTADO_ORDER: Record<BucketKey, number> = { al_dia: 0, mora: 1 }
 
 const FECHA_PRESETS: { key: string; label: string }[] = [
   { key: "este-mes",   label: "Este mes" },
@@ -37,11 +37,10 @@ function periodoNumLabel(n: number): string {
   return `${MESES[m - 1] ?? "?"} ${s.slice(0, 4)}`
 }
 
-// Estado rule lives in one place (src/lib/pago-bucket.ts). The yyyymm it needs
-// is each row's own calendar month — a per-row fact, independent of the page's
-// date range (for a single-month view this is identical to the old code).
-function bucketOf(p: PagoRow, gracePeriod: number): BucketKey {
-  return classifyPagoBucket(p, gracePeriod, Number(p.fechaRecaudo.slice(0, 7).replace("-", "")))
+// Estado rule lives in one place (src/lib/pago-bucket.ts): mora iff
+// fecha_recaudo > fecha_factura + 30, else Al día.
+function bucketOf(p: PagoRow): BucketKey {
+  return classifyPagoBucket(p)
 }
 
 function FacturaPill({ p }: { p: PagoRow }) {
@@ -115,11 +114,9 @@ function SortHeader({
 
 export function PagosTable({
   data,
-  gracePeriod,
   fecha,
 }: {
   data: PagoRow[]
-  gracePeriod: number
   fecha: FechaSelection
 }) {
   const router = useRouter()
@@ -212,11 +209,11 @@ export function PagosTable({
 
   const filtered = useMemo(() => {
     return data.filter((p) => {
-      if (estados.length > 0 && !estados.includes(bucketOf(p, gracePeriod))) return false
+      if (estados.length > 0 && !estados.includes(bucketOf(p))) return false
       if (locales.length > 0 && !(p.unitNumber && locales.includes(p.unitNumber))) return false
       return true
     })
-  }, [data, estados, locales, gracePeriod])
+  }, [data, estados, locales])
 
   const sorted = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1
@@ -232,7 +229,7 @@ export function PagosTable({
         case "inquilino":
           return a.clienteName.localeCompare(b.clienteName, "es") * dir
         case "estado":
-          return (ESTADO_ORDER[bucketOf(a, gracePeriod)] - ESTADO_ORDER[bucketOf(b, gracePeriod)]) * dir
+          return (ESTADO_ORDER[bucketOf(a)] - ESTADO_ORDER[bucketOf(b)]) * dir
         case "factura":
           if (a.invoicePeriodo == null && b.invoicePeriodo == null) return 0
           if (a.invoicePeriodo == null) return 1
@@ -242,7 +239,7 @@ export function PagosTable({
           return (a.valorFinal - b.valorFinal) * dir
       }
     })
-  }, [filtered, sortKey, sortDir, gracePeriod])
+  }, [filtered, sortKey, sortDir])
 
   const filteredTotal = filtered.reduce((s, p) => s + p.valorFinal, 0)
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize))
@@ -404,7 +401,7 @@ export function PagosTable({
             <tbody>
               {paginated.map((p) => {
                 const isAnticipo = p.valorFinal < 0
-                const estado = bucketOf(p, gracePeriod)
+                const estado = bucketOf(p)
                 return (
                   <tr key={p.id} className={cn("border-b border-slate-50 hover:bg-slate-50", isAnticipo && "bg-rose-50/40")}>
                     <td className="whitespace-nowrap px-4 py-3 text-slate-600">{formatDateShort(p.fechaRecaudo)}</td>
