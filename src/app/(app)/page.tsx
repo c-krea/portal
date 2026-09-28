@@ -159,8 +159,8 @@ export default async function ResumenPage({
       </div>
 
       {/* Chart row */}
-      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="rounded-[10px] border border-slate-200 bg-white">
+      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-5">
+        <div className="rounded-[10px] border min-w-0 md:col-span-2 border-slate-200 bg-white">
           <h2 className="flex items-center gap-1.5 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">
             Recaudo por decena — {mesTitulo}
             <InfoTip text="Días 1–10 es la ventana de pronto pago: lo que entra ahí alcanzó el descuento." />
@@ -169,7 +169,7 @@ export default async function ResumenPage({
             <SemanalChart data={decenas} />
           </div>
         </div>
-        <div className="flex flex-col overflow-hidden rounded-[10px] border border-slate-200 bg-white">
+        <div className="flex flex-col overflow-hidden min-w-0 md:col-span-3 rounded-[10px] border border-slate-200 bg-white">
           <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">
             Origen del recaudo
           </h2>

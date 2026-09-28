@@ -121,16 +121,16 @@ export function OrigenChart({ data, title }: { data: OrigenDatum[]; title?: stri
           </span>
         </div>
       </div>
-      <ul className="flex min-w-0 flex-1 flex-col gap-4">
+      <ul className="flex min-w-0 flex-1 flex-col gap-3">
         {data.map((d) => (
           <li key={d.name} className="flex items-center gap-2.5">
             <span
-              className="h-3 w-3 shrink-0 rounded-[3px]"
+              className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
               style={{ background: d.fill }}
             />
             <div className="min-w-0">
-              <p className="text-sm text-slate-600">{d.name}</p>
-              <p className="text-lg font-bold leading-tight tabular-nums text-slate-900">
+              <p className="text-xs text-slate-600">{d.name}</p>
+              <p className="text-base font-bold leading-tight tabular-nums text-slate-900">
                 {formatCOP(d.value)}
               </p>
             </div>
