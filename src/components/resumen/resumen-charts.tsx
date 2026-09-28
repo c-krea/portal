@@ -63,19 +63,41 @@ export function SemanalChart({ data }: { data: SemanaDatum[] }) {
   )
 }
 
-export function OrigenChart({ data }: { data: OrigenDatum[] }) {
+export function OrigenChart({ data, title }: { data: OrigenDatum[]; title?: string }) {
   const total = data.reduce((s, d) => s + d.value, 0)
+  if (total <= 0) {
+    return (
+      <div>
+        {title ? (
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            {title}
+          </p>
+        ) : null}
+        <p className="text-sm text-slate-400">Sin datos</p>
+      </div>
+    )
+  }
   // The first slice is the one the page is about — what actually came in.
   // Its share is the headline; the ring is just how it sits against the rest.
   const principal = data[0]
-  const pctPrincipal = total > 0 && principal ? Math.round((principal.value / total) * 100) : 0
+  const pctPrincipal = principal ? Math.round((principal.value / total) * 100) : 0
+  // Zero slices next to paddingAngle corrupt the pie render — keep them out
+  // of <Pie> only. Headline and legend still read the full `data` so a 0
+  // Recaudo / Cobrado shows "0% cobrado" with a full Pendiente ring.
+  const pieData = data.filter((d) => d.value > 0)
   return (
-    <div className="flex flex-wrap items-center gap-6 sm:gap-8">
+    <div>
+      {title ? (
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          {title}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap items-center gap-6 sm:gap-8">
       <div className="relative h-[190px] w-[190px] shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={data}
+              data={pieData}
               dataKey="value"
               nameKey="name"
               innerRadius={62}
@@ -83,7 +105,7 @@ export function OrigenChart({ data }: { data: OrigenDatum[] }) {
               paddingAngle={2}
               strokeWidth={0}
             >
-              {data.map((d) => (
+              {pieData.map((d) => (
                 <Cell key={d.name} fill={d.fill} />
               ))}
             </Pie>
@@ -115,6 +137,7 @@ export function OrigenChart({ data }: { data: OrigenDatum[] }) {
           </li>
         ))}
       </ul>
+      </div>
     </div>
   )
 }

@@ -239,8 +239,8 @@ async function getPagosKPIs_uncached(month: string): Promise<PagosKPIs> {
 // fecha_vencimiento, which overstated 2026 mora collections by 153,428,496.
 //
 // Scope: on-time cash counts every tenant (it ratios against full R08 billing);
-// late cash excludes cartera jurídica (it ratios against the mora-at-start
-// denominator, which is non-jurídica by construction — see
+// late cash excludes cartera jurídica (it ratios against the month-end mora
+// balance + itself, which is non-jurídica by construction — see
 // getMoraTrendReconstruido). totalRecaudo is derived as the sum in TS so
 // cards 1+2 == card 3 holds by construction for every month.
 export type ResumenKPIs = {

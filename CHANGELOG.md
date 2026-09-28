@@ -4,6 +4,15 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 
 ## [Unreleased]
 
+### 2026-09-28 — Resumen: dona de mora
+
+#### Added
+- **Resumen → "Origen del recaudo" ahora tiene dos donas**: Corriente (igual que antes) y **Mora** — cobrado en el mes contra lo que sigue vencido al cierre del mes (en vivo para el mes actual). El total es la mora al 1 del mes más lo que venció durante el mes.
+
+#### Changed
+- **El % de la tarjeta "Recaudo mora" usa la misma base que la dona** y ya no pasa de 100 %. Antes dividía todo lo cobrado tarde entre la mora al 1 del mes, e incluía facturas que vencieron durante el mes (feb-2026 mostraba 210 %; ahora 61 %). El monto en $ no cambia.
+- Las donas muestran "0 % cobrado" cuando aún no entra nada, en vez de "100 % pendiente".
+
 ### 2026-09-28 — Estado de pagos: solo "Al día" o "Mora"
 
 #### Changed

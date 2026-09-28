@@ -52,11 +52,11 @@ export default async function ResumenPage({
     getResumenKPIs(month),
     getPagos(month),
     getPortfolioStats(empresaId),
-    // Mora denominator: balance at the START of the selected month, rebuilt the
+    // Mora donut: balance at the END of the selected month, rebuilt the
     // same way as the /mora trend (still open today + paid after that date).
     // Shared code, not a second definition — every month the picker offers is
-    // inside the reconstructed series. The series points at each month's END,
-    // so this month's opening balance is the PREVIOUS month's point.
+    // inside the reconstructed series. Each point is its month's closing
+    // balance; the current month's point is live.
     getMoraTrendReconstruido(empresaId),
   ])
 
@@ -66,11 +66,11 @@ export default async function ResumenPage({
   // The two added — totalRecaudo is derived as this sum inside getResumenKPIs,
   // so cards 1+2 == card 3 holds by construction for every month.
   const totalRecaudo = kpis.totalRecaudo
-  const mesAnterior = `${mm === 1 ? yy - 1 : yy}-${String(mm === 1 ? 12 : mm - 1).padStart(2, "0")}`
-  const moraInicio = moraTrend.find((p) => p.periodo === mesAnterior)?.saldoVencido ?? 0
   const pendiente = Math.max(0, facturacionMes - recaudoFacturado)
   const pctFacturacion = facturacionMes > 0 ? Math.round((recaudoFacturado / facturacionMes) * 100) : 0
-  const pctMora = moraInicio > 0 ? Math.round((recaudoMora / moraInicio) * 100) : 0
+  const pendienteMora = moraTrend.find((p) => p.periodo === month)?.saldoVencido ?? 0
+  const totalMora = recaudoMora + pendienteMora
+  const pctMora = totalMora > 0 ? Math.round((recaudoMora / totalMora) * 100) : 0
 
   const decenas: SemanaDatum[] = [
     { semana: "1–10", total: kpis.decena1, fill: "#10b981" },
@@ -78,12 +78,18 @@ export default async function ResumenPage({
     { semana: "21–fin", total: kpis.decena3, fill: "#94a3b8" },
   ]
 
-  // Mora never appears here: it is other months' money and lives on its own card.
-  // Zero slices next to paddingAngle corrupt the pie render — filter them out.
+  // Corriente = this month's billing (Recaudo vs Pendiente). Mora gets its own
+  // donut: collected during the month vs still owed at the month's end.
+  // Zero slices are kept here — OrigenChart filters them out of <Pie> itself
+  // so the headline always reads the first slice (Recaudo / Cobrado).
   const origen: OrigenDatum[] = [
     { name: "Recaudo", value: recaudoFacturado, fill: "#1e40af" },
     { name: "Pendiente", value: pendiente, fill: "#cbd5e1" },
-  ].filter((d) => d.value > 0)
+  ]
+  const origenMora: OrigenDatum[] = [
+    { name: "Cobrado", value: recaudoMora, fill: "#e11d48" },
+    { name: "Pendiente", value: pendienteMora, fill: "#cbd5e1" },
+  ]
 
   const ultimos = pagos.slice(0, 8)
 
@@ -135,7 +141,7 @@ export default async function ResumenPage({
           </p>
           <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
             Recaudo mora
-            <InfoTip text="Pagos hechos después de los 30 días, ya con intereses. % sobre la mora al inicio del mes. Sin cartera jurídica." />
+            <InfoTip text="Pagos hechos después de los 30 días, ya con intereses. % sobre la mora al inicio del mes más lo vencido en el mes. Sin cartera jurídica." />
           </p>
         </div>
         <div className="rounded-[10px] border border-blue-100 bg-blue-50/40 p-4">
@@ -167,8 +173,9 @@ export default async function ResumenPage({
           <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">
             Origen del recaudo
           </h2>
-          <div className="flex flex-1 items-center p-6">
-            <OrigenChart data={origen} />
+          <div className="grid flex-1 grid-cols-1 gap-6 p-6 sm:grid-cols-2">
+            <OrigenChart data={origen} title="Corriente" />
+            <OrigenChart data={origenMora} title="Mora" />
           </div>
         </div>
       </div>
