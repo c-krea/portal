@@ -6,6 +6,28 @@ This file lives in `docs/history/`.
 
 ---
 
+## 2026-09-28 — Pagos estado: Al día / Mora only; Resumen mora donut
+
+- **"Gracia" was never a grace period.** It meant "paid day 11+ of this month, not late" — on-time
+  payments shown in amber. Mora came from `invoice_periodo < pay month` OR ERP `dias_mora_al_pago` >
+  `grace_period_days`. Local copy, 2025-01-02 → 2026-09-08, 2,554 payments: 20 on-time ($37.5M)
+  labelled Mora (previous-month invoice paid early), 6 late ($1.1M) labelled Al día (invoice outside
+  the 4-month `documentos` window → fell back to the ERP date). Now: Mora iff
+  `fecha_recaudo > fecha_factura + 30`, else Al día (481 Mora). `grace_period_days` lost its last
+  reader → removed from /configuracion (row kept, hidden, not writable). It only matched because the
+  knob happened to be 30.
+- **`docs/context.md` §C back to flat factura+30.** The 2026-09-10 patch wrote the `factura+25` test
+  into the doc, but `moraVencEfecExpr` has been flat +30 (owner's rule) — code is the truth.
+- **Resumen "Recaudo mora" % could read 210%** (Feb 2026): numerator = all late cash in the month,
+  denominator = mora on day 1 only, so bills that went overdue mid-month counted on top only. New
+  base = cobrado + mora still owed at month end (live for current month). Identity checked every
+  month 2025-02 → 2026-09: day-1 mora + new overdue = month-end mora + collected. Feb 2026 → 61%.
+  Owner chose "new mora during the month counts in that month" over a frozen day-1 photo.
+- **Donut headline bug:** zero slices were filtered before choosing the headline slice, so "0%
+  cobrado" rendered as "100% pendiente". Filter now lives inside `OrigenChart`, `<Pie>` only.
+- **Stacked charts were a breakpoint, not a bug:** the owner's window is < 1024px, so `lg:` never
+  fired (the old 50/50 stacked too). Row is now `md:` 40/60.
+
 ## 2026-09-28 — Locales loading screen, Usuarios "Ingreso" column
 
 - **Why /locales/[id] never showed a loading screen.** `(app)/loading.tsx` wraps the `locales`
