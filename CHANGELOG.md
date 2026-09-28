@@ -4,6 +4,12 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 
 ## [Unreleased]
 
+### 2026-09-28 — Pantalla de carga en Locales, columna Ingreso en Usuarios
+
+#### Added
+- **/locales: al abrir un cliente aparece una pantalla de carga** en vez de quedarse la lista congelada hasta que el detalle termina de cargar.
+- **/usuarios: columna "Ingreso"** en la tabla de inquilinos — Este mes / Mes pasado / Más de 2 meses / Nunca, según el último inicio de sesión. Es la misma regla que la gráfica "Uso del portal", así que la columna y la gráfica siempre cuadran.
+
 ### 2026-09-12 — Repo de referencia: gburgos293/Ckrea-Portal
 
 El repositorio se movió a la cuenta `ginreymon`, y con eso Vercel dejó de recibir avisos de

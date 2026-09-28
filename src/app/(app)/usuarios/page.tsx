@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/layout/page-header"
 import { InfoTip } from "@/components/pagos/info-tip"
 import { getPortalTenants, getUsuarios } from "@/lib/data/usuarios"
 import { currentPeriodo } from "@/lib/periodo"
-import { TabSwitcher } from "./tab-switcher"
+import { TabSwitcher, type IngresoBucket } from "./tab-switcher"
 import { SendEmailModal } from "./send-email-modal"
 import { UsuariosUsoChart } from "./uso-chart"
 
@@ -28,15 +28,21 @@ export default async function UsuariosPage() {
   let mesPasado = 0
   let masDeDos = 0
   let nunca = 0
+  // One bucket per tenant, shared by the chart counts and the table's "Ingreso"
+  // column so the two can never disagree.
+  const ingresoPorTenant: Record<string, IngresoBucket> = {}
   for (const t of tenants) {
+    let bucket: IngresoBucket
     if (!t.lastSignIn) {
       nunca++
-      continue
+      bucket = "nunca"
+    } else {
+      const dist = ahora - monthIndex(ingresoPeriodo(t.lastSignIn))
+      if (dist <= 0) { esteMes++; bucket = "este_mes" }
+      else if (dist === 1) { mesPasado++; bucket = "mes_pasado" }
+      else { masDeDos++; bucket = "mas_de_dos" }
     }
-    const dist = ahora - monthIndex(ingresoPeriodo(t.lastSignIn))
-    if (dist <= 0) esteMes++
-    else if (dist === 1) mesPasado++
-    else masDeDos++
+    ingresoPorTenant[t.tenantId] = bucket
   }
 
   // "Este mes" IS the Activos KPI population by construction: dist <= 0 counts
@@ -106,7 +112,7 @@ export default async function UsuariosPage() {
         </div>
       </div>
 
-      <TabSwitcher tenants={tenants} admins={admins} />
+      <TabSwitcher tenants={tenants} admins={admins} ingresoPorTenant={ingresoPorTenant} />
 
       <p className="mt-3 text-xs text-slate-400">
         Inquilinos: clic en el email para editar. Administración: cuentas de solo lectura del panel.

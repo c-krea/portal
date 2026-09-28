@@ -6,6 +6,18 @@ This file lives in `docs/history/`.
 
 ---
 
+## 2026-09-28 — Locales loading screen, Usuarios "Ingreso" column
+
+- **Why /locales/[id] never showed a loading screen.** `(app)/loading.tsx` wraps the `locales`
+  segment; going list → detail keeps that segment, so its Suspense boundary never re-fires and the
+  list sat frozen until the detail resolved. Fix: a `loading.tsx` on `locales/[id]` itself. Any
+  other list → detail route under `(app)` has the same gap.
+- **"Ingreso" uses `last_sign_in_at`, not `v2.portal_visitas_diarias`.** The page's "Uso del
+  portal" chart already buckets by last sign-in; the column reuses the same per-tenant bucket so the
+  two can never disagree. The visits table only has rows since 2026-09-12, so it would read "Nunca"
+  for almost everyone. Known limit: a tenant who stays signed in and just reopens the portal does
+  not move `last_sign_in_at`. Switch both chart and column to visits once that history is long enough.
+
 ## 2026-09-10 — Tenant stale-payments warning removed
 
 German: every tenant saw "Información de pagos desactualizada". ASAP — get rid of it, app should be working.
