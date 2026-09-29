@@ -90,6 +90,12 @@ export default async function ResumenPage({
     { name: "Cobrado", value: recaudoMora, fill: "#e11d48" },
     { name: "Pendiente", value: pendienteMora, fill: "#cbd5e1" },
   ]
+  // General = Corriente + Mora: total collected vs total still pending.
+  // Sums only, no new query and no new rule.
+  const origenGeneral: OrigenDatum[] = [
+    { name: "Recaudo", value: recaudoFacturado + recaudoMora, fill: "#059669" },
+    { name: "Pendiente", value: pendiente + pendienteMora, fill: "#cbd5e1" },
+  ]
 
   const ultimos = pagos.slice(0, 8)
 
@@ -158,9 +164,9 @@ export default async function ResumenPage({
         </div>
       </div>
 
-      {/* Chart row */}
-      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-5">
-        <div className="rounded-[10px] border min-w-0 md:col-span-2 border-slate-200 bg-white">
+      {/* Chart row: 30% decena bars, 70% three origen donuts */}
+      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-[3fr_7fr]">
+        <div className="min-w-0 rounded-[10px] border border-slate-200 bg-white">
           <h2 className="flex items-center gap-1.5 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">
             Recaudo por decena — {mesTitulo}
             <InfoTip text="Días 1–10 es la ventana de pronto pago: lo que entra ahí alcanzó el descuento." />
@@ -169,13 +175,14 @@ export default async function ResumenPage({
             <SemanalChart data={decenas} />
           </div>
         </div>
-        <div className="flex flex-col overflow-hidden min-w-0 md:col-span-3 rounded-[10px] border border-slate-200 bg-white">
+        <div className="flex min-w-0 flex-col overflow-hidden rounded-[10px] border border-slate-200 bg-white">
           <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">
             Origen del recaudo
           </h2>
-          <div className="grid flex-1 grid-cols-1 gap-6 p-6 sm:grid-cols-2">
+          <div className="grid flex-1 grid-cols-1 content-center gap-4 p-4 md:grid-cols-3">
             <OrigenChart data={origen} title="Corriente" />
             <OrigenChart data={origenMora} title="Mora" />
+            <OrigenChart data={origenGeneral} title="General" />
           </div>
         </div>
       </div>

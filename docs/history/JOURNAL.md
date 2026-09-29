@@ -6,6 +6,23 @@ This file lives in `docs/history/`.
 
 ---
 
+## 2026-09-29 — Resumen: "General" donut (Corriente + Mora)
+
+- **Decision:** the third donut is the SUM of the two existing ones — Recaudo = `recaudoFacturado + recaudoMora`
+  (== `totalRecaudo`), Pendiente = `pendiente + pendienteMora`. Display only: no query, no new mora rule.
+  Alternative not taken: a Corriente-vs-Mora composition split.
+- **Open definition:** General's denominator (collected + both pendings) is a blended ratio that
+  `docs/context.md` does not define; `recaudoFacturado` includes jurídica while `recaudoMora` excludes it, so
+  General inherits that mixed scope. Fine for a picture; pin it in `context.md` if finance ever quotes the %.
+- **Layout:** three donuts do not fit in the old 40/60 row, so the row is now `lg:grid-cols-[3fr_7fr]` (30/70),
+  stacked below `lg`. Donut ring 190→130px, legend 10px/12px, bars 208→150px. Tuned live by eye, not derived.
+- **Gotcha (local preview):** `.test-data/make-local-admin.mjs` does NOT reset the password if `admin@local.test`
+  already exists — login then fails with `invalid_credentials`. Reset via the GoTrue admin API
+  (`PUT /auth/v1/admin/users/<id>` with `password`). Also `supabase start` can say "already running" with the db
+  container exited: `supabase stop` (keeps the volume) then `npm run db:start`.
+- **Process:** built by the Executor from a self-contained brief, self-reviewed, then a full review
+  (correctness CLEAN, simplicity CLEAN) on the final diff.
+
 ## 2026-09-28 — Login lockout: cached "no profile"
 
 - **Symptom:** cartera@reymon.com.co (auth user since 2026-09-04, created by another Reymon app)

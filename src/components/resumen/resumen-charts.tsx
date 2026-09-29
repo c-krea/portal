@@ -30,7 +30,7 @@ function tooltipMoney(value: ReactNode): string {
 
 export function SemanalChart({ data }: { data: SemanaDatum[] }) {
   return (
-    <ResponsiveContainer width="100%" height={208}>
+    <ResponsiveContainer width="100%" height={150}>
       <BarChart data={data} margin={{ top: 22, right: 12, left: 0, bottom: 0 }} barCategoryGap="30%">
         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
         <XAxis
@@ -44,7 +44,7 @@ export function SemanalChart({ data }: { data: SemanaDatum[] }) {
           tick={{ fontSize: 10, fill: "#94a3b8" }}
           axisLine={false}
           tickLine={false}
-          width={42}
+          width={38}
         />
         <Tooltip formatter={tooltipMoney} cursor={{ fill: "#eff6ff" }} />
         <Bar dataKey="total" fill="#1e40af" radius={[4, 4, 0, 0]} maxBarSize={56}>
@@ -92,16 +92,16 @@ export function OrigenChart({ data, title }: { data: OrigenDatum[]; title?: stri
           {title}
         </p>
       ) : null}
-      <div className="flex flex-wrap items-center gap-6 sm:gap-8">
-      <div className="relative h-[190px] w-[190px] shrink-0">
+      <div className="flex flex-wrap items-center gap-4">
+      <div className="relative h-[130px] w-[130px] shrink-0">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               data={pieData}
               dataKey="value"
               nameKey="name"
-              innerRadius={62}
-              outerRadius={92}
+              innerRadius={42}
+              outerRadius={62}
               paddingAngle={2}
               strokeWidth={0}
             >
@@ -113,24 +113,24 @@ export function OrigenChart({ data, title }: { data: OrigenDatum[]; title?: stri
           </PieChart>
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[30px] font-bold leading-none tracking-tight tabular-nums text-slate-900">
+          <span className="text-[20px] font-bold leading-none tracking-tight tabular-nums text-slate-900">
             {pctPrincipal}%
           </span>
-          <span className="mt-1 text-[11px] text-slate-500">
+          <span className="mt-0.5 text-[10px] text-slate-500">
             {principal ? principal.name.toLowerCase() : ""}
           </span>
         </div>
       </div>
-      <ul className="flex min-w-0 flex-1 flex-col gap-3">
+      <ul className="flex min-w-0 flex-1 flex-col gap-2">
         {data.map((d) => (
-          <li key={d.name} className="flex items-center gap-2.5">
+          <li key={d.name} className="flex items-center gap-2">
             <span
-              className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+              className="h-2 w-2 shrink-0 rounded-[2px]"
               style={{ background: d.fill }}
             />
             <div className="min-w-0">
-              <p className="text-xs text-slate-600">{d.name}</p>
-              <p className="text-base font-bold leading-tight tabular-nums text-slate-900">
+              <p className="text-[10px] text-slate-600">{d.name}</p>
+              <p className="text-xs font-bold leading-tight tabular-nums text-slate-900">
                 {formatCOP(d.value)}
               </p>
             </div>
