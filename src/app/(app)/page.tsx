@@ -87,7 +87,7 @@ export default async function ResumenPage({
     { name: "Pendiente", value: pendiente, fill: "#cbd5e1" },
   ]
   const origenMora: OrigenDatum[] = [
-    { name: "Cobrado", value: recaudoMora, fill: "#e11d48" },
+    { name: "Recaudo", value: recaudoMora, fill: "#e11d48" },
     { name: "Pendiente", value: pendienteMora, fill: "#cbd5e1" },
   ]
   // General = Corriente + Mora: total collected vs total still pending.
