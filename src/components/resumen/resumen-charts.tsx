@@ -109,7 +109,6 @@ export function OrigenChart({ data, title }: { data: OrigenDatum[]; title?: stri
                 <Cell key={d.name} fill={d.fill} />
               ))}
             </Pie>
-            <Tooltip formatter={tooltipMoney} />
           </PieChart>
         </ResponsiveContainer>
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
