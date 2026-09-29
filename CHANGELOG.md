@@ -4,6 +4,14 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 
 ## [Unreleased]
 
+### 2026-09-29 — Resumen: dona de recaudo general
+
+#### Added
+- **Resumen → "Origen del recaudo" ahora tiene tres donas**: Corriente, Mora y **General**. General junta las dos: todo lo recaudado en el mes (al día + mora) contra todo lo que sigue pendiente (lo de este mes + la mora al cierre). No hay consulta ni regla nueva: son sumas de los números que ya estaban en la página.
+
+#### Changed
+- **Distribución de Resumen**: la fila de gráficos queda 30 % barras por decena / 70 % donas (desde pantalla de laptop; en pantallas menores se apilan). Donas, leyendas y barras más pequeñas para que quepan las tres.
+
 ### 2026-09-28 — Login: usuarios nuevos entran sin esperar
 
 #### Fixed
