@@ -60,6 +60,7 @@ export function WompiButton({
   ppPct,
   electricityInvoices,
   totalEnergia,
+  saldoSinLocal = 0,
 }: {
   units: UnitSaldo[]
   nit: string
@@ -69,6 +70,8 @@ export function WompiButton({
   electricityInvoices: PortalElectricityInvoiceData[]
   /** Energy still owed per SIESA cartera (RGE) — the amount to pay. */
   totalEnergia: number
+  /** Owed but tied to no unit (e.g. mora interest) — only part of "Todos". */
+  saldoSinLocal?: number
 }) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>("type")
@@ -80,7 +83,7 @@ export function WompiButton({
   const docLabel = tipoPersona === "PJ" ? "NIT" : tipoPersona === "PN" ? "Cédula" : "Documento"
 
   const selectedSaldo = selectedIdx === -1
-    ? units.reduce((s, u) => s + u.saldo, 0)
+    ? units.reduce((s, u) => s + u.saldo, 0) + saldoSinLocal
     : (units[selectedIdx]?.saldo ?? 0)
 
   function handleOpen() {
