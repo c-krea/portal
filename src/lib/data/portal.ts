@@ -395,7 +395,15 @@ async function getPortalContratos_uncached(tenantId: string): Promise<PortalCont
   }))
 }
 
+// siesa_raw.cartera.tipo_cliente → which line of "Total a Pagar" a document goes on.
+// It never decides WHETHER it is owed: every open Z40 document counts. Values seen in
+// Z40 (2026-10): ARRENDAMIENTOS (FVS, NSC), INTERESES MORA (FVS), SERV. PUB/INGRESOS
+// RECIBIDOS PARA TERCER (RGE), NACIONALES REYMON (old FVS, shown as a normal invoice).
+export type PortalCarteraTipo = "arriendo" | "intereses" | "energia"
+
 export type PortalCarteraRow = {
+  tipo: PortalCarteraTipo
+  factura: string
   periodo: number
   unidad: string | null
   saldo: number
@@ -411,6 +419,8 @@ export type PortalCarteraRow = {
 
 export type PortalCartera = {
   saldoTotal: number
+  /** Part of saldoTotal billed as energía (RGE). Already included in saldoTotal. */
+  saldoEnergia: number
   facturaCount: number
   vencido: number
   maxDiasMora: number
@@ -421,16 +431,38 @@ export type PortalCartera = {
 
 const NIT_RE = /^\d{5,12}(-\d)?$/
 
+export const EMPTY_PORTAL_CARTERA: PortalCartera = { saldoTotal: 0, saldoEnergia: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }
+
 async function getPortalCartera_uncached(nit: string): Promise<PortalCartera> {
-  if (!NIT_RE.test(nit)) return { saldoTotal: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }
-  // Interés DIAN compartido con /mora (ver mora.ts): misma tasa, misma base
-  // (vr_vencido) y mismos días (venc_efec = fecha_factura + 30).
+  if (!NIT_RE.test(nit)) return EMPTY_PORTAL_CARTERA
+  // Saldo pendiente = todo lo que SIESA aún tiene en cartera (Z40, saldo > 0) para el
+  // NIT; tipo_cliente solo decide el renglón (arriendo / intereses / energía), nada se
+  // descarta. Una factura pagada sale de cartera, así que la energía (RGE) ya pagada
+  // deja de aparecer sin mirar recaudo. Saldos negativos (anticipos, RK sin aplicar)
+  // nunca se restan: cartera los aplica en SIESA.
+  // Mora (vencido, días, interés estimado) = solo facturas FVS-%, la misma regla que
+  // /mora, Clientes, Reportes y los correos (ver mora.ts). Interés DIAN compartido:
+  // misma tasa, misma base (vr_vencido) y mismos días (venc_efec = fecha_factura + 30).
   const rows = await execute(`
     WITH ${moraRateCteSql()},
     base AS (
       SELECT
+        CASE
+          WHEN UPPER(TRIM(c.tipo_cliente)) LIKE 'SERV. PUB%'
+            OR c.factura LIKE 'RGE-%'                               THEN 'energia'
+          WHEN UPPER(TRIM(c.tipo_cliente)) = 'INTERESES MORA'      THEN 'intereses'
+          ELSE 'arriendo'
+        END                                                         AS tipo,
+        c.factura                                                   AS factura,
         (EXTRACT(YEAR FROM c.fecha_factura) * 100 + EXTRACT(MONTH FROM c.fecha_factura))::int AS periodo,
-        REVERSE(SPLIT_PART(REVERSE(c.sucursal), ' ', 1))                                      AS unidad,
+        -- The unit number ends the sucursal only for rent ("… 124"); interest and energy
+        -- sucursales end in "INTERESES MORA" / "SERVICIOS P", which are not units.
+        CASE WHEN UPPER(TRIM(c.tipo_cliente)) = 'INTERESES MORA'
+               OR UPPER(TRIM(c.tipo_cliente)) LIKE 'SERV. PUB%'
+               OR c.factura LIKE 'RGE-%'
+             THEN NULL
+             ELSE REVERSE(SPLIT_PART(REVERSE(c.sucursal), ' ', 1))
+        END                                                         AS unidad,
         ROUND(c.saldo)::numeric                                     AS saldo,
         ROUND(c.vr_vencido)::numeric                                AS vencido,
         c.vr_vencido                                                AS vr_vencido_raw,
@@ -445,20 +477,21 @@ async function getPortalCartera_uncached(nit: string): Promise<PortalCartera> {
         ON d.documento = '001-' || c.factura
         AND d.tipo = 'Facturas'
       WHERE c.documento = '${nit}'
-        AND c.factura LIKE 'FVS-%'
         AND c.id_zona = 'Z40'
         AND c.saldo > 0
     )
     SELECT
-      periodo, unidad, saldo, vencido,
+      tipo, factura, periodo, unidad, saldo, vencido,
       ${moraDiasVencidosExpr("venc_efec")}::int  AS dias_mora,
       ${moraDiasVencidosExpr("venc_efec")}::int  AS dias_interest,
       ${moraInteresExpr("vr_vencido_raw", "venc_efec")}::numeric AS interes_est,
       fecha_factura, fecha_vence, ventas, impuesto, retenciones
     FROM base
-    ORDER BY fecha_factura DESC, unidad
+    ORDER BY fecha_factura DESC, unidad, factura
   `)
   const mapped: PortalCarteraRow[] = rows.map((r) => ({
+    tipo:        String(r.tipo) as PortalCarteraTipo,
+    factura:     String(r.factura),
     periodo:     Number(r.periodo),
     unidad:      r.unidad ? String(r.unidad) : null,
     saldo:       Number(r.saldo ?? 0),
@@ -471,13 +504,18 @@ async function getPortalCartera_uncached(nit: string): Promise<PortalCartera> {
     impuesto:    r.impuesto != null ? Number(r.impuesto) : null,
     retenciones: r.retenciones != null ? Number(r.retenciones) : null,
   }))
+  const isMora = (factura: unknown) => String(factura).startsWith("FVS-")
+  const moraRows = mapped.filter((r) => isMora(r.factura))
   return {
     saldoTotal:      mapped.reduce((s, r) => s + r.saldo, 0),
+    saldoEnergia:    mapped.filter((r) => r.tipo === "energia").reduce((s, r) => s + r.saldo, 0),
     facturaCount:    mapped.length,
-    vencido:         mapped.reduce((s, r) => s + r.vencido, 0),
-    maxDiasMora:     mapped.reduce((m, r) => Math.max(m, r.diasMora), 0),
-    maxDiasInterest: mapped.reduce((m, r) => Math.max(m, r.diasInterest), 0),
-    interesEstimado: rows.reduce((s, r) => s + Number(r.interes_est ?? 0), 0),
+    vencido:         moraRows.reduce((s, r) => s + r.vencido, 0),
+    maxDiasMora:     moraRows.reduce((m, r) => Math.max(m, r.diasMora), 0),
+    maxDiasInterest: moraRows.reduce((m, r) => Math.max(m, r.diasInterest), 0),
+    interesEstimado: rows
+      .filter((r) => isMora(r.factura))
+      .reduce((s, r) => s + Number(r.interes_est ?? 0), 0),
     rows:            mapped,
   }
 }
@@ -708,7 +746,8 @@ export const getPortalPagosPage = cached(getPortalPagosPage_uncached, ["portal:p
 export const getPortalPagosKpis = cached(getPortalPagosKpis_uncached, ["portal:pagosKpis"], "portal")
 export const getPortalMedidorHistory = cached(getPortalMedidorHistory_uncached, ["portal:medidorHistory"], "portal")
 export const getPortalContratos = cached(getPortalContratos_uncached, ["portal:contratos"], "portal")
-export const getPortalCartera = cached(getPortalCartera_uncached, ["portal:cartera"], "portal")
+// v2: PR #8 added tipo / factura / saldoEnergia; a new key keeps pre-deploy entries from being served.
+export const getPortalCartera = cached(getPortalCartera_uncached, ["portal:cartera:v2"], "portal")
 // Time-derived — do not cache. Caching `isStale` kept the tenant warning up
 // after Siesa had already resumed (and on any local clone older than 48h).
 export const getSyncFreshness = getSyncFreshness_uncached

@@ -88,10 +88,14 @@ if [[ "${SKIP_RECAUDO:-0}" == "1" ]]; then
 else
   echo "▶ Backfilling siesa_raw.recaudo in quarters (long single COPY drops the pooler's SSL)…"
   psql "$LOCAL" -X -q -c "truncate siesa_raw.recaudo;"
+  # +3 months from a YYYY-MM-DD date — BSD date (macOS) or GNU date (Linux / Git Bash on Windows).
+  plus3m() {
+    date -j -v+3m -f "%Y-%m-%d" "$1" "+%Y-%m-%d" 2>/dev/null || date -d "$1 +3 months" "+%Y-%m-%d"
+  }
   chunk_start=2024-01-01
-  chunk_stop=$(date -v+3m "+%Y-%m-%d")   # a quarter past today, so the newest rows are included
+  chunk_stop=$(plus3m "$(date "+%Y-%m-%d")")   # a quarter past today, so the newest rows are included
   while [[ "$chunk_start" < "$chunk_stop" ]]; do
-    chunk_end=$(date -j -v+3m -f "%Y-%m-%d" "$chunk_start" "+%Y-%m-%d")
+    chunk_end=$(plus3m "$chunk_start")
     printf '   %s → %s  ' "$chunk_start" "$chunk_end"
     psql "$PROD" -X -q -c "\copy (select * from siesa_raw.recaudo where fecha_recaudo >= '$chunk_start' and fecha_recaudo < '$chunk_end') to stdout" \
       | psql "$LOCAL" -X -q -c "\copy siesa_raw.recaudo from stdin"

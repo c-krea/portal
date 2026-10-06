@@ -87,6 +87,19 @@ No RLS — not exposed via PostgREST. Access via role `siesa_sync` only.
 | `vr_vencido` | numeric | Overdue amount (> 0 means past due date) |
 | `saldo` | numeric | Total outstanding = `vr_corriente + vr_vencido`. Negative = credit note |
 | `id_zona` | text | Always `Z40` for C-Krea |
+| `tipo_cliente` | text | What the document bills (see below) |
+| `sucursal` | text | Tenant name + unit number for rent (`… 124`). Interest ends in `INTERESES MORA`, energy in `SERVICIOS P` — not units |
+
+**`tipo_cliente` values in Z40** (open documents, verified 2026-10-06):
+
+| `tipo_cliente` | Prefixes | Meaning |
+|---|---|---|
+| `ARRENDAMIENTOS` | `FVS-`, `NSC-` (+ negative `RK`/`CN`/`NCF`/`RKM`) | Rent |
+| `INTERESES MORA` | `FVS-` | Mora interest invoice, one per tenant (no unit) |
+| `SERV. PUB/INGRESOS RECIBIDOS PARA TERCER` | `RGE-` | Energy reimbursement, per tenant (no unit). Issued the month after consumption. Paid RGEs leave cartera; payment is in `recaudo` with `cruce = 'RGE-…'` |
+| `NACIONALES REYMON` | `FVS-` | Should not be in Z40 — 2 old invoices of an ex-tenant remain (2026-10) |
+
+The tenant portal's "Total a Pagar" sums every open Z40 document (`saldo > 0`) and uses `tipo_cliente` only to pick the line. Mora (vencido, días, interés) stays on `FVS-%`, same as `/mora`.
 
 **To query current month's open invoices:**
 ```sql
