@@ -59,6 +59,7 @@ export function WompiButton({
   hasPp,
   ppPct,
   electricityInvoices,
+  totalEnergia,
 }: {
   units: UnitSaldo[]
   nit: string
@@ -66,14 +67,16 @@ export function WompiButton({
   hasPp: boolean
   ppPct: number
   electricityInvoices: PortalElectricityInvoiceData[]
+  /** Energy still owed per SIESA cartera (RGE) — the amount to pay. */
+  totalEnergia: number
 }) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>("type")
   const [selectedIdx, setSelectedIdx] = useState<number>(units.length === 1 ? 0 : -1)
 
   const isSingle = units.length === 1
-  const hasElectricity = electricityInvoices.length > 0
-  const totalElectricity = electricityInvoices.reduce((s, inv) => s + inv.total, 0)
+  const hasElectricity = totalEnergia > 0
+  const totalElectricity = totalEnergia
   const docLabel = tipoPersona === "PJ" ? "NIT" : tipoPersona === "PN" ? "Cédula" : "Documento"
 
   const selectedSaldo = selectedIdx === -1
@@ -224,7 +227,8 @@ export function WompiButton({
                   </button>
                 </div>
 
-                {/* Unit cards — scrollable row */}
+                {/* Unit cards — scrollable row (meter detail; the amount to pay is the cartera total) */}
+                {electricityInvoices.length > 0 && (
                 <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
                   {electricityInvoices.map(inv => (
                     <div key={inv.unidad}
@@ -250,6 +254,7 @@ export function WompiButton({
                     </div>
                   ))}
                 </div>
+                )}
 
                 {/* Accounting note */}
                 <div className="mb-4 rounded-xl border border-emerald-300 bg-emerald-50 p-3">

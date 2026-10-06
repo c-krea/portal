@@ -5,12 +5,15 @@ import { ChevronDown, ChevronUp, BadgePercent, Banknote, Zap } from "lucide-reac
 import { formatCOP } from "@/lib/formatters"
 
 export type CarteraEnergyInvoice = {
-  unidad: string
+  factura: string
+  unidad: string | null
   periodoLabel: string
   total: number
 }
 
 export type BreakdownRow = {
+  tipo: "arriendo" | "intereses"
+  factura: string
   periodo: number
   unidad: string | null
   saldo: number
@@ -25,7 +28,8 @@ function InvoiceRow({ row }: { row: BreakdownRow }) {
   const [open, setOpen] = useState(false)
   const year = Math.floor(row.periodo / 100)
   const month = row.periodo % 100
-  const label = new Date(year, month - 1, 1).toLocaleDateString("es-CO", { month: "long", year: "numeric" })
+  const mes = new Date(year, month - 1, 1).toLocaleDateString("es-CO", { month: "long", year: "numeric" })
+  const label = row.tipo === "intereses" ? `Intereses de mora · ${mes}` : mes
   const displaySaldo = row.ppDiscount > 0 ? row.saldo - row.ppDiscount : row.saldo
   const hasDetail = row.ventas != null || row.ppDiscount > 0
 
@@ -72,7 +76,7 @@ function InvoiceRow({ row }: { row: BreakdownRow }) {
           {row.ventas != null && (
             <>
               <p className="text-xs text-slate-400">
-                Arrendamiento: <span className="text-slate-600">{formatCOP(row.ventas)}</span>
+                {row.tipo === "intereses" ? "Intereses" : "Arrendamiento"}: <span className="text-slate-600">{formatCOP(row.ventas)}</span>
               </p>
               {row.impuesto != null && (
                 <p className="text-xs text-slate-400">
@@ -151,17 +155,19 @@ export function CarteraBreakdown({
           {/* Invoice list — always visible, detail per row is collapsible */}
           <div className="mt-3 border-t border-slate-100 pt-1">
             {rows.map((row) => (
-              <InvoiceRow key={`${row.periodo}-${row.unidad}`} row={row} />
+              <InvoiceRow key={row.factura} row={row} />
             ))}
             {electricityInvoices.map((inv) => (
               <div
-                key={`energia-${inv.unidad}-${inv.periodoLabel}`}
+                key={inv.factura}
                 className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0"
               >
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 shrink-0">
-                    Local {inv.unidad}
-                  </span>
+                  {inv.unidad && (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 shrink-0">
+                      Local {inv.unidad}
+                    </span>
+                  )}
                   <span className="flex items-center gap-1 text-xs font-medium text-slate-700 truncate">
                     <Zap className="h-3 w-3 text-amber-500 shrink-0" />
                     Energía · {inv.periodoLabel}

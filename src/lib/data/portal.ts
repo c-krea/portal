@@ -395,7 +395,13 @@ async function getPortalContratos_uncached(tenantId: string): Promise<PortalCont
   }))
 }
 
+// siesa_raw.cartera.tipo_cliente → what the tenant owes it for. NACIONALES REYMON
+// is not a Z40 tenant charge and is left out.
+export type PortalCarteraTipo = "arriendo" | "intereses" | "energia"
+
 export type PortalCarteraRow = {
+  tipo: PortalCarteraTipo
+  factura: string
   periodo: number
   unidad: string | null
   saldo: number
@@ -411,6 +417,8 @@ export type PortalCarteraRow = {
 
 export type PortalCartera = {
   saldoTotal: number
+  /** Part of saldoTotal billed as energía (RGE). Already included in saldoTotal. */
+  saldoEnergia: number
   facturaCount: number
   vencido: number
   maxDiasMora: number
@@ -421,14 +429,28 @@ export type PortalCartera = {
 
 const NIT_RE = /^\d{5,12}(-\d)?$/
 
+export const EMPTY_PORTAL_CARTERA: PortalCartera = { saldoTotal: 0, saldoEnergia: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }
+
 async function getPortalCartera_uncached(nit: string): Promise<PortalCartera> {
-  if (!NIT_RE.test(nit)) return { saldoTotal: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }
+  if (!NIT_RE.test(nit)) return EMPTY_PORTAL_CARTERA
+  // Saldo pendiente = lo que SIESA aún tiene en cartera (Z40, saldo > 0) para el NIT,
+  // separado por tipo_cliente. Una factura pagada sale de cartera, así que la energía
+  // (RGE) ya pagada deja de aparecer sin mirar recaudo. Saldos negativos (anticipos,
+  // RK sin aplicar) nunca se restan: cartera los aplica en SIESA.
   // Interés DIAN compartido con /mora (ver mora.ts): misma tasa, misma base
   // (vr_vencido) y mismos días (venc_efec = fecha_factura + 30).
+  // Mora e interés estimado se calculan solo sobre arriendo + intereses (lo que antes
+  // cubría FVS-%); la energía no genera interés en el portal.
   const rows = await execute(`
     WITH ${moraRateCteSql()},
     base AS (
       SELECT
+        CASE
+          WHEN UPPER(TRIM(c.tipo_cliente)) = 'ARRENDAMIENTOS'   THEN 'arriendo'
+          WHEN UPPER(TRIM(c.tipo_cliente)) = 'INTERESES MORA'   THEN 'intereses'
+          WHEN UPPER(TRIM(c.tipo_cliente)) LIKE 'SERV. PUB%'    THEN 'energia'
+        END                                                         AS tipo,
+        c.factura                                                   AS factura,
         (EXTRACT(YEAR FROM c.fecha_factura) * 100 + EXTRACT(MONTH FROM c.fecha_factura))::int AS periodo,
         REVERSE(SPLIT_PART(REVERSE(c.sucursal), ' ', 1))                                      AS unidad,
         ROUND(c.saldo)::numeric                                     AS saldo,
@@ -445,20 +467,22 @@ async function getPortalCartera_uncached(nit: string): Promise<PortalCartera> {
         ON d.documento = '001-' || c.factura
         AND d.tipo = 'Facturas'
       WHERE c.documento = '${nit}'
-        AND c.factura LIKE 'FVS-%'
         AND c.id_zona = 'Z40'
         AND c.saldo > 0
     )
     SELECT
-      periodo, unidad, saldo, vencido,
+      tipo, factura, periodo, unidad, saldo, vencido,
       ${moraDiasVencidosExpr("venc_efec")}::int  AS dias_mora,
       ${moraDiasVencidosExpr("venc_efec")}::int  AS dias_interest,
       ${moraInteresExpr("vr_vencido_raw", "venc_efec")}::numeric AS interes_est,
       fecha_factura, fecha_vence, ventas, impuesto, retenciones
     FROM base
-    ORDER BY fecha_factura DESC, unidad
+    WHERE tipo IS NOT NULL
+    ORDER BY fecha_factura DESC, unidad, factura
   `)
   const mapped: PortalCarteraRow[] = rows.map((r) => ({
+    tipo:        String(r.tipo) as PortalCarteraTipo,
+    factura:     String(r.factura),
     periodo:     Number(r.periodo),
     unidad:      r.unidad ? String(r.unidad) : null,
     saldo:       Number(r.saldo ?? 0),
@@ -471,13 +495,17 @@ async function getPortalCartera_uncached(nit: string): Promise<PortalCartera> {
     impuesto:    r.impuesto != null ? Number(r.impuesto) : null,
     retenciones: r.retenciones != null ? Number(r.retenciones) : null,
   }))
+  const moraRows = mapped.filter((r) => r.tipo !== "energia")
   return {
     saldoTotal:      mapped.reduce((s, r) => s + r.saldo, 0),
+    saldoEnergia:    mapped.filter((r) => r.tipo === "energia").reduce((s, r) => s + r.saldo, 0),
     facturaCount:    mapped.length,
-    vencido:         mapped.reduce((s, r) => s + r.vencido, 0),
-    maxDiasMora:     mapped.reduce((m, r) => Math.max(m, r.diasMora), 0),
-    maxDiasInterest: mapped.reduce((m, r) => Math.max(m, r.diasInterest), 0),
-    interesEstimado: rows.reduce((s, r) => s + Number(r.interes_est ?? 0), 0),
+    vencido:         moraRows.reduce((s, r) => s + r.vencido, 0),
+    maxDiasMora:     moraRows.reduce((m, r) => Math.max(m, r.diasMora), 0),
+    maxDiasInterest: moraRows.reduce((m, r) => Math.max(m, r.diasInterest), 0),
+    interesEstimado: rows
+      .filter((r) => r.tipo !== "energia")
+      .reduce((s, r) => s + Number(r.interes_est ?? 0), 0),
     rows:            mapped,
   }
 }

@@ -5,6 +5,7 @@ import {
   getPortalElectricityInvoiceData,
   getPortalElectricityPeriodos,
   getSyncFreshness,
+  EMPTY_PORTAL_CARTERA,
   type PortalProfile,
 } from "@/lib/data/portal"
 import { formatCOP, formatDate } from "@/lib/formatters"
@@ -35,6 +36,13 @@ function prevPeriodo(now: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
 }
 
+// RGE is issued the month after the consumption it bills (August energy → September
+// invoice), so the label names the consumption month like the meter invoice does.
+function energiaPeriodoLabel(periodoFactura: number): string {
+  const d = new Date(Math.floor(periodoFactura / 100), (periodoFactura % 100) - 2, 1)
+  return d.toLocaleDateString("es-CO", { month: "long", year: "numeric" })
+}
+
 function daysFromNow(date: Date): number {
   const todayCO = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }))
   todayCO.setHours(0, 0, 0, 0)
@@ -57,7 +65,7 @@ export async function PortalDashboard({
     getPortalPagos(profile.tenantId, 5),
     // Day-9 readings are stored under the previous month's periodo
     getPortalMedidorStatus(profile.unitId, electricidadPeriodo),
-    profile.nit ? getPortalCartera(profile.nit) : Promise.resolve({ saldoTotal: 0, facturaCount: 0, vencido: 0, maxDiasMora: 0, maxDiasInterest: 0, interesEstimado: 0, rows: [] }),
+    profile.nit ? getPortalCartera(profile.nit) : Promise.resolve(EMPTY_PORTAL_CARTERA),
     Promise.all(profile.allUnitIds.map(id => getPortalElectricityInvoiceData(id, electricidadPeriodo))),
     Promise.all(profile.allUnitIds.map(id => getPortalElectricityPeriodos(id))),
     getSyncFreshness(),
@@ -92,13 +100,25 @@ export async function PortalDashboard({
   // issue on the 2nd.
   const ppPct = (profile.prontoPagoPct ?? 0) / 100
   const todayMidnight = new Date(nowCO.getFullYear(), nowCO.getMonth(), nowCO.getDate())
-  const ppDiscountFor = (r: { fechaFactura: string | null; ventas: number | null }): number =>
-    ppPct > 0 && isPpDateEligible(r.fechaFactura, todayMidnight, ppWindow)
+  // Only rent earns pronto pago — never mora interest or energy.
+  const ppDiscountFor = (r: { tipo: string; fechaFactura: string | null; ventas: number | null }): number =>
+    r.tipo === "arriendo" && ppPct > 0 && isPpDateEligible(r.fechaFactura, todayMidnight, ppWindow)
       ? Math.round((r.ventas ?? 0) * ppPct)
       : 0
   const ppDiscountTotal = cartera.rows.reduce((sum, r) => sum + ppDiscountFor(r), 0)
   const isPpWindow = ppDiscountTotal > 0
-  const saldoConPp = cartera.saldoTotal - ppDiscountTotal
+  // Everything owed comes from SIESA cartera, split by tipo_cliente. Energy (RGE) keeps
+  // its own line and Wompi step; a paid RGE has left cartera, so it no longer shows.
+  const energiaRows = cartera.rows.filter((r) => r.tipo === "energia")
+  const facturaRows = cartera.rows.filter(
+    (r): r is typeof r & { tipo: "arriendo" | "intereses" } => r.tipo !== "energia",
+  )
+  const saldoFacturas = cartera.saldoTotal - cartera.saldoEnergia
+  const saldoConPp = saldoFacturas - ppDiscountTotal
+  // RGE is billed per tenant, not per unit — name the unit only when there is one.
+  const energiaUnidad = profile.allUnits.length === 1 ? profile.allUnits[0] : null
+  // Meter detail cards (kWh, tarifa) only make sense while energy is actually owed.
+  const energiaCards = cartera.saldoEnergia > 0 ? electricityInvoices : []
 
   // ERP feed frozen → cartera is a stale snapshot while interest is still counted
   // against CURRENT_DATE, so a tenant who paid after the freeze would be shown as
@@ -274,12 +294,14 @@ export async function PortalDashboard({
 
       {/* ── Total a Pagar ── */}
       <CarteraBreakdown
-        saldoTotal={cartera.saldoTotal}
+        saldoTotal={saldoFacturas}
         saldoConPp={saldoConPp}
         ppDiscountTotal={ppDiscountTotal}
         isPpWindow={isPpWindow}
         ppPct={profile.prontoPagoPct ?? 0}
-        rows={cartera.rows.map((row): BreakdownRow => ({
+        rows={facturaRows.map((row): BreakdownRow => ({
+          tipo:        row.tipo,
+          factura:     row.factura,
           periodo:     row.periodo,
           unidad:      row.unidad,
           saldo:       row.saldo,
@@ -289,10 +311,11 @@ export async function PortalDashboard({
           impuesto:    row.impuesto,
           retenciones: row.retenciones,
         }))}
-        electricityInvoices={electricityInvoices.map(inv => ({
-          unidad:       inv.unidad,
-          periodoLabel: inv.periodoLabel,
-          total:        inv.total,
+        electricityInvoices={energiaRows.map(row => ({
+          factura:      row.factura,
+          unidad:       energiaUnidad,
+          periodoLabel: energiaPeriodoLabel(row.periodo),
+          total:        row.saldo,
         }))}
       />
 
@@ -316,12 +339,13 @@ export async function PortalDashboard({
           tipoPersona={profile.tipoPersona}
           hasPp={isPpWindow}
           ppPct={profile.prontoPagoPct ?? 0}
-          electricityInvoices={electricityInvoices}
+          electricityInvoices={energiaCards}
+          totalEnergia={cartera.saldoEnergia}
           units={profile.allUnits.map(unitNumber => {
-            const rawSaldo = cartera.rows
+            const rawSaldo = facturaRows
               .filter(r => r.unidad === unitNumber)
               .reduce((s, r) => s + r.saldo, 0)
-            const unitPpDiscount = cartera.rows
+            const unitPpDiscount = facturaRows
               .filter(r => r.unidad === unitNumber)
               .reduce((sum, r) => sum + ppDiscountFor(r), 0)
             return { unitNumber, saldo: rawSaldo - unitPpDiscount }
