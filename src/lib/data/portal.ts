@@ -746,7 +746,8 @@ export const getPortalPagosPage = cached(getPortalPagosPage_uncached, ["portal:p
 export const getPortalPagosKpis = cached(getPortalPagosKpis_uncached, ["portal:pagosKpis"], "portal")
 export const getPortalMedidorHistory = cached(getPortalMedidorHistory_uncached, ["portal:medidorHistory"], "portal")
 export const getPortalContratos = cached(getPortalContratos_uncached, ["portal:contratos"], "portal")
-export const getPortalCartera = cached(getPortalCartera_uncached, ["portal:cartera"], "portal")
+// v2: PR #8 added tipo / factura / saldoEnergia; a new key keeps pre-deploy entries from being served.
+export const getPortalCartera = cached(getPortalCartera_uncached, ["portal:cartera:v2"], "portal")
 // Time-derived — do not cache. Caching `isStale` kept the tenant warning up
 // after Siesa had already resumed (and on any local clone older than 48h).
 export const getSyncFreshness = getSyncFreshness_uncached
