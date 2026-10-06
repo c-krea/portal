@@ -13,7 +13,7 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 #### Changed
 - **Total a Pagar = todo lo abierto en cartera Z40** (saldo > 0) por NIT, separado por `tipo_cliente`: arriendo, "Intereses de mora · mes" en renglón propio y energía. Nada se descarta por tipo.
 - **La energía aparece cuando SIESA emite la RGE**, ya no apenas hay lectura. Las tarjetas del medidor en Wompi son las del mes que cobra esa RGE.
-- **Pronto pago solo sobre arriendo** (`docs/context.md` §A), nunca sobre intereses ni energía.
+- **Pronto pago solo sobre facturas de arriendo `FVS-`** (`docs/context.md` §A), nunca sobre intereses, energía, `NSC-` ni un `tipo_cliente` desconocido.
 - **Mora sin cambios:** vencido, días e interés estimado siguen sobre `FVS-%`, igual que `/mora` (18/18 inquilinos en mora dan el mismo vencido).
 
 ### 2026-09-29 — Resumen: dona de recaudo general

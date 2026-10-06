@@ -108,9 +108,10 @@ export async function PortalDashboard({
   // issue on the 2nd.
   const ppPct = (profile.prontoPagoPct ?? 0) / 100
   const todayMidnight = new Date(nowCO.getFullYear(), nowCO.getMonth(), nowCO.getDate())
-  // Only rent earns pronto pago — never mora interest or energy.
-  const ppDiscountFor = (r: { tipo: string; fechaFactura: string | null; ventas: number | null }): number =>
-    r.tipo === "arriendo" && ppPct > 0 && isPpDateEligible(r.fechaFactura, todayMidnight, ppWindow)
+  // Only rent invoices (FVS-) earn pronto pago — never mora interest, energy, NSC or an
+  // unknown tipo_cliente that fell back to "arriendo".
+  const ppDiscountFor = (r: { tipo: string; factura: string; fechaFactura: string | null; ventas: number | null }): number =>
+    r.tipo === "arriendo" && r.factura.startsWith("FVS-") && ppPct > 0 && isPpDateEligible(r.fechaFactura, todayMidnight, ppWindow)
       ? Math.round((r.ventas ?? 0) * ppPct)
       : 0
   const ppDiscountTotal = cartera.rows.reduce((sum, r) => sum + ppDiscountFor(r), 0)
