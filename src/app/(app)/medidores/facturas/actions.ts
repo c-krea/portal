@@ -1,6 +1,7 @@
 "use server"
 
 import { supabaseAdmin, executeDml, sqlStr } from "@/lib/db/executor"
+import { getAuthUser } from "@/lib/auth/session"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { ELECTRICITY_GROUPS } from "@/lib/data/electricity"
 import { assertPeriodo, assertUuid } from "@/lib/security/validators"
@@ -25,6 +26,9 @@ export async function saveFacturasEnergia(
   _prev: SaveFacturasState,
   formData: FormData,
 ): Promise<SaveFacturasState> {
+  const user = await getAuthUser()
+  if (!user) return { error: "No autorizado" }
+
   const periodo = formData.get("periodo") as string
   if (!periodo) return { error: "Periodo requerido" }
   assertPeriodo(periodo)
@@ -89,11 +93,14 @@ export async function saveFacturasEnergia(
 
   // Propagate new tarifas to existing lecturas for this period.
   // Recompute total_energia from kwh × tarifa so portal/admin views match the saved bills.
+  // Only rows whose values actually change are touched, so updated_by/updated_at
+  // mark real edits rather than every reading of the period on each save.
   const filledGroups = filled.map((r) => `'${r.electricity_group}'`).join(",")
   await executeDml(`
     UPDATE v2.lecturas_medidor lm
     SET tarifa_kwh    = fe.tarifa_kwh,
-        total_energia = ROUND(lm.kwh * fe.tarifa_kwh / 50.0) * 50
+        total_energia = ROUND(lm.kwh * fe.tarifa_kwh / 50.0) * 50,
+        updated_by    = '${user.id}'::uuid
     FROM v2.facturas_energia fe,
          v2.locales u
     WHERE lm.empresa_id    = '${empresaId}'::uuid
@@ -103,6 +110,8 @@ export async function saveFacturasEnergia(
       AND fe.empresa_id    = '${empresaId}'::uuid
       AND fe.periodo       = '${periodo}'
       AND fe.grupo_energia IN (${filledGroups})
+      AND (lm.tarifa_kwh    IS DISTINCT FROM fe.tarifa_kwh
+        OR lm.total_energia IS DISTINCT FROM ROUND(lm.kwh * fe.tarifa_kwh / 50.0) * 50)
   `)
 
   revalidatePath("/medidores/facturas")

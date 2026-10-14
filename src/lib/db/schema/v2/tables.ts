@@ -145,6 +145,7 @@ export const lecturasMedidor = v2Schema.table('lecturas_medidor', {
   fotoDriveId: text('foto_drive_id'),
   notas: text('notas'),
   submittedBy: uuid('submitted_by').references(() => perfiles.id),
+  updatedBy: uuid('updated_by').references(() => perfiles.id),
   estadoValidacion: estadoValidacionLecturaEnum('estado_validacion').notNull().default('pendiente'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),

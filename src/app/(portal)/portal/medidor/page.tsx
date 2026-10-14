@@ -38,6 +38,7 @@ export default async function MedidorPage() {
     tarifaKwh:          refs[i].tarifaKwh,
     alreadySubmitted:   refs[i].alreadySubmitted,
     esPrimeraLectura:   refs[i].esPrimeraLectura,
+    promedio3m:         refs[i].promedio3m ?? null,
     history:            histories[i],
   }))
 
