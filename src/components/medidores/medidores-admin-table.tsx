@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils"
 import type { MedidorAdminRow, UnitWithMeter } from "@/lib/data/medidores"
 import { LecturaForm } from "@/components/medidores/lectura-form"
 import { getMeterPhotoSignedUrl } from "@/app/(app)/medidores/actions"
-import { X, ImageIcon } from "lucide-react"
+import { X, ImageIcon, Pencil } from "lucide-react"
+import { EditarLecturaDialog } from "@/components/medidores/editar-lectura-dialog"
 
 type SortKey = "unitNumber" | "tenantName" | "kwh" | "desvPct" | "totalEnergia"
 type SortDir = "asc" | "desc"
@@ -98,6 +99,7 @@ export function MedidoresAdminTable({
   const [pageSize, setPageSize] = useState(25)
   const [showForm, setShowForm] = useState(false)
   const [loadingPhotoId, setLoadingPhotoId] = useState<string | null>(null)
+  const [editRow, setEditRow] = useState<MedidorAdminRow | null>(null)
 
   function handleSort(key: SortKey) {
     if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"))
@@ -208,6 +210,7 @@ export function MedidoresAdminTable({
               <th className="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                 Foto
               </th>
+              <th className="px-4 py-3" aria-label="Acciones" />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
@@ -264,6 +267,18 @@ export function MedidoresAdminTable({
                     </button>
                   ) : (
                     <span className="text-slate-300">—</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {row.readingId && (
+                    <button
+                      onClick={() => setEditRow(row)}
+                      title="Corregir lectura"
+                      className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Editar</span>
+                    </button>
                   )}
                 </td>
               </tr>
@@ -328,6 +343,10 @@ export function MedidoresAdminTable({
           </div>
         </div>
       </div>
+
+      {editRow && (
+        <EditarLecturaDialog key={editRow.readingId} row={editRow} periodo={periodo} onClose={() => setEditRow(null)} />
+      )}
     </div>
   )
 }

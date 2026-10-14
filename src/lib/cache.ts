@@ -1,4 +1,4 @@
-import { unstable_cache, revalidateTag } from "next/cache"
+import { unstable_cache, revalidateTag, updateTag } from "next/cache"
 
 // Single knob for how long the portal serves a stored copy before recomputing.
 // Portal-visible data changes only on the daily ERP sync or on admin edits, and
@@ -38,6 +38,13 @@ export function cached<A extends unknown[], R>(
 // Next 16: revalidateTag needs a cache-life profile — "max" = stale-while-revalidate.
 export function bustTags(...tags: CacheTag[]): void {
   for (const tag of tags) revalidateTag(tag, "max")
+}
+
+// Expire tags immediately (next request blocks for fresh data) — for admin
+// corrections that must show at once instead of serving the stale copy once.
+// Server Actions only.
+export function expireTags(...tags: CacheTag[]): void {
+  for (const tag of tags) updateTag(tag)
 }
 
 // Refresh every data cache — use after the daily ERP sync or a financial-rule

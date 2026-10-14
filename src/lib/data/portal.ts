@@ -557,6 +557,8 @@ export type PortalMedidorRef = {
   tarifaKwh: number
   alreadySubmitted: boolean
   esPrimeraLectura: boolean
+  // Avg kWh of the last 3 billed readings (baselines excluded); null = no history.
+  promedio3m: number | null
 }
 
 async function getPortalMedidorRef_uncached(
@@ -565,7 +567,7 @@ async function getPortalMedidorRef_uncached(
 ): Promise<PortalMedidorRef> {
   assertUuid(unitId)
   assertPeriodo(periodo)
-  const [prevRows, currentRows] = await Promise.all([
+  const [prevRows, currentRows, avgRows] = await Promise.all([
     execute(`
       SELECT lectura_actual::numeric AS la, tarifa_kwh::numeric AS tk
       FROM v2.lecturas_medidor
@@ -577,12 +579,21 @@ async function getPortalMedidorRef_uncached(
       WHERE local_id = '${unitId}'::uuid AND periodo = '${periodo}'
       LIMIT 1
     `),
+    execute(`
+      SELECT AVG(kwh)::numeric AS promedio
+      FROM (
+        SELECT kwh FROM v2.lecturas_medidor
+        WHERE local_id = '${unitId}'::uuid AND periodo < '${periodo}' AND kwh > 0
+        ORDER BY periodo DESC LIMIT 3
+      ) r
+    `),
   ])
   return {
     lecturaAnteriorRef: prevRows[0] ? Number(prevRows[0].la) : 0,
     tarifaKwh:          prevRows[0] ? Number(prevRows[0].tk) : 0,
     alreadySubmitted:   currentRows.length > 0,
     esPrimeraLectura:   !prevRows[0],
+    promedio3m:         avgRows[0]?.promedio != null ? Number(avgRows[0].promedio) : null,
   }
 }
 
@@ -751,7 +762,7 @@ export const getPortalCartera = cached(getPortalCartera_uncached, ["portal:carte
 // Time-derived — do not cache. Caching `isStale` kept the tenant warning up
 // after Siesa had already resumed (and on any local clone older than 48h).
 export const getSyncFreshness = getSyncFreshness_uncached
-export const getPortalMedidorRef = cached(getPortalMedidorRef_uncached, ["portal:medidorRef"], "portal")
+export const getPortalMedidorRef = cached(getPortalMedidorRef_uncached, ["portal:medidorRef:v2"], "portal")
 export const getPortalMedidorStatus = cached(getPortalMedidorStatus_uncached, ["portal:medidorStatus"], "portal")
 export const getPortalElectricityInvoiceData = cached(getPortalElectricityInvoiceData_uncached, ["portal:elecInvoice"], "portal")
 export const getPortalElectricityPeriodos = cached(getPortalElectricityPeriodos_uncached, ["portal:elecPeriodos"], "portal")

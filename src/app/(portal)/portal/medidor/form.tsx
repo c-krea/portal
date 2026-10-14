@@ -3,10 +3,14 @@
 import { useActionState, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { submitLectura, type MedidorPortalState } from "./actions"
-import { Camera, X, CheckCircle2 } from "lucide-react"
+import { Camera, X, CheckCircle2, AlertTriangle } from "lucide-react"
 import type { PortalMedidorHistoryRow } from "@/lib/data/portal"
 
 const initial: MedidorPortalState = {}
+
+// Consumo deviating more than this from the 3-month average asks the tenant to
+// double-check before sending. Only a warning — a confirmed reading saves as usual.
+const DESVIO_ALERTA_PCT = 50
 
 function periodoLabel(periodo: string) {
   const [year, month] = periodo.split("-")
@@ -109,6 +113,7 @@ export type UnitMedidorData = {
   tarifaKwh: number
   alreadySubmitted: boolean
   esPrimeraLectura: boolean
+  promedio3m: number | null
   history: PortalMedidorHistoryRow[]
 }
 
@@ -133,19 +138,53 @@ export function MedidorForm({
   const [imgProcessing, setImgProcessing] = useState(false)
   const [imgError, setImgError] = useState<string | null>(null)
   const fileSeqRef = useRef(0)
+  const formRef = useRef<HTMLFormElement>(null)
+  const desvioConfirmadoRef = useRef(false)
+  const [desvioAviso, setDesvioAviso] = useState<{ consumo: number; promedio: number; pct: number } | null>(null)
 
   const selected = units[selectedIdx]
+
+  function updateDigits(next: string[]) {
+    setDigits(next)
+    setDesvioAviso(null)
+    desvioConfirmadoRef.current = false
+  }
+
+  // Consumo vs the unit's 3-month average; null when there is nothing to compare.
+  function calcDesvio() {
+    if (selected.esPrimeraLectura || digits.some(d => d === "")) return null
+    const promedio = selected.promedio3m
+    if (promedio == null || promedio <= 0) return null
+    const consumo = Math.max(0, Number(digits.join("")) - Math.floor(selected.lecturaAnteriorRef))
+    const pct = Math.round(((consumo - promedio) / promedio) * 100)
+    return Math.abs(pct) > DESVIO_ALERTA_PCT ? { consumo, promedio, pct } : null
+  }
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (desvioConfirmadoRef.current) return
+    const desvio = calcDesvio()
+    if (desvio) {
+      e.preventDefault()
+      setDesvioAviso(desvio)
+    }
+  }
+
+  function confirmarDesvio() {
+    desvioConfirmadoRef.current = true
+    setDesvioAviso(null)
+    formRef.current?.requestSubmit()
+  }
 
   // Reset form when switching units
   function selectUnit(idx: number) {
     setSelectedIdx(idx)
-    setDigits(["", "", "", "", ""])
+    updateDigits(["", "", "", "", ""])
     setPreview(null); setFotoBase64(null); setImgError(null)
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
   useEffect(() => {
-    if (state.success) { router.refresh(); setDigits(["", "", "", "", ""]); setPreview(null); setFotoBase64(null) }
+    if (state.success) { router.refresh(); updateDigits(["", "", "", "", ""]); setPreview(null); setFotoBase64(null) }
   }, [state.success, router])
 
   async function applyFile(file: File) {
@@ -206,7 +245,7 @@ export function MedidorForm({
           </p>
         </div>
       ) : (
-        <form action={action}>
+        <form ref={formRef} action={action} onSubmit={handleSubmit}>
           <input type="hidden" name="localId" value={selected.unitId} />
           {fotoBase64 && <input type="hidden" name="fotoBase64" value={fotoBase64} />}
           {fotoBase64 && <input type="hidden" name="fotoMime" value={fotoMime} />}
@@ -283,7 +322,7 @@ export function MedidorForm({
                   Lectura actual (kWh) <span className="text-rose-500">*</span>
                 </label>
                 <input type="hidden" name="lecturaActual" value={digits.join("")} />
-                <MeterDigitInput digits={digits} onChange={setDigits} />
+                <MeterDigitInput digits={digits} onChange={updateDigits} />
                 <p className="mt-1.5 text-xs text-slate-400">
                   Ingresa los 5 dígitos negros del contador. El dígito rojo (decimal) no se registra.
                 </p>
@@ -337,7 +376,35 @@ export function MedidorForm({
                   className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
 
-              <button type="submit" disabled={pending || imgProcessing || digits.some(d => d === "")}
+              {desvioAviso && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                    <div>
+                      <p className="font-semibold">
+                        El consumo es {Math.abs(desvioAviso.pct)}% {desvioAviso.pct > 0 ? "mayor" : "menor"} a su promedio
+                      </p>
+                      <p className="mt-1">
+                        Este mes: <span className="font-semibold tabular-nums">{desvioAviso.consumo.toLocaleString("es-CO")} kWh</span>
+                        {" · "}Promedio últimos 3 meses: <span className="font-semibold tabular-nums">{Math.round(desvioAviso.promedio).toLocaleString("es-CO")} kWh</span>
+                      </p>
+                      <p className="mt-1">Verifique que los dígitos coincidan con el contador antes de enviar.</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => setDesvioAviso(null)}
+                      className="rounded-lg border border-amber-300 bg-white py-2 text-xs font-semibold text-amber-800 hover:bg-amber-100">
+                      Corregir lectura
+                    </button>
+                    <button type="button" onClick={confirmarDesvio} disabled={pending}
+                      className="rounded-lg bg-amber-600 py-2 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50">
+                      Sí, es correcta · Enviar
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <button type="submit" disabled={pending || imgProcessing || digits.some(d => d === "") || desvioAviso != null}
                 className="mt-auto w-full rounded-lg bg-slate-900 py-3 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50 transition-colors">
                 {imgProcessing ? "Procesando foto…" : pending ? "Enviando…" : `Enviar lectura Local ${selected.unitNumber}`}
               </button>

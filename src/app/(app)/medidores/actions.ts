@@ -1,7 +1,7 @@
 "use server"
 
 import { supabaseAdmin, execute, executeDml, sqlStr } from "@/lib/db/executor"
-import { getAuthUser } from "@/lib/auth/session"
+import { getAuthUser, requireAdminOrFinanzasAction } from "@/lib/auth/session"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
 import { uploadMeterPhoto } from "@/lib/r2/meter-photos"
@@ -9,7 +9,7 @@ import { getSignedDownloadUrl } from "@/lib/r2/files"
 import { isValidPeriodo } from "@/lib/security/validators"
 import { consumoDesdeLecturas, totalEnergia } from "@/lib/lectura-consumo"
 import { revalidatePath } from "next/cache"
-import { bustTags } from "@/lib/cache"
+import { bustTags, expireTags } from "@/lib/cache"
 import { z } from "zod"
 
 const schema = z.object({
@@ -135,6 +135,88 @@ export async function registrarLectura(
   } catch (e) {
     console.error(e)
     return { error: "Error al registrar lectura" }
+  }
+}
+
+const editSchema = z.object({
+  readingId:     z.string().uuid("Lectura inválida"),
+  lecturaActual: z.coerce.number().min(0, "Lectura inválida"),
+  notas:         z.string().max(500).optional(),
+})
+
+// Admin correction of an existing reading (typo fixes) — only that month's row.
+// Keeps the stored lectura_anterior; kWh and total recompute with the same rule
+// as registration (invoice tarifa, MROUND 50). Later months are left untouched.
+export async function editarLectura(
+  _prev: MedidorState,
+  formData: FormData,
+): Promise<MedidorState> {
+  const auth = await requireAdminOrFinanzasAction()
+  if ("error" in auth) return { error: auth.error }
+
+  const parsed = editSchema.safeParse({
+    readingId:     formData.get("readingId"),
+    lecturaActual: formData.get("lecturaActual"),
+    notas:         formData.get("notas") || undefined,
+  })
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
+  }
+  const { readingId, lecturaActual, notas } = parsed.data
+
+  const rows = await execute(`
+    SELECT lm.local_id, lm.periodo, lm.lectura_anterior::numeric AS lectura_anterior,
+           lm.tarifa_kwh::numeric AS tarifa_kwh,
+           EXISTS (
+             SELECT 1 FROM v2.lecturas_medidor p
+             WHERE p.local_id = lm.local_id AND p.periodo < lm.periodo
+           ) AS tiene_previa
+    FROM v2.lecturas_medidor lm
+    WHERE lm.id = '${readingId}'::uuid
+  `)
+  const row = rows[0]
+  if (!row) return { error: "Lectura no encontrada" }
+
+  const localId = String(row.local_id)
+  const periodo = String(row.periodo)
+  const { lecturaAnterior, kwh, esPrimeraLectura } = consumoDesdeLecturas(
+    lecturaActual,
+    row.tiene_previa ? Number(row.lectura_anterior) : null,
+  )
+  if (!esPrimeraLectura && lecturaActual < lecturaAnterior) {
+    return { error: `La lectura actual no puede ser menor a la anterior (${lecturaAnterior})` }
+  }
+
+  try {
+    const empresaId = await getEmpresaCkreaId()
+    const invoiceTarifa = await getElectricityTarifaForUnit(empresaId, localId, periodo)
+    const tarifa = invoiceTarifa > 0 ? invoiceTarifa : Number(row.tarifa_kwh ?? 0)
+    const total = totalEnergia(kwh, tarifa)
+
+    await executeDml(`
+      UPDATE v2.lecturas_medidor SET
+        lectura_anterior = ${lecturaAnterior},
+        lectura_actual   = ${lecturaActual},
+        kwh              = ${kwh},
+        tarifa_kwh       = ${tarifa > 0 ? tarifa : 0},
+        total_energia    = ${total},
+        notas            = ${sqlStr(notas ?? null)},
+        updated_at       = now()
+      WHERE id = '${readingId}'::uuid
+    `)
+
+    revalidatePath("/medidores")
+    revalidatePath("/medidores/facturas")
+    // Corrections must show at once in admin + portal (Total a Pagar).
+    expireTags("pagos", "medidores", "portal")
+
+    return {
+      success: true,
+      message: `Lectura corregida: ${kwh.toLocaleString("es-CO")} kWh · $${total.toLocaleString("es-CO")}`,
+    }
+  } catch (e) {
+    console.error(e)
+    return { error: "Error al corregir la lectura" }
   }
 }
 

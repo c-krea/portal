@@ -26,6 +26,9 @@ export type MedidorAdminRow = {
   totalEnergia: number | null
   status: "registrada" | "sin_lectura"
   readingId: string | null
+  lecturaAnterior: number | null
+  lecturaActual: number | null
+  notas: string | null
   validationStatus: "pendiente" | "aprobado" | "revision" | "critico" | "sin_lectura" | null
   fotoUrl: string | null
   // Period of the reading this one was measured against. When it isn't the
@@ -61,6 +64,9 @@ async function getMedidoresAdmin_uncached(
       u.unidad                                           AS unit_number,
       COALESCE(t.nombre_corto, t.razon_social)           AS tenant_name,
       mr.id                                              AS reading_id,
+      mr.lectura_anterior::numeric                       AS lectura_anterior,
+      mr.lectura_actual::numeric                         AS lectura_actual,
+      mr.notas,
       mr.kwh::numeric                                    AS kwh,
       mr.total_energia::numeric                          AS total_energia,
       mr.estado_validacion                               AS validation_status,
@@ -112,6 +118,9 @@ async function getMedidoresAdmin_uncached(
       unitNumber:  String(r.unit_number),
       tenantName:  r.tenant_name ? String(r.tenant_name) : null,
       readingId:   r.reading_id ? String(r.reading_id) : null,
+      lecturaAnterior: r.lectura_anterior != null ? Number(r.lectura_anterior) : null,
+      lecturaActual:   r.lectura_actual != null ? Number(r.lectura_actual) : null,
+      notas:           r.notas ? String(r.notas) : null,
       kwh,
       promedio3m:  p3m,
       desvPct:     desv,
@@ -188,5 +197,5 @@ async function getUnitsWithMeters_uncached(empresaId: string): Promise<UnitWithM
 
 // ── Cached exports (30-min window; busts via ERP sync + meter-reading writes) ──
 export const getMeterYears      = cached(getMeterYears_uncached,      ["medidores:years"], "medidores")
-export const getMedidoresAdmin  = cached(getMedidoresAdmin_uncached,  ["medidores:admin"], "medidores")
+export const getMedidoresAdmin  = cached(getMedidoresAdmin_uncached,  ["medidores:admin:v2"], "medidores")
 export const getUnitsWithMeters = cached(getUnitsWithMeters_uncached, ["medidores:units"], "medidores")
