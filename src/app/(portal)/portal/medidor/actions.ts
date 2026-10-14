@@ -142,6 +142,7 @@ export async function submitLectura(
         foto_url          = EXCLUDED.foto_url,
         foto_drive_id     = EXCLUDED.foto_drive_id,
         submitted_by      = EXCLUDED.submitted_by,
+        updated_by        = EXCLUDED.submitted_by,
         estado_validacion = EXCLUDED.estado_validacion
     `)
   } catch {

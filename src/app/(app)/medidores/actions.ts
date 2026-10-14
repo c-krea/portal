@@ -117,7 +117,8 @@ export async function registrarLectura(
         notas            = EXCLUDED.notas,
         foto_url         = EXCLUDED.foto_url,
         foto_drive_id    = EXCLUDED.foto_drive_id,
-        submitted_by     = EXCLUDED.submitted_by
+        submitted_by     = EXCLUDED.submitted_by,
+        updated_by       = EXCLUDED.submitted_by
     `)
 
     revalidatePath("/medidores")
@@ -201,6 +202,7 @@ export async function editarLectura(
         tarifa_kwh       = ${tarifa > 0 ? tarifa : 0},
         total_energia    = ${total},
         notas            = ${sqlStr(notas ?? null)},
+        updated_by       = '${auth.profile.userId}'::uuid,
         updated_at       = now()
       WHERE id = '${readingId}'::uuid
     `)
