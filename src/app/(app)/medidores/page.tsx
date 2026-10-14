@@ -124,7 +124,7 @@ export default async function MedidoresPage({
       </div>
 
       {/* Admin table */}
-      <MedidoresAdminTable rows={rows} units={units} periodo={periodo} />
+      <MedidoresAdminTable rows={rows} units={units} periodo={periodo} editable={periodo === defaultPeriodo} />
     </>
   )
 }

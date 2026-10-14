@@ -87,10 +87,13 @@ export function MedidoresAdminTable({
   rows,
   units,
   periodo,
+  editable,
 }: {
   rows: MedidorAdminRow[]
   units: UnitWithMeter[]
   periodo: string
+  // Only the current reading period can be corrected; older months are closed.
+  editable: boolean
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("unitNumber")
   const [sortDir, setSortDir] = useState<SortDir>("asc")
@@ -270,7 +273,7 @@ export function MedidoresAdminTable({
                   )}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  {row.readingId && (
+                  {editable && row.readingId && (
                     <button
                       onClick={() => setEditRow(row)}
                       title="Corregir lectura"

@@ -7,6 +7,7 @@ import { getElectricityTarifaForUnit } from "@/lib/data/electricity"
 import { uploadMeterPhoto } from "@/lib/r2/meter-photos"
 import { getSignedDownloadUrl } from "@/lib/r2/files"
 import { isValidPeriodo } from "@/lib/security/validators"
+import { lecturaPeriodo } from "@/lib/periodo"
 import { consumoDesdeLecturas, totalEnergia } from "@/lib/lectura-consumo"
 import { revalidatePath } from "next/cache"
 import { bustTags, expireTags } from "@/lib/cache"
@@ -145,7 +146,8 @@ const editSchema = z.object({
   notas:         z.string().max(500).optional(),
 })
 
-// Admin correction of an existing reading (typo fixes) — only that month's row.
+// Admin correction of an existing reading (typo fixes) — only that month's row,
+// and only for the current reading period (older months are closed).
 // Keeps the stored lectura_anterior; kWh and total recompute with the same rule
 // as registration (invoice tarifa, MROUND 50). Later months are left untouched.
 export async function editarLectura(
@@ -180,6 +182,9 @@ export async function editarLectura(
 
   const localId = String(row.local_id)
   const periodo = String(row.periodo)
+  if (periodo !== lecturaPeriodo()) {
+    return { error: "Solo se pueden corregir lecturas del último periodo" }
+  }
   const { lecturaAnterior, kwh, esPrimeraLectura } = consumoDesdeLecturas(
     lecturaActual,
     row.tiene_previa ? Number(row.lectura_anterior) : null,
