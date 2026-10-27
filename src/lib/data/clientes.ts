@@ -68,13 +68,15 @@ async function getClienteRows_uncached(entrada?: string): Promise<ClienteRow[]> 
   // se sumaba encima (doble gracia ≈60 días desde factura). El estado y max usan
   // la fecha corregida y solo FVS (igual que /mora); el saldo mostrado sigue
   // siendo todo vr_vencido>0 para no esconder deuda no-FVS en la tabla.
+  // Solo contratos activo/critico: un local de contrato vencido/terminado ya
+  // sale en getVacantUnitRows; incluirlo aquí lo duplicaba (ej. 106, 209, 505).
   const e = safeEntrada(entrada)
   const entradaExists = e
     ? `AND EXISTS (
         SELECT 1 FROM v2.contratos cx
         JOIN v2.locales lx ON lx.id = cx.local_id
         WHERE cx.inquilino_id = t.id
-          AND cx.estado IN ('activo','critico','vencido','terminado')
+          AND cx.estado IN ('activo','critico')
           AND lx.entrada = '${e}'
       )`
     : ""
@@ -121,13 +123,13 @@ async function getClienteRows_uncached(entrada?: string): Promise<ClienteRow[]> 
     FROM v2.inquilinos t
     LEFT JOIN v2.contratos con
       ON con.inquilino_id = t.id
-      AND con.estado IN ('activo', 'critico', 'vencido', 'terminado')
+      AND con.estado IN ('activo', 'critico')
     LEFT JOIN v2.locales u ON con.local_id = u.id
     WHERE t.juridica = false
       AND EXISTS (
         SELECT 1 FROM v2.contratos c4
         WHERE c4.inquilino_id = t.id
-          AND c4.estado IN ('activo', 'critico', 'vencido', 'terminado')
+          AND c4.estado IN ('activo', 'critico')
       )
       ${entradaExists}
     GROUP BY t.id, t.razon_social, t.nombre_corto, t.nit, t.tipo_persona
