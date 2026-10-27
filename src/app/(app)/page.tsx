@@ -118,6 +118,13 @@ export default async function ResumenPage({
             </span>
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
+            <span className="text-slate-500">Mora del mes</span>
+            <InfoTip text="Mora recaudada en el mes + saldo vencido (factura + 30 días) que sigue pendiente al cierre del mes. Es la base del % de Recaudo mora. Solo arriendo FVS, sin cartera jurídica." />
+            <span className="font-semibold tabular-nums text-rose-600">
+              {formatCOP(totalMora)}
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             {portfolio.activeClients} de {portfolio.totalUnits} ocupados
           </span>
