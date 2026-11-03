@@ -8,12 +8,14 @@ here. They do not get a second copy of the formulas.
 
 Doc map: `docs/README.md`.
 
+**Last verified: 2026-11-03**
+
 This file states **nothing countable** — no table counts, no rates that change yearly. A doc that
 misstates a money rule is worse than no doc. If a number can go stale, it does not belong here.
 
 | To find | Look at |
 |---|---|
-| Tables, columns, RPCs, RLS | `docs/schema/` then `docs/db-schema-reference.md` — or query the live DB. **Not** `supabase/migrations/` (one file; schema was applied directly). |
+| Tables, columns, RPCs, RLS | `docs/schema/` then `docs/db-schema-reference.md` — or query the live DB. **Not** `supabase/migrations/` alone (4 files; they hold only the changes made since the schema dump, which was applied directly). |
 | Recaudo filters | `v2.vista_pagos` in `docs/schema/02_vistas.sql` |
 | Routes | `src/app/` |
 | Cron | `vercel.json` and `src/app/api/cron/` |

@@ -17,8 +17,8 @@ This app sits on a **live Supabase database with real client money**. The same d
 - Never INSERT / UPDATE / DELETE `siesa_raw` (read-only ERP dump).
 - Never touch other schemas (`cartera`, `rutas`, `satelites`, …).
 - Never redefine shared money logic (what “paid” means, mora, pronto pago) to fix one record.
-- Prod writes, migrations, and deploys need explicit approval. Show the exact diff first.
-- `siesa_raw` is never written. Portal meter/energy rows upsert. Money rules: `docs/context.md` only.
+- Show the exact diff before any prod write.
+- Portal meter/energy rows upsert. Money rules: `docs/context.md` only.
 
 ## Local development
 
@@ -79,7 +79,6 @@ Siesa is the legal record. This portal reads; it does not write money back. Paym
 - Auth trigger is `on_auth_user_created_v2` → `v2.handle_new_user()` — never an unsuffixed name
 - RLS on operational money tables. `agente_chat` has none by design.
 - `service_role` is server-side, **this app only** (login create uses it). Other apps must not copy that.
-- `siesa_raw` = SELECT only
 
 ## Env
 
@@ -89,7 +88,7 @@ Siesa is the legal record. This portal reads; it does not write money back. Paym
 
 Reach for these before writing a second copy.
 
-- `src/lib/data/mora.ts` | `moraVencEfecExpr` · `moraEnMoraBaseSql` · `moraEsJuridicaExpr` | the ONE mora rule: due date is `fecha_factura + 30`, jurídica is the flag only. Never re-inline — a scout once found 7 independent definitions. The ERP's `fecha_vencimiento`, `dias_mora_al_pago` and `grace_period_days` must never decide mora.
+- `src/lib/data/mora.ts` | `moraVencEfecExpr` · `moraEnMoraBaseSql` · `moraEsJuridicaExpr` · `moraPastDueExpr` · `moraDiasVencidosExpr` · `moraInteresExpr` | the ONE mora rule: due date is `fecha_factura + 30`, jurídica is the flag only. Never re-inline — an audit once found 7 independent definitions. The ERP's `fecha_vencimiento`, `dias_mora_al_pago` and `grace_period_days` must never decide mora.
 - `src/components/pagos/info-tip.tsx` | `InfoTip({ text })` | instant hover tooltip. Its card must not have `overflow-hidden` or the tooltip is clipped.
 - `src/components/layout/page-header.tsx` | `PageHeader({ title, children })` | `title` takes a ReactNode, so a page can compose an icon or tooltip inline.
 - `src/components/layout/periodo-dropdown.tsx` | `PeriodoDropdown({ periodos, periodo, basePath })` | shared period picker (Gastos, Medidores).
