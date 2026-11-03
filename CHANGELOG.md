@@ -15,6 +15,19 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 #### Data (producción, sin código)
 - **PUNTO ACRILICO (NIT 901600134) marcado `juridica = true`** directamente en `v2.inquilinos`. Pasa a Cartera jurídica: la mora en totales baja $4.818.675 (61,39M → 56,57M; 11 → 10 clientes).
 
+### 2026-10-14 — Medidores: aviso de consumo y corrección de lecturas
+
+#### Added
+- **Aviso al inquilino por consumo inusual.** Antes de enviar, `/portal/medidor` compara el consumo con el promedio de los últimos 3 meses facturados del local. Si se desvía más de 50%, pide confirmar o corregir. Solo es un aviso: una lectura confirmada se guarda igual.
+- **Botón "Editar" en `/medidores`** (admin y finanzas) para corregir lectura actual y notas. kWh y total se recalculan con la misma regla del registro (tarifa de la factura, MROUND 50). La corrección se ve al instante en admin y portal.
+- **`v2.lecturas_medidor.updated_by`**: quién editó la lectura por última vez desde la app. `submitted_by` conserva quién la registró.
+
+#### Changed
+- **Solo se corrige el periodo de lectura actual** (el mes anterior al calendario). Los meses anteriores quedan cerrados: corregirlos cobraría dos veces el mismo consumo, porque el mes siguiente ya parte de la lectura vieja.
+- **Una lectura corregida queda "aprobado"**, y el inquilino ya no puede reenviarla encima de la corrección.
+- **`submitted_by` ya no se sobrescribe** al volver a registrar una lectura; el cambio queda en `updated_by`.
+- Guardar facturas de energía solo actualiza las lecturas cuya tarifa o total cambia.
+
 ### 2026-10-06 — Portal: Total a Pagar desde cartera SIESA
 
 #### Fixed

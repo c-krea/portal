@@ -35,7 +35,7 @@ Guard: `scripts/assert-local-db.sh`. `.env.test`, `.test-data/`, `supabase/.temp
 
 `db:sync` does **not** copy `auth`. Create a local staff user via the GoTrue admin API (`http://127.0.0.1:54621/auth/v1/admin/users`, service-role key from `.env.test`) plus a matching `v2.perfiles` row (`rol` anything but `inquilino`, `empresa_id` = Ckrea). Prod logins will never work here.
 
-Migrations: develop on local first, then propose the diff for prod. `supabase/migrations/` holds one file (`v2.tasa_interes_mora`). Schema of record is `docs/schema/` plus that migration plus the live DB.
+Migrations: develop on local first, then propose the diff for prod. `supabase/migrations/` holds the changes made since the schema dump (`v2.tasa_interes_mora`, mora snapshots, portal visits, `v2.lecturas_medidor.updated_by`). Schema of record is `docs/schema/` plus those migrations plus the live DB.
 
 ## Stack
 

@@ -118,7 +118,6 @@ export async function registrarLectura(
         notas            = EXCLUDED.notas,
         foto_url         = EXCLUDED.foto_url,
         foto_drive_id    = EXCLUDED.foto_drive_id,
-        submitted_by     = EXCLUDED.submitted_by,
         updated_by       = EXCLUDED.submitted_by
     `)
 
@@ -166,6 +165,7 @@ export async function editarLectura(
     return { error: parsed.error.issues[0]?.message ?? "Datos inválidos" }
   }
   const { readingId, lecturaActual, notas } = parsed.data
+  const empresaId = await getEmpresaCkreaId()
 
   const rows = await execute(`
     SELECT lm.local_id, lm.periodo, lm.lectura_anterior::numeric AS lectura_anterior,
@@ -176,6 +176,7 @@ export async function editarLectura(
            ) AS tiene_previa
     FROM v2.lecturas_medidor lm
     WHERE lm.id = '${readingId}'::uuid
+      AND lm.empresa_id = '${empresaId}'::uuid
   `)
   const row = rows[0]
   if (!row) return { error: "Lectura no encontrada" }
@@ -194,22 +195,25 @@ export async function editarLectura(
   }
 
   try {
-    const empresaId = await getEmpresaCkreaId()
     const invoiceTarifa = await getElectricityTarifaForUnit(empresaId, localId, periodo)
     const tarifa = invoiceTarifa > 0 ? invoiceTarifa : Number(row.tarifa_kwh ?? 0)
     const total = totalEnergia(kwh, tarifa)
 
+    // An admin checked and fixed it → aprobado. That also stops the tenant
+    // re-sending over the fix (submitLectura refuses approved readings).
     await executeDml(`
       UPDATE v2.lecturas_medidor SET
-        lectura_anterior = ${lecturaAnterior},
-        lectura_actual   = ${lecturaActual},
-        kwh              = ${kwh},
-        tarifa_kwh       = ${tarifa > 0 ? tarifa : 0},
-        total_energia    = ${total},
-        notas            = ${sqlStr(notas ?? null)},
-        updated_by       = '${auth.profile.userId}'::uuid,
-        updated_at       = now()
+        lectura_anterior  = ${lecturaAnterior},
+        lectura_actual    = ${lecturaActual},
+        kwh               = ${kwh},
+        tarifa_kwh        = ${tarifa > 0 ? tarifa : 0},
+        total_energia     = ${total},
+        notas             = ${sqlStr(notas ?? null)},
+        estado_validacion = 'aprobado',
+        updated_by        = '${auth.profile.userId}'::uuid,
+        updated_at        = now()
       WHERE id = '${readingId}'::uuid
+        AND empresa_id = '${empresaId}'::uuid
     `)
 
     revalidatePath("/medidores")
