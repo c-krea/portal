@@ -4,6 +4,17 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 
 ## [Unreleased]
 
+### 2026-10-27 — Resumen: mora del mes · Locales sin duplicados
+
+#### Added
+- **Resumen → chip "Mora del mes"** junto a "Facturación del mes": mora recaudada en el mes + saldo vencido (factura + 30 días) pendiente al cierre del mes. Es el mismo total que ya era la base del % de Recaudo mora; no hay consulta ni regla nueva.
+
+#### Fixed
+- **Un local desocupado ya no sale dos veces en Locales.** La lista de inquilinos incluía contratos `vencido`/`terminado`, así que el local salía bajo su exinquilino (inactivo) y otra vez como vacante (106, 209, 505). Ahora solo cuenta contratos `activo`/`critico`, igual que la consulta de vacantes; aplica también al filtro por entrada. Salen 8 exinquilinos sin contrato activo, ninguno con saldo vencido. Los % de Al día / En mora suben un poco porque el denominador ya no incluye esos exinquilinos.
+
+#### Data (producción, sin código)
+- **PUNTO ACRILICO (NIT 901600134) marcado `juridica = true`** directamente en `v2.inquilinos`. Pasa a Cartera jurídica: la mora en totales baja $4.818.675 (61,39M → 56,57M; 11 → 10 clientes).
+
 ### 2026-10-14 — Medidores: aviso de consumo y corrección de lecturas
 
 #### Added
