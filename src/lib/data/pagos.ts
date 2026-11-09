@@ -33,7 +33,7 @@ export type PagosKPIs = {
 }
 
 // Returns "YYYY-MM" for the month prior to the given year+month numbers.
-function prevMonthStr(year: number, monthNum: number): string {
+export function prevMonthStr(year: number, monthNum: number): string {
   return monthNum === 1
     ? `${year - 1}-12`
     : `${year}-${String(monthNum - 1).padStart(2, "0")}`
@@ -53,7 +53,7 @@ function prevMonthStr(year: number, monthNum: number): string {
 // SELECT * on purpose: the view is ~3k rows after its own filters, so the extra columns cost
 // nothing, and a hand-kept column list would have to be edited every time a new field is read
 // from vp. tenant-detail.ts:186 fences the same view the same way.
-function electricityTenantsSubquery(monthExpr: string, prevMonth: string): string {
+export function electricityTenantsSubquery(monthExpr: string, prevMonth: string): string {
   return `
     vp AS MATERIALIZED (
       SELECT * FROM v2.vista_pagos
@@ -86,7 +86,7 @@ function electricityTenantsSubquery(monthExpr: string, prevMonth: string): strin
     )`
 }
 
-const EXCLUDE_ELECTRICITY = `
+export const EXCLUDE_ELECTRICITY = `
     AND NOT (
       p.docto LIKE '001-%'
       AND p.inquilino_id IN (SELECT inquilino_id FROM electricity_tenants)

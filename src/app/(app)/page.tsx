@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Info } from "lucide-react"
+import { Download, Info } from "lucide-react"
 import { MonthFilter } from "@/components/pagos/month-filter"
 import { getPagos, getResumenKPIs } from "@/lib/data/pagos"
 import { getMoraTrendReconstruido } from "@/lib/data/mora"
@@ -120,9 +120,15 @@ export default async function ResumenPage({
           <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
             <span className="text-slate-500">Mora del mes</span>
             <InfoTip text="Mora recaudada en el mes + saldo vencido (factura + 30 días) que sigue pendiente al cierre del mes. Es la base del % de Recaudo mora. Solo arriendo FVS, sin cartera jurídica." />
-            <span className="font-semibold tabular-nums text-rose-600">
+            <a
+              href={`/api/resumen/mora?periodo=${month}`}
+              download
+              title="Descargar detalle por documento (Excel)"
+              className="inline-flex items-center gap-1 font-semibold tabular-nums text-rose-600 underline decoration-rose-300 underline-offset-2 hover:text-rose-700"
+            >
               {formatCOP(totalMora)}
-            </span>
+              <Download className="h-3 w-3" />
+            </a>
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -158,9 +164,15 @@ export default async function ResumenPage({
           </p>
         </div>
         <div className="rounded-[10px] border border-blue-100 bg-blue-50/40 p-4">
-          <p className="text-[26px] font-bold leading-tight tracking-tight tabular-nums text-blue-700">
+          <a
+            href={`/api/resumen/recaudo?periodo=${month}`}
+            download
+            title="Descargar recaudo del mes (Excel)"
+            className="group inline-flex items-center gap-2 text-[26px] font-bold leading-tight tracking-tight tabular-nums text-blue-700 underline decoration-blue-200 underline-offset-4 hover:text-blue-800 hover:decoration-blue-400"
+          >
             {formatCOP(totalRecaudo)}
-          </p>
+            <Download className="h-4 w-4 opacity-60 group-hover:opacity-100" />
+          </a>
           <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-blue-700">
             Total recaudo
             <InfoTip
