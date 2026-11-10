@@ -132,6 +132,8 @@ export async function getMoraDelMesExport(month: string, empresaId: string): Pro
   assertUuid(empresaId)
   const vencPagos = moraVencEfecExpr("p.fecha_vencimiento", "p.fecha_factura")
   const vencCartera = moraVencEfecExpr("c.fecha_vencimiento", "c.fecha_factura::date")
+  // docs has no fecha_vencimiento column; the helper ignores that argument anyway.
+  const vencDoc = moraVencEfecExpr("NULL", "d.fecha_factura")
 
   const rows = await execute(`
     WITH ${monthCte(month)},
@@ -191,8 +193,8 @@ export async function getMoraDelMesExport(month: string, empresaId: string): Pro
       COALESCE(t.nombre_corto, t.razon_social)            AS cliente,
       ${LOCAL_SUBQUERY("d.inquilino_id")}                 AS local,
       d.fecha_factura::text                               AS fecha_factura,
-      (d.fecha_factura + 30)::text                        AS vencimiento,
-      GREATEST(0, (SELECT corte FROM params) - (d.fecha_factura + 30)) AS dias_vencido,
+      (${vencDoc})::text                                  AS vencimiento,
+      GREATEST(0, (SELECT corte FROM params) - (${vencDoc})) AS dias_vencido,
       d.recaudo_mes::numeric                              AS recaudo_mes,
       d.abierto::numeric                                  AS abierto,
       d.despues::numeric                                  AS despues,
