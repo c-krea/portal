@@ -40,6 +40,26 @@ const ENTRADAS = [
   { value: "ZONA 8", label: "Zona 8"    },
 ]
 
+// Position of an entrada in ENTRADAS; unknown or missing entradas go last.
+function entradaRank(entrada: string | undefined): number {
+  const i = ENTRADAS.findIndex((e) => e.value === entrada)
+  return i === -1 ? ENTRADAS.length : i
+}
+
+// "412" < "416" < "2-401" < "2-416": plain locales first, then the "2-"
+// series; within each, by number and then letter suffix (406A < 406B).
+function unidadKey(u: string): [number, number, string] {
+  const m = u.match(/^(?:(\d+)-)?(\d+)(.*)$/)
+  if (!m) return [Number.MAX_SAFE_INTEGER, 0, u]
+  return [m[1] ? Number(m[1]) : 1, Number(m[2]), m[3]]
+}
+
+function compareUnidad(a: string, b: string): number {
+  const [sa, na, xa] = unidadKey(a)
+  const [sb, nb, xb] = unidadKey(b)
+  return sa - sb || na - nb || xa.localeCompare(xb)
+}
+
 // Windowed page numbers: 1 … (c-1) c (c+1) … N with a 2-page edge.
 // Copied from src/components/pagos/pagos-table.tsx.
 function pageWindow(current: number, total: number): (number | "…")[] {
@@ -83,12 +103,13 @@ const columns: ColumnDef<ClienteRow>[] = [
     accessorKey: "unitNumbers",
     header: "Locales",
     meta: { className: "hidden sm:table-cell" },
+    // Entrada first, then local. Sorting by the local alone put the "2-4xx"
+    // series (Entrada 4) before every other entrada.
     sortingFn: (a, b) => {
-      const av = a.original.unitNumbers[0] ?? ""
-      const bv = b.original.unitNumbers[0] ?? ""
-      const an = Number(av), bn = Number(bv)
-      if (!isNaN(an) && !isNaN(bn)) return an - bn
-      return av.localeCompare(bv)
+      const ea = entradaRank(a.original.entradas[0])
+      const eb = entradaRank(b.original.entradas[0])
+      if (ea !== eb) return ea - eb
+      return compareUnidad(a.original.unitNumbers[0] ?? "", b.original.unitNumbers[0] ?? "")
     },
     cell: ({ row }) => {
       const units = row.original.unitNumbers
