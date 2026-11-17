@@ -27,7 +27,14 @@ export async function GET(req: NextRequest) {
     getMoraDelMesExport(periodo, empresaId),
     getRecaudoExport(periodo, empresaId),
   ])
-  const pagosMora = recaudo.filter((r) => r.tipo === "mora")
+  // Late FVS cash, as in getMoraDelMesExport's recaudo CTE: rent paid late plus
+  // mora-interest invoices paid after their own vencimiento (ISO dates compare
+  // as strings). Jurídica late payments are already tipo mora_juridica.
+  const pagosMora = recaudo.filter(
+    (r) =>
+      r.tipo === "mora" ||
+      (r.tipo === "intereses_mora" && r.vencimiento != null && r.fechaRecaudo > r.vencimiento),
+  )
 
   let tRecaudo = 0, tAbierto = 0, tDespues = 0
   const docRows: Cell[][] = documentos.map((d) => {

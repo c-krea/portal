@@ -11,8 +11,13 @@ export const dynamic = "force-dynamic"
 const TIPO_LABEL: Record<RecaudoTipo, string> = {
   facturado: "Recaudo facturado",
   mora: "Recaudo mora",
+  intereses_mora: "Intereses de mora",
   mora_juridica: "Mora jurídica (no suma en el total)",
+  servicios_publicos: "Servicios públicos (energía)",
 }
+
+// The tipos the /resumen "Total recaudo" card adds up.
+const EN_TOTAL: RecaudoTipo[] = ["facturado", "mora", "intereses_mora"]
 
 function decena(fecha: string): string {
   const d = Number(fecha.slice(8, 10))
@@ -34,20 +39,26 @@ export async function GET(req: NextRequest) {
   const empresaId = await getEmpresaCkreaId()
   const rows = await getRecaudoExport(periodo, empresaId)
 
-  const sum = (t: RecaudoTipo) => rows.filter((r) => r.tipo === t).reduce((s, r) => s + r.valorFinal, 0)
-  const facturado = sum("facturado")
-  const mora = sum("mora")
-  const juridica = sum("mora_juridica")
+  const of = (tipos: RecaudoTipo[]) => rows.filter((r) => tipos.includes(r.tipo))
+  const line = (label: string, tipos: RecaudoTipo[]): Cell[] => {
+    const sel = of(tipos)
+    return [label, sel.reduce((s, r) => s + r.valorFinal, 0), sel.length]
+  }
+  const todos: RecaudoTipo[] = [...EN_TOTAL, "servicios_publicos"]
 
   const resumen = buildSheet(
-    [{ header: "Concepto", width: 40 }, { header: "Valor", width: 18, format: COP_FORMAT }, { header: "Pagos", width: 8 }],
+    [{ header: "Concepto", width: 48 }, { header: "Valor", width: 18, format: COP_FORMAT }, { header: "Pagos", width: 8 }],
     [
       ["Período", periodo, null],
-      ["Recaudo facturado (≤ 30 días de la factura)", facturado, rows.filter((r) => r.tipo === "facturado").length],
-      ["Recaudo mora (> 30 días, sin jurídica)", mora, rows.filter((r) => r.tipo === "mora").length],
-      ["Total recaudo", facturado + mora, rows.filter((r) => r.tipo !== "mora_juridica").length],
+      line("Recaudo facturado (≤ 30 días de la factura)", ["facturado"]),
+      line("Recaudo mora (> 30 días, sin jurídica)", ["mora"]),
+      line("Intereses de mora", ["intereses_mora"]),
+      line("Total recaudo (igual a la tarjeta del Resumen)", EN_TOTAL),
       [null, null, null],
-      ["Mora jurídica (fuera del total)", juridica, rows.filter((r) => r.tipo === "mora_juridica").length],
+      line("Servicios públicos (energía, RGE)", ["servicios_publicos"]),
+      line("Total recaudo + servicios públicos", todos),
+      [null, null, null],
+      line("Mora jurídica (fuera de los totales)", ["mora_juridica"]),
     ],
   )
 
@@ -81,7 +92,7 @@ export async function GET(req: NextRequest) {
       { header: "Cliente", width: 36 },
       { header: "Local", width: 8 },
       { header: "Fecha factura", width: 13 },
-      { header: "Vence (+30 días)", width: 15 },
+      { header: "Vence (+30 días; vacío en energía)", width: 15 },
       { header: "Días factura → pago", width: 12 },
       { header: "Tipo", width: 32 },
       { header: "Decena", width: 8 },
