@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { execute, executeDml } from "@/lib/db/executor"
 import { moraVencEfecExpr } from "@/lib/data/mora"
 import { sendPushToUser } from "@/lib/push"
+import { rejectUnauthorizedCron } from "@/lib/cron-auth"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
@@ -45,9 +46,8 @@ async function notify(
 }
 
 export async function GET(req: Request) {
-  if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const unauthorized = rejectUnauthorizedCron(req)
+  if (unauthorized) return unauthorized
 
   const today = new Date()
   const todayStr = dateStr(today)
