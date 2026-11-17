@@ -8,7 +8,8 @@ import { EXCLUDE_ELECTRICITY, electricityTenantsSubquery, prevMonthStr } from "@
 //
 // No new money rules here — every filter mirrors its aggregate twin:
 //   • Recaudo rows  ↔ getResumenKPIs (pagos.ts): same vp fence, empresa scope,
-//     electricity dedup, and on-time/late split via moraVencEfecExpr.
+//     electricity dedup, and on-time/late split via moraVencEfecExpr. On top of
+//     that it lists RGE (servicios públicos) payments, which the card leaves out.
 //   • Mora rows     ↔ getResumenKPIs.late + getMoraTrendReconstruido (mora.ts):
 //     late non-jurídica cash in the month + (cartera still open today OR paid
 //     after the cutoff) for FVS invoices due before the month's cutoff.
@@ -30,7 +31,14 @@ function monthCte(month: string): string {
 
 // ── Recaudo del mes (Total recaudo) ─────────────────────────────────────────
 
-export type RecaudoTipo = "facturado" | "mora" | "mora_juridica"
+// facturado / mora / intereses_mora add up to the "Total recaudo" card.
+// mora_juridica and servicios_publicos are listed but sit outside that total.
+export type RecaudoTipo =
+  | "facturado"
+  | "mora"
+  | "intereses_mora"
+  | "mora_juridica"
+  | "servicios_publicos"
 
 export type RecaudoExportRow = {
   fechaRecaudo: string
@@ -54,31 +62,76 @@ export async function getRecaudoExport(month: string, empresaId: string): Promis
   const vencEfec = moraVencEfecExpr("p.fecha_vencimiento", "p.fecha_factura")
 
   const rows = await execute(`
-    WITH ${monthCte(month)}
+    WITH ${monthCte(month)},
+    -- FVS invoices: exactly the rows getResumenKPIs sums. tipo_cliente only
+    -- splits mora-interest invoices out of the arriendo lines; a late payment
+    -- from a jurídica tenant stays out of the total, as on the card.
+    fvs AS (
+      SELECT
+        p.fecha_recaudo::date                           AS fecha_recaudo,
+        p.docto::text                                   AS docto,
+        p.cruce::text                                   AS cruce,
+        p.nit_inquilino::text                           AS nit,
+        p.razon_social_raw::text                        AS razon_social_raw,
+        p.inquilino_id,
+        p.fecha_factura::date                           AS fecha_factura,
+        (${vencEfec})::date                             AS vencimiento,
+        CASE
+          WHEN p.fecha_recaudo > (${vencEfec}) AND COALESCE(p.juridica, false) THEN 'mora_juridica'
+          WHEN p.tipo_cliente = 'INTERESES MORA' THEN 'intereses_mora'
+          WHEN p.fecha_recaudo <= (${vencEfec}) THEN 'facturado'
+          ELSE 'mora'
+        END                                             AS tipo,
+        COALESCE(p.valor_aplicado, 0)::numeric          AS valor_aplicado,
+        COALESCE(p.pronto_pago_aplicado, 0)::numeric    AS pronto_pago,
+        p.valor_final::numeric                          AS valor_final
+      FROM vp p
+      WHERE p.empresa_id = '${empresaId}'::uuid
+        AND date_trunc('month', p.fecha_recaudo) = DATE '${month}-01'
+        ${EXCLUDE_ELECTRICITY}
+    ),
+    -- Servicios públicos: energy is billed as RGE-, which vista_pagos leaves out
+    -- (FVS only). Same canonical filters as the view: dedup on row_id_mov,
+    -- zona Z40, < 1B, tenant matched by NIT within the empresa.
+    rge AS (
+      SELECT DISTINCT ON (r.row_id_mov)
+        r.fecha_recaudo::date                           AS fecha_recaudo,
+        r.docto::text                                   AS docto,
+        r.cruce::text                                   AS cruce,
+        r.documento::text                               AS nit,
+        r.cliente::text                                 AS razon_social_raw,
+        i.id                                            AS inquilino_id,
+        r.fecha_fact::date                              AS fecha_factura,
+        NULL::date                                      AS vencimiento,
+        'servicios_publicos'                            AS tipo,
+        COALESCE(r.valor_aplicado, 0)::numeric          AS valor_aplicado,
+        COALESCE(r.pronto_pago, 0)::numeric             AS pronto_pago,
+        r.valor_final::numeric                          AS valor_final
+      FROM siesa_raw.recaudo r
+      JOIN v2.inquilinos i ON i.nit = r.documento AND i.empresa_id = '${empresaId}'::uuid
+      WHERE r.cruce LIKE 'RGE-%'
+        AND r.id_zona = 'Z40'
+        AND r.valor_final < 1000000000
+        AND date_trunc('month', r.fecha_recaudo::date) = DATE '${month}-01'
+      ORDER BY r.row_id_mov
+    )
     SELECT
-      p.fecha_recaudo::date::text                       AS fecha_recaudo,
-      p.docto                                           AS recibo,
-      p.cruce                                           AS factura,
-      TRIM(p.nit_inquilino)                             AS nit,
-      COALESCE(t.nombre_corto, t.razon_social, p.razon_social_raw) AS cliente,
-      ${LOCAL_SUBQUERY("p.inquilino_id")}               AS local,
-      p.fecha_factura::date::text                       AS fecha_factura,
-      (${vencEfec})::date::text                         AS vencimiento,
-      (p.fecha_recaudo::date - p.fecha_factura::date)   AS dias_al_pago,
-      CASE
-        WHEN p.fecha_recaudo <= (${vencEfec}) THEN 'facturado'
-        WHEN COALESCE(p.juridica, false) THEN 'mora_juridica'
-        ELSE 'mora'
-      END                                               AS tipo,
-      COALESCE(p.valor_aplicado, 0)::numeric            AS valor_aplicado,
-      COALESCE(p.pronto_pago_aplicado, 0)::numeric      AS pronto_pago,
-      p.valor_final::numeric                            AS valor_final
-    FROM vp p
-    LEFT JOIN v2.inquilinos t ON t.id = p.inquilino_id
-    WHERE p.empresa_id = '${empresaId}'::uuid
-      AND date_trunc('month', p.fecha_recaudo) = DATE '${month}-01'
-      ${EXCLUDE_ELECTRICITY}
-    ORDER BY p.fecha_recaudo, p.docto, p.cruce
+      x.fecha_recaudo::text                             AS fecha_recaudo,
+      x.docto                                           AS recibo,
+      x.cruce                                           AS factura,
+      TRIM(x.nit)                                       AS nit,
+      COALESCE(t.nombre_corto, t.razon_social, x.razon_social_raw) AS cliente,
+      ${LOCAL_SUBQUERY("x.inquilino_id")}               AS local,
+      x.fecha_factura::text                             AS fecha_factura,
+      x.vencimiento::text                               AS vencimiento,
+      (x.fecha_recaudo - x.fecha_factura)               AS dias_al_pago,
+      x.tipo,
+      x.valor_aplicado,
+      x.pronto_pago,
+      x.valor_final
+    FROM (SELECT * FROM fvs UNION ALL SELECT * FROM rge) x
+    LEFT JOIN v2.inquilinos t ON t.id = x.inquilino_id
+    ORDER BY x.fecha_recaudo, x.docto, x.cruce
   `)
 
   return (rows as Array<Record<string, unknown>>).map((r) => ({
