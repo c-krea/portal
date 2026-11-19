@@ -328,6 +328,7 @@ export function serviciosPublicosRowsSql(empresaId: string, month: string): stri
       AND r.cruce NOT LIKE 'FVS-%'
       AND r.id_zona = 'Z40'
       AND r.valor_final < 1000000000
+      AND NOT r."Eliminado"
       AND date_trunc('month', r.fecha_recaudo::date) = DATE '${month}-01'
     ORDER BY r.row_id_mov`
 }
