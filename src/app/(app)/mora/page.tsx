@@ -90,17 +90,22 @@ export default async function MoraPage() {
       </div>
 
       {/* ── Cartera Jurídica (separate — not in the KPI totals above) ── */}
-      {juridica.length > 0 && (
-        <div className="mt-8">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="inline-block rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-slate-600">
-              Cartera Jurídica
-            </span>
-            <InfoTip text="Inquilinos jurídicos + ex-inquilinos con saldo. No incluida en los totales ni gráficas de arriba — esta cartera ya no se gestiona por cobro directo, sino por proceso legal." />
-          </div>
-          <MoraTable data={juridica} />
+      {/* Always shown: an empty list is a fact to record, not a missing section. */}
+      <div className="mt-8">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="inline-block rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-slate-600">
+            Cartera Jurídica
+          </span>
+          <InfoTip text="Inquilinos jurídicos + ex-inquilinos con saldo. No incluida en los totales ni gráficas de arriba — esta cartera ya no se gestiona por cobro directo, sino por proceso legal." />
         </div>
-      )}
+        {juridica.length > 0 ? (
+          <MoraTable data={juridica} />
+        ) : (
+          <div className="rounded-[10px] border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
+            No hay cartera jurídica. Ningún arrendatario marcado como jurídico tiene saldo abierto en cartera.
+          </div>
+        )}
+      </div>
     </>
   )
 }

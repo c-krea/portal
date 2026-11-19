@@ -10,8 +10,8 @@ function tooltipMoney(value: ReactNode): string {
   return formatCOP(Number(value ?? 0))
 }
 
-// Donut modeled on OrigenChart (resumen-charts.tsx): same 170px geometry,
-// same center "Total" overlay, same colored-bar legend with % + COP amount.
+// Donut: 170px geometry, center "Total" overlay, colored-bar legend with
+// % + COP amount.
 export function GastosDistribucionChart({ data }: { data: GastoDistribucionDatum[] }) {
   const total = data.reduce((s, d) => s + d.value, 0)
   if (total === 0) {

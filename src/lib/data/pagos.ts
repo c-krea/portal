@@ -1,5 +1,5 @@
 import { execute } from "@/lib/db/executor"
-import { assertPeriodo } from "@/lib/security/validators"
+import { assertPeriodo, assertUuid } from "@/lib/security/validators"
 import { cached } from "@/lib/cache"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { moraVencEfecExpr } from "@/lib/data/mora"
@@ -307,6 +307,83 @@ async function getResumenKPIs_uncached(month: string): Promise<ResumenKPIs> {
   }
 }
 
+// ── Servicios públicos (energía) ─────────────────────────────────────────────
+// Energy is billed for third parties (mostly RGE-, a few RK-) and SIESA tags
+// those payments with this tipo_cliente. vista_pagos is FVS-only, so energy is
+// read from siesa_raw.recaudo with the view's other canonical filters:
+// dedup on row_id_mov, zona Z40, < 1B, tenant matched by NIT in the empresa.
+// FVS rows are excluded so nothing can be counted twice with canon/mora.
+export const SERV_PUB_TIPO_CLIENTE = "SERV. PUB/INGRESOS RECIBIDOS PARA TERCER"
+
+// One row per energy payment in the month: every siesa_raw.recaudo column plus
+// inquilino_id. Shared by the /resumen Luz card and the recaudo Excel.
+export function serviciosPublicosRowsSql(empresaId: string, month: string): string {
+  assertUuid(empresaId)
+  assertPeriodo(month)
+  return `
+    SELECT DISTINCT ON (r.row_id_mov) r.*, i.id AS inquilino_id
+    FROM siesa_raw.recaudo r
+    JOIN v2.inquilinos i ON i.nit = r.documento AND i.empresa_id = '${empresaId}'::uuid
+    WHERE r.tipo_cliente = '${SERV_PUB_TIPO_CLIENTE}'
+      AND r.cruce NOT LIKE 'FVS-%'
+      AND r.id_zona = 'Z40'
+      AND r.valor_final < 1000000000
+      AND date_trunc('month', r.fecha_recaudo::date) = DATE '${month}-01'
+    ORDER BY r.row_id_mov`
+}
+
+// ── /resumen extras: Luz + descuentos ────────────────────────────────────────
+// luz         energy cash in the month (serviciosPublicosRowsSql).
+// financieros pronto pago granted on the same FVS rows as canon + mora
+//             (getResumenKPIs scope). valor_final is already net of it.
+// comerciales contract-agreed discount: canon_base × descuento_pct of the
+//             CURRENT active contracts. Contracts carry no history, so a past
+//             month shows today's agreements, not that month's.
+// Both discounts are informative — they are already out of the cash figures.
+export type ResumenExtras = {
+  luz: number
+  descuentoFinanciero: number
+  descuentoComercial: number
+}
+
+async function getResumenExtras_uncached(month: string): Promise<ResumenExtras> {
+  assertPeriodo(month)
+  const [y, m] = month.split("-").map(Number)
+  const empresaId = await getEmpresaCkreaId()
+
+  const rows = await execute(`
+    WITH ${electricityTenantsSubquery(`DATE '${month}-01'`, prevMonthStr(y, m))},
+    luz AS (
+      SELECT COALESCE(SUM(valor_final), 0) AS total
+      FROM (${serviciosPublicosRowsSql(empresaId, month)}) s
+    ),
+    pp AS (
+      SELECT COALESCE(SUM(p.pronto_pago_aplicado), 0) AS total
+      FROM vp p
+      WHERE p.empresa_id = '${empresaId}'::uuid
+        AND date_trunc('month', p.fecha_recaudo) = DATE '${month}-01'
+        ${EXCLUDE_ELECTRICITY}
+    ),
+    comercial AS (
+      SELECT COALESCE(SUM(c.canon_base * c.descuento_pct / 100), 0) AS total
+      FROM v2.contratos c
+      WHERE c.empresa_id = '${empresaId}'::uuid
+        AND c.estado IN ('activo','critico')
+        AND c.descuento_pct > 0
+    )
+    SELECT
+      ROUND((SELECT total FROM luz))::numeric       AS luz,
+      ROUND((SELECT total FROM pp))::numeric        AS financiero,
+      ROUND((SELECT total FROM comercial))::numeric AS comercial
+  `)
+  const r = rows[0] as Record<string, unknown>
+  return {
+    luz:                 Number(r.luz ?? 0),
+    descuentoFinanciero: Number(r.financiero ?? 0),
+    descuentoComercial:  Number(r.comercial ?? 0),
+  }
+}
+
 async function getPagos_uncached(month: string): Promise<PagoRow[]> {
   assertPeriodo(month)
   const monthFilter = `AND date_trunc('month', p.fecha_recaudo) = DATE '${month}-01'`
@@ -498,6 +575,7 @@ async function getPagosBuckets_uncached(month: string): Promise<PagosBuckets> {
 
 // ── Cached exports (30-min window; read-only — pagos has no admin mutation) ──
 export const getResumenKPIs  = cached(getResumenKPIs_uncached,  ["pagos:resumen"],  "pagos")
+export const getResumenExtras = cached(getResumenExtras_uncached, ["pagos:resumen-extras"], "pagos")
 export const getPagosKPIs    = cached(getPagosKPIs_uncached,    ["pagos:kpis"],    "pagos")
 export const getPagos        = cached(getPagos_uncached,        ["pagos:list"],    "pagos")
 export const getPagosBuckets = cached(getPagosBuckets_uncached, ["pagos:buckets"], "pagos")
