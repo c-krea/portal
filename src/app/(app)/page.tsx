@@ -111,12 +111,12 @@ export default async function ResumenPage({
   const cuentas = 0
   const cuentasProyectado = 0
   const luz = extras.luz
+  const luzProyectado = extras.luzProyectado
   const descuentos = extras.descuentoFinanciero + extras.descuentoComercial
 
-  // Luz has no proyectado yet, so cumplimiento only compares lines that have one.
   const totalRecaudo = canon + mora + cuentas + luz
-  const proyectado = canonProyectado + moraProyectado + cuentasProyectado
-  const conProyectado = canon + mora + cuentas
+  const proyectado = canonProyectado + moraProyectado + cuentasProyectado + luzProyectado
+  const conProyectado = canon + mora + cuentas + luz
   const cumplimiento = pctOf(conProyectado, proyectado)
   const faltanTotal = Math.max(0, proyectado - conProyectado)
 
@@ -155,7 +155,7 @@ export default async function ResumenPage({
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500">
             <Wallet className="h-3.5 w-3.5" />
             Recaudo total
-            <InfoTip text="Canon + mora + luz + cuentas de cobro del mes. El % de cumplimiento compara solo las líneas con proyectado (luz aún no tiene)." />
+            <InfoTip text="Canon + mora + luz + cuentas de cobro del mes, comparado con lo proyectado de cada línea. Luz proyectada: kWh × tarifa del mes anterior por local; mientras no se registran (hacia el día 10), usa los del mes previo." />
           </p>
           <a
             href={`/api/resumen/recaudo?periodo=${month}`}
@@ -268,7 +268,7 @@ export default async function ResumenPage({
             title: "Descargar recaudo del mes, incluye servicios públicos (Excel)",
             className: "text-[#e9a23b] hover:opacity-80",
           }}
-          note="Sin proyectado por ahora"
+          proyectado={{ total: luzProyectado, color: COLOR.luz }}
         />
         <KpiCard
           title="Descuentos"
@@ -287,7 +287,8 @@ export default async function ResumenPage({
             <div className="flex items-center justify-between gap-3 py-4">
               <div>
                 <p className="font-semibold text-slate-900">Financieros</p>
-                <p className="text-sm text-slate-500">Pronto pago del mes</p>
+                <p className="text-sm text-slate-500">Pronto Pago del recaudo</p>
+                <p className="text-xs text-slate-400">Clientes que pagan en los primeros 10 días del mes</p>
               </div>
               <p className="text-lg font-bold tabular-nums text-slate-900 sm:text-xl">
                 −{formatCOP(extras.descuentoFinanciero)}

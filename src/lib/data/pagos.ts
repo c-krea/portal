@@ -335,6 +335,10 @@ export function serviciosPublicosRowsSql(empresaId: string, month: string): stri
 
 // ── /resumen extras: Luz + descuentos ────────────────────────────────────────
 // luz         energy cash in the month (serviciosPublicosRowsSql).
+// luzProy.    sum of v2.vista_proyeccion_energia for the month: per local,
+//             kWh of the previous month × its invoice tarifa, falling back to
+//             the month before while the previous one is not registered yet
+//             (~day 10). Migration 20261120130000.
 // financieros pronto pago as booked by contabilidad: siesa_raw.documentos,
 //             auxiliar 42201090, periodo = month, not Eliminado. ventas is
 //             negative there, so the sum is flipped. NO canal / CO filter on
@@ -347,6 +351,7 @@ export function serviciosPublicosRowsSql(empresaId: string, month: string): stri
 // Both discounts are informative — they are already out of the cash figures.
 export type ResumenExtras = {
   luz: number
+  luzProyectado: number
   descuentoFinanciero: number
   descuentoComercial: number
 }
@@ -369,6 +374,12 @@ async function getResumenExtras_uncached(month: string): Promise<ResumenExtras> 
         AND d.periodo = ${y * 100 + m}
         AND NOT d."Eliminado"
     ),
+    luz_proy AS (
+      SELECT COALESCE(SUM(e.total_proyectado), 0) AS total
+      FROM v2.vista_proyeccion_energia e
+      WHERE e.empresa_id = '${empresaId}'::uuid
+        AND e.periodo = '${month}'
+    ),
     comercial AS (
       SELECT COALESCE(SUM(c.canon_base * c.descuento_pct / 100), 0) AS total
       FROM v2.contratos c
@@ -378,12 +389,14 @@ async function getResumenExtras_uncached(month: string): Promise<ResumenExtras> 
     )
     SELECT
       ROUND((SELECT total FROM luz))::numeric       AS luz,
+      ROUND((SELECT total FROM luz_proy))::numeric  AS luz_proyectado,
       ROUND((SELECT total FROM pp))::numeric        AS financiero,
       ROUND((SELECT total FROM comercial))::numeric AS comercial
   `)
   const r = rows[0] as Record<string, unknown>
   return {
     luz:                 Number(r.luz ?? 0),
+    luzProyectado:       Number(r.luz_proyectado ?? 0),
     descuentoFinanciero: Number(r.financiero ?? 0),
     descuentoComercial:  Number(r.comercial ?? 0),
   }
