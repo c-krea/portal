@@ -385,7 +385,7 @@ export default async function ResumenPage({
             </p>
             {juridica.length === 0 ? (
               <p className="px-3 py-6 text-center text-sm text-slate-500">
-                No hay cartera jurídica. Ningún arrendatario marcado como jurídico tiene saldo abierto en cartera.
+                No hay cartera jurídica. No hay facturas vencidas de C-Krea en cobro jurídico (cartera zona Z99).
               </p>
             ) : (
               <ul className="divide-y divide-slate-100">

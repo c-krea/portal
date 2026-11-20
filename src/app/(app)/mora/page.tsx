@@ -96,13 +96,13 @@ export default async function MoraPage() {
           <span className="inline-block rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold uppercase tracking-wider text-slate-600">
             Cartera Jurídica
           </span>
-          <InfoTip text="Inquilinos jurídicos + ex-inquilinos con saldo. No incluida en los totales ni gráficas de arriba — esta cartera ya no se gestiona por cobro directo, sino por proceso legal." />
+          <InfoTip text="Facturas de C-Krea en cobro jurídico: cartera SIESA zona Z99 de clientes con lista de precios ACK, más saldos de inquilinos marcados jurídica. No incluida en los totales ni gráficas de arriba — esta cartera ya no se gestiona por cobro directo, sino por proceso legal." />
         </div>
         {juridica.length > 0 ? (
           <MoraTable data={juridica} />
         ) : (
           <div className="rounded-[10px] border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500">
-            No hay cartera jurídica. Ningún arrendatario marcado como jurídico tiene saldo abierto en cartera.
+            No hay cartera jurídica. No hay facturas vencidas de C-Krea en cobro jurídico (cartera zona Z99).
           </div>
         )}
       </div>
