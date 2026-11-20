@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
       line("Intereses de mora", ["intereses_mora"]),
       line("Total recaudo (igual a la tarjeta del Resumen)", EN_TOTAL),
       [null, null, null],
-      line("Servicios públicos (energía, RGE)", ["servicios_publicos"]),
+      line("Servicios públicos (energía)", ["servicios_publicos"]),
       line("Total recaudo + servicios públicos", todos),
       [null, null, null],
       line("Mora jurídica (fuera de los totales)", ["mora_juridica"]),

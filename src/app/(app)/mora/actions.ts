@@ -84,6 +84,7 @@ export async function guardarTasaMora(
     `)
     bustTags("mora", "portal")
     revalidatePath("/mora")
+    revalidatePath("/") // Resumen shows and edits the same rate
     return { success: true, tasaEa }
   } catch (e) {
     console.error(e)

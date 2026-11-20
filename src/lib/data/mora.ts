@@ -27,6 +27,7 @@ export type MoraRow = {
   facturas: number            // invoice count
   saldoVencido: number        // sum of overdue balances
   interes: number             // sum of interest
+  carteraCorriente: number    // open balance not yet due (vr_corriente, Z40 FVS); 0 for jurídica
   invoices: MoraInvoice[]     // per-invoice detail (expandable in the UI)
 }
 
@@ -141,6 +142,40 @@ export function moraEnMoraBaseSql(empresaId: string): string {
       JOIN v2.inquilinos t ON c.inquilino_id = t.id
       WHERE c.vr_vencido > 0 AND c.factura LIKE 'FVS-%'
         AND t.empresa_id = '${empresaId}'::uuid
+  `
+}
+
+// ── Cartera jurídica — fuente propia ─────────────────────────────────────────
+// SIESA mueve la cartera en cobro jurídico a la zona Z99, que vista_cartera_actual
+// (solo Z40) no ve. Se toma de siesa_raw.cartera Z99 y se limita a C-Krea con el
+// punto de envío del cliente (row_id_tercero + id_sucursal) en lista de precios
+// 'ACK'. EXISTS y no JOIN: un cliente puede tener varios puntos por sucursal
+// (p. ej. 4 en ARIAS GARCIA) y un JOIN multiplicaría las facturas. La cartera trae
+// una fila por factura (row_id NO es único: lo comparten varias facturas).
+export function moraJuridicaBaseSql(empresaId: string): string {
+  assertUuid(empresaId)
+  return `
+      SELECT
+        COALESCE(t.id::text, trim(c.documento))  AS tenant_id,
+        COALESCE(t.nombre_corto, t.razon_social, c.cliente) AS cliente,
+        true                                     AS es_juridica,
+        NULLIF(REGEXP_REPLACE(c.sucursal, '^.*[[:space:]]', ''), '') AS unidad,
+        c.factura,
+        c.fecha_factura::date                    AS fecha_factura,
+        ${moraVencEfecExpr("c.fecha_vence::date", "c.fecha_factura::date")} AS venc_efec,
+        c.vr_vencido
+      FROM siesa_raw.cartera c
+      LEFT JOIN v2.inquilinos t ON t.nit = trim(c.documento) AND t.empresa_id = '${empresaId}'::uuid
+      WHERE c.id_zona = 'Z99'
+        AND NOT COALESCE(c."Eliminado", false)
+        AND c.vr_vencido > 0
+        AND EXISTS (
+          SELECT 1 FROM siesa_raw.puntos_de_envio p
+          WHERE p.rowid_cliente = c.row_id_tercero
+            AND trim(p.id_sucursal) = trim(c.id_sucursal)
+            AND trim(p.id_lista_precio) = 'ACK'
+            AND NOT COALESCE(p."Eliminado", false)
+        )
   `
 }
 
@@ -297,7 +332,12 @@ async function getMoraData_uncached(): Promise<MoraData> {
   const rows = (await execute(`
     WITH ${moraRateCteSql()},
     base AS (
-      ${baseSql}
+      -- Z40 (activos + inquilinos marcados jurídica) + cartera jurídica Z99/ACK.
+      -- Zonas distintas: ninguna factura cae en ambas (verificado 2026-11-20).
+      SELECT tenant_id::text, cliente, es_juridica, unidad, factura, fecha_factura, venc_efec, vr_vencido
+      FROM (${baseSql}) z40
+      UNION ALL
+      ${moraJuridicaBaseSql(empresaId)}
     )
     SELECT
       tenant_id, cliente, es_juridica, unidad, factura, fecha_factura, venc_efec,
@@ -308,11 +348,13 @@ async function getMoraData_uncached(): Promise<MoraData> {
     ORDER BY cliente, fecha_factura
   `)) as unknown as RawInvoice[]
 
+  // Keyed by tenant + jurídica: a tenant can have Z40 (activo) and Z99 (jurídica)
+  // invoices at once, and each set belongs to its own section.
   const byTenant = new Map<string, MoraRow>()
-  const juridicaFlag = new Map<string, boolean>()
+  const juridicaFlag = new Map<MoraRow, boolean>()
 
   for (const r of rows) {
-    const key = String(r.tenant_id)
+    const key = `${r.tenant_id}|${r.es_juridica === true}`
     const inv: MoraInvoice = {
       factura: String(r.factura),
       fechaFactura: String(r.fecha_factura),
@@ -325,17 +367,18 @@ async function getMoraData_uncached(): Promise<MoraData> {
     let row = byTenant.get(key)
     if (!row) {
       row = {
-        tenantId: key,
+        tenantId: String(r.tenant_id),
         cliente: String(r.cliente),
         unitNumber: null,
         diasMora: 0,
         facturas: 0,
         saldoVencido: 0,
         interes: 0,
+        carteraCorriente: 0,
         invoices: [],
       }
       byTenant.set(key, row)
-      juridicaFlag.set(key, r.es_juridica === true)
+      juridicaFlag.set(row, r.es_juridica === true)
     }
     row.invoices.push(inv)
     row.facturas += 1
@@ -347,11 +390,26 @@ async function getMoraData_uncached(): Promise<MoraData> {
     }
   }
 
+  // Cartera corriente (not yet due) per tenant, attached to the activo row only:
+  // what a tenant in mora must also pay this month on top of the overdue balance.
+  const corrienteRows = await execute(`
+    SELECT c.inquilino_id::text AS tenant_id, SUM(c.vr_corriente) AS corriente
+    FROM v2.vista_cartera_actual c
+    WHERE c.empresa_id = '${empresaId}'::uuid
+      AND c.factura LIKE 'FVS-%'
+      AND c.vr_corriente > 0
+    GROUP BY c.inquilino_id
+  `)
+  for (const c of corrienteRows) {
+    const row = byTenant.get(`${c.tenant_id}|false`)
+    if (row) row.carteraCorriente = Number(c.corriente ?? 0)
+  }
+
   const all = [...byTenant.values()]
   for (const row of all) row.invoices.sort((a, b) => b.diasVencidos - a.diasVencidos)
 
-  const activos  = all.filter((r) => !juridicaFlag.get(r.tenantId)).sort((a, b) => b.diasMora - a.diasMora)
-  const juridica = all.filter((r) =>  juridicaFlag.get(r.tenantId)).sort((a, b) => b.diasMora - a.diasMora)
+  const activos  = all.filter((r) => !juridicaFlag.get(r)).sort((a, b) => b.diasMora - a.diasMora)
+  const juridica = all.filter((r) =>  juridicaFlag.get(r)).sort((a, b) => b.diasMora - a.diasMora)
 
   const sum = (arr: MoraRow[], f: (r: MoraRow) => number) => arr.reduce((s, r) => s + f(r), 0)
   const summary: MoraSummary = {

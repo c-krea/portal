@@ -1,7 +1,12 @@
 import { execute } from "@/lib/db/executor"
 import { assertPeriodo, assertUuid } from "@/lib/security/validators"
 import { moraVencEfecExpr } from "@/lib/data/mora"
-import { EXCLUDE_ELECTRICITY, electricityTenantsSubquery, prevMonthStr } from "@/lib/data/pagos"
+import {
+  EXCLUDE_ELECTRICITY,
+  electricityTenantsSubquery,
+  prevMonthStr,
+  serviciosPublicosRowsSql,
+} from "@/lib/data/pagos"
 
 // Row-level detail behind the /resumen headline numbers, for the Excel
 // downloads. Live (uncached) on purpose: a download should reflect the DB now.
@@ -9,7 +14,7 @@ import { EXCLUDE_ELECTRICITY, electricityTenantsSubquery, prevMonthStr } from "@
 // No new money rules here — every filter mirrors its aggregate twin:
 //   • Recaudo rows  ↔ getResumenKPIs (pagos.ts): same vp fence, empresa scope,
 //     electricity dedup, and on-time/late split via moraVencEfecExpr. On top of
-//     that it lists RGE (servicios públicos) payments, which the card leaves out.
+//     that it lists servicios públicos, the same rows as getResumenExtras.luz.
 //   • Mora rows     ↔ getResumenKPIs.late + getMoraTrendReconstruido (mora.ts):
 //     late non-jurídica cash in the month + (cartera still open today OR paid
 //     after the cutoff) for FVS invoices due before the month's cutoff.
@@ -90,30 +95,22 @@ export async function getRecaudoExport(month: string, empresaId: string): Promis
         AND date_trunc('month', p.fecha_recaudo) = DATE '${month}-01'
         ${EXCLUDE_ELECTRICITY}
     ),
-    -- Servicios públicos: energy is billed as RGE-, which vista_pagos leaves out
-    -- (FVS only). Same canonical filters as the view: dedup on row_id_mov,
-    -- zona Z40, < 1B, tenant matched by NIT within the empresa.
+    -- Servicios públicos (energía): same rows as the /resumen Luz card.
     rge AS (
-      SELECT DISTINCT ON (r.row_id_mov)
+      SELECT
         r.fecha_recaudo::date                           AS fecha_recaudo,
         r.docto::text                                   AS docto,
         r.cruce::text                                   AS cruce,
         r.documento::text                               AS nit,
         r.cliente::text                                 AS razon_social_raw,
-        i.id                                            AS inquilino_id,
+        r.inquilino_id,
         r.fecha_fact::date                              AS fecha_factura,
         NULL::date                                      AS vencimiento,
         'servicios_publicos'                            AS tipo,
         COALESCE(r.valor_aplicado, 0)::numeric          AS valor_aplicado,
         COALESCE(r.pronto_pago, 0)::numeric             AS pronto_pago,
         r.valor_final::numeric                          AS valor_final
-      FROM siesa_raw.recaudo r
-      JOIN v2.inquilinos i ON i.nit = r.documento AND i.empresa_id = '${empresaId}'::uuid
-      WHERE r.cruce LIKE 'RGE-%'
-        AND r.id_zona = 'Z40'
-        AND r.valor_final < 1000000000
-        AND date_trunc('month', r.fecha_recaudo::date) = DATE '${month}-01'
-      ORDER BY r.row_id_mov
+      FROM (${serviciosPublicosRowsSql(empresaId, month)}) r
     )
     SELECT
       x.fecha_recaudo::text                             AS fecha_recaudo,

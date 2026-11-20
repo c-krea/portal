@@ -1,40 +1,85 @@
 import Link from "next/link"
-import { Download, Info } from "lucide-react"
+import type { ReactNode } from "react"
+import { ArrowRight, Download, Scale, Wallet, AlertTriangle } from "lucide-react"
 import { MonthFilter } from "@/components/pagos/month-filter"
-import { getPagos, getResumenKPIs } from "@/lib/data/pagos"
-import { getMoraTrendReconstruido } from "@/lib/data/mora"
-import { classifyPagoBucket } from "@/lib/pago-bucket"
+import { InfoTip } from "@/components/pagos/info-tip"
+import { ProgressRing } from "@/components/resumen/progress-ring"
+import { TasaMoraForm } from "@/components/mora/tasa-mora-form"
+import { getResumenExtras, getResumenKPIs } from "@/lib/data/pagos"
+import { getMoraData, getMoraTrendReconstruido, type MoraRow } from "@/lib/data/mora"
 import { getPortfolioStats } from "@/lib/data/dashboard"
 import { getEmpresaCkreaId } from "@/lib/empresa"
-import { formatCOP, formatDateShort } from "@/lib/formatters"
+import { formatCOP } from "@/lib/formatters"
 import { isValidPeriodo } from "@/lib/security/validators"
 import { currentPeriodo } from "@/lib/periodo"
-import {
-  OrigenChart,
-  SemanalChart,
-  type OrigenDatum,
-  type SemanaDatum,
-} from "@/components/resumen/resumen-charts"
 
-// Row-level Estado shares the single classifier in src/lib/pago-bucket.ts
-// (same rule as the SQL CASE in getPagosBuckets): mora iff
-// fecha_recaudo > fecha_factura + 30, else Al día.
-
-const ESTADO_META = {
-  al_dia: { dot: "bg-emerald-500", label: "Al día" },
-  mora: { dot: "bg-rose-500", label: "Mora" },
+// Card colours, shared by the hero bar segments, legend and card rings.
+const COLOR = {
+  canon: "#4f6bed",
+  cuentas: "#2ea89a",
+  mora: "#8b5cf6",
+  luz: "#e9a23b",
+  descuentos: "#94a3b8",
 } as const
 
-// Native `title` needs the cursor to sit dead still for ~1s before it shows —
-// too easy to never trigger. Instant custom tooltip on hover instead.
-function InfoTip({ text, iconClassName = "text-slate-400" }: { text: string; iconClassName?: string }) {
+// "$ 160,8 M" for the hero legend.
+function formatMillones(value: number): string {
+  const m = value / 1_000_000
+  return `$ ${m.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} M`
+}
+
+function pctOf(value: number, base: number): number {
+  return base > 0 ? (value / base) * 100 : 0
+}
+
+function DownloadLink({ href, title, className }: { href: string; title: string; className: string }) {
   return (
-    <span className="group relative inline-flex cursor-help">
-      <Info className={`h-3.5 w-3.5 ${iconClassName}`} />
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-md border border-slate-200 bg-white px-2.5 py-2 text-[11px] leading-snug text-slate-600 shadow-lg group-hover:block">
-        {text}
-      </span>
-    </span>
+    <a href={href} download title={title} className={`inline-flex ${className}`}>
+      <Download className="h-5 w-5" />
+    </a>
+  )
+}
+
+type KpiCardProps = {
+  title: string
+  titleClassName: string
+  value: number
+  negative?: boolean
+  download?: { href: string; title: string; className: string }
+  // With a proyectado: "de $X proyectado", "Faltan $Y" and a ring.
+  // Without: `note` explains why, and there is no ring.
+  proyectado?: { total: number; color: string }
+  note?: ReactNode
+}
+
+function KpiCard({ title, titleClassName, value, negative, download, proyectado, note }: KpiCardProps) {
+  const faltan = proyectado ? Math.max(0, proyectado.total - value) : 0
+  return (
+    <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+      <div className="min-w-0 flex-1">
+        <p className={`text-sm font-semibold uppercase tracking-wider ${titleClassName}`}>{title}</p>
+        <div className="mt-2 flex items-center gap-3">
+          <p className="truncate text-2xl font-bold tabular-nums tracking-tight text-slate-900 sm:text-[32px]">
+            {negative && value > 0 ? "−" : ""}
+            {formatCOP(value)}
+          </p>
+          {download && <DownloadLink {...download} />}
+        </div>
+        {proyectado ? (
+          <>
+            <p className="mt-1 text-sm text-slate-500">
+              de <span className="font-semibold text-slate-700">{formatCOP(proyectado.total)}</span> proyectado
+            </p>
+            <div className="mt-4 border-t border-dashed border-slate-200 pt-3 text-sm text-slate-600">
+              Faltan <span className="font-semibold text-slate-900">{formatCOP(faltan)}</span>
+            </div>
+          </>
+        ) : note ? (
+          <div className="mt-4 border-t border-dashed border-slate-200 pt-3 text-sm text-slate-500">{note}</div>
+        ) : null}
+      </div>
+      {proyectado && <ProgressRing pct={pctOf(value, proyectado.total)} color={proyectado.color} />}
+    </div>
   )
 }
 
@@ -45,225 +90,350 @@ export default async function ResumenPage({
 }) {
   const { month: rawMonth } = await searchParams
   const month = isValidPeriodo(rawMonth) ? rawMonth : currentPeriodo()
-  const [yy, mm] = month.split("-").map(Number)
 
   const empresaId = await getEmpresaCkreaId()
-  const [kpis, pagos, portfolio, moraTrend] = await Promise.all([
+  const [kpis, extras, portfolio, moraTrend, moraData] = await Promise.all([
     getResumenKPIs(month),
-    getPagos(month),
+    getResumenExtras(month),
     getPortfolioStats(empresaId),
-    // Mora donut: balance at the END of the selected month, rebuilt the
-    // same way as the /mora trend (still open today + paid after that date).
-    // Shared code, not a second definition — every month the picker offers is
-    // inside the reconstructed series. Each point is its month's closing
-    // balance; the current month's point is live.
+    // Balance at the END of the selected month, rebuilt like the /mora trend.
     getMoraTrendReconstruido(empresaId),
+    // Detalle de mora + cartera jurídica: same data as /mora (live, not per month).
+    getMoraData(),
   ])
 
-  const facturacionMes = kpis.facturacionMes
-  const recaudoFacturado = kpis.recaudoFacturado
-  const recaudoMora = kpis.recaudoMora
-  // The two added — totalRecaudo is derived as this sum inside getResumenKPIs,
-  // so cards 1+2 == card 3 holds by construction for every month.
-  const totalRecaudo = kpis.totalRecaudo
-  const pendiente = Math.max(0, facturacionMes - recaudoFacturado)
-  const pctFacturacion = facturacionMes > 0 ? Math.round((recaudoFacturado / facturacionMes) * 100) : 0
+  // Canon / Mora: unchanged definitions from the previous Resumen (getResumenKPIs).
+  const canon = kpis.recaudoFacturado
+  const canonProyectado = kpis.facturacionMes
+  const mora = kpis.recaudoMora
   const pendienteMora = moraTrend.find((p) => p.periodo === month)?.saldoVencido ?? 0
-  const totalMora = recaudoMora + pendienteMora
-  const pctMora = totalMora > 0 ? Math.round((recaudoMora / totalMora) * 100) : 0
+  const moraProyectado = mora + pendienteMora
+  // Cuentas de cobro: not wired yet — shown as 0 on purpose.
+  const cuentas = 0
+  const cuentasProyectado = 0
+  const luz = extras.luz
+  const luzProyectado = extras.luzProyectado
+  const descuentos = extras.descuentoFinanciero + extras.descuentoComercial
 
-  const decenas: SemanaDatum[] = [
-    { semana: "1–10", total: kpis.decena1, fill: "#10b981" },
-    { semana: "11–20", total: kpis.decena2, fill: "#1e40af" },
-    { semana: "21–fin", total: kpis.decena3, fill: "#94a3b8" },
+  const totalRecaudo = canon + mora + cuentas + luz
+  const proyectado = canonProyectado + moraProyectado + cuentasProyectado + luzProyectado
+  const conProyectado = canon + mora + cuentas + luz
+  const cumplimiento = pctOf(conProyectado, proyectado)
+  const faltanTotal = Math.max(0, proyectado - conProyectado)
+
+  // Hero bar: segments scaled to the proyectado (or the total, if larger).
+  const escala = Math.max(proyectado, totalRecaudo, 1)
+  const segmentos = [
+    { key: "canon", label: "Canon", value: canon, color: COLOR.canon },
+    { key: "mora", label: "Mora", value: mora, color: COLOR.mora },
+    { key: "luz", label: "Luz", value: luz, color: COLOR.luz },
+    { key: "cuentas", label: "Cuentas de cobro", value: cuentas, color: COLOR.cuentas },
   ]
 
-  // Corriente = this month's billing (Recaudo vs Pendiente). Mora gets its own
-  // donut: collected during the month vs still owed at the month's end.
-  // Zero slices are kept here — OrigenChart filters them out of <Pie> itself
-  // so the headline always reads the first slice (Recaudo / Cobrado).
-  const origen: OrigenDatum[] = [
-    { name: "Recaudo", value: recaudoFacturado, fill: "#1e40af" },
-    { name: "Pendiente", value: pendiente, fill: "#cbd5e1" },
-  ]
-  const origenMora: OrigenDatum[] = [
-    { name: "Recaudo", value: recaudoMora, fill: "#e11d48" },
-    { name: "Pendiente", value: pendienteMora, fill: "#cbd5e1" },
-  ]
-  // General = Corriente + Mora: total collected vs total still pending.
-  // Sums only, no new query and no new rule.
-  const origenGeneral: OrigenDatum[] = [
-    { name: "Recaudo", value: recaudoFacturado + recaudoMora, fill: "#059669" },
-    { name: "Pendiente", value: pendiente + pendienteMora, fill: "#cbd5e1" },
-  ]
-
-  const ultimos = pagos.slice(0, 8)
-
-  const mesRaw = new Date(yy, mm - 1, 1).toLocaleDateString("es-CO", { month: "long" })
-  const mesTitulo = `${mesRaw.charAt(0).toUpperCase() + mesRaw.slice(1)} ${yy}`
+  const ocupacionPct = Math.round(pctOf(portfolio.activeClients, portfolio.totalUnits))
+  const filasMora: MoraRow[] = [...moraData.activos].sort((a, b) => b.saldoVencido - a.saldoVencido)
+  const totalAPagar = (r: MoraRow) => r.saldoVencido + r.interes + r.carteraCorriente
+  const sumMora = (f: (r: MoraRow) => number) => filasMora.reduce((s, r) => s + f(r), 0)
+  const juridica = moraData.juridica
 
   return (
     <>
-      {/* Header: title + month picker + two pill chips */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="flex items-center gap-1.5 text-xl font-bold tracking-tight text-slate-900">
+      {/* Header */}
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
           Resumen — <MonthFilter selected={month} />
         </h1>
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
-            <span className="text-slate-500">Facturación del mes</span>
-            <InfoTip text="Lo que Siesa facturó de arriendo este mes. No cambia con tu cobro." />
-            <span className="font-semibold tabular-nums text-slate-900">
-              {formatCOP(facturacionMes)}
-            </span>
+        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm text-slate-600">
+          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          {portfolio.activeClients} de {portfolio.totalUnits} ocupados
+          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+            {ocupacionPct}%
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
-            <span className="text-slate-500">Mora del mes</span>
-            <InfoTip text="Mora recaudada en el mes + saldo vencido (factura + 30 días) que sigue pendiente al cierre del mes. Es la base del % de Recaudo mora. Solo arriendo FVS, sin cartera jurídica." />
-            <a
-              href={`/api/resumen/mora?periodo=${month}`}
-              download
-              title="Descargar detalle por documento (Excel)"
-              className="inline-flex items-center gap-1 font-semibold tabular-nums text-rose-600 underline decoration-rose-300 underline-offset-2 hover:text-rose-700"
-            >
-              {formatCOP(totalMora)}
-              <Download className="h-3 w-3" />
-            </a>
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            {portfolio.activeClients} de {portfolio.totalUnits} ocupados
-          </span>
-        </div>
+        </span>
       </div>
 
-      {/* 3 hero KPI tiles: number on top, title + InfoTip underneath */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-[10px] border border-slate-200 bg-white p-4">
-          <p className="text-[26px] font-bold leading-tight tracking-tight tabular-nums text-slate-900">
-            {formatCOP(recaudoFacturado)}{" "}
-            <span className="align-middle text-sm font-semibold text-slate-400">
-              ({pctFacturacion}%)
-            </span>
+      {/* Hero: recaudo total + composition bar */}
+      <div className="mb-5 grid grid-cols-1 gap-6 rounded-2xl border border-slate-200 bg-white p-6 lg:grid-cols-[2fr_5fr]">
+        <div>
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500">
+            <Wallet className="h-3.5 w-3.5" />
+            Recaudo total
+            <InfoTip text="Canon + mora + luz + cuentas de cobro del mes, comparado con lo proyectado de cada línea. Luz proyectada: kWh × tarifa del mes anterior por local; mientras no se registran (hacia el día 10), usa los del mes previo." />
           </p>
-          <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Recaudo facturado
-            <InfoTip text="Pagos hechos dentro de los 30 días de su propia factura. % sobre la facturación del mes. Si el mes va corriendo, el % sube hasta cerrar." />
-          </p>
-        </div>
-        <div className="rounded-[10px] border border-slate-200 bg-white p-4">
-          <p className="text-[26px] font-bold leading-tight tracking-tight tabular-nums text-slate-900">
-            {formatCOP(recaudoMora)}{" "}
-            <span className="align-middle text-sm font-semibold text-slate-400">
-              ({pctMora}%)
-            </span>
-          </p>
-          <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            Recaudo mora
-            <InfoTip text="Pagos hechos después de los 30 días, ya con intereses. % sobre la mora al inicio del mes más lo vencido en el mes. Sin cartera jurídica." />
-          </p>
-        </div>
-        <div className="rounded-[10px] border border-blue-100 bg-blue-50/40 p-4">
           <a
             href={`/api/resumen/recaudo?periodo=${month}`}
             download
             title="Descargar recaudo del mes (Excel)"
-            className="group inline-flex items-center gap-2 text-[26px] font-bold leading-tight tracking-tight tabular-nums text-blue-700 underline decoration-blue-200 underline-offset-4 hover:text-blue-800 hover:decoration-blue-400"
+            className="mt-2 block text-4xl font-bold tabular-nums tracking-tight text-[#2b3fae] hover:underline sm:text-[44px]"
           >
             {formatCOP(totalRecaudo)}
-            <Download className="h-4 w-4 opacity-60 group-hover:opacity-100" />
           </a>
-          <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-blue-700">
-            Total recaudo
-            <InfoTip
-              text="Toda la caja del mes: al día más mora. Sin porcentaje — mezcla facturas de varios meses."
-              iconClassName="text-blue-700/50"
-            />
+          <p className="mt-1 text-sm text-slate-600">
+            de <span className="font-semibold text-slate-800">{formatCOP(proyectado)}</span> proyectado
           </p>
+          <div className="mt-4 flex flex-col items-start gap-2">
+            <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
+              {Math.round(cumplimiento)}% de cumplimiento
+            </span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">
+              Faltan <span className="font-semibold text-slate-800">{formatCOP(faltanTotal)}</span>
+            </span>
+          </div>
+        </div>
+
+        <div className="flex min-w-0 flex-col justify-center">
+          <div className="mb-3 flex items-center justify-between text-sm text-slate-500">
+            <span>¿De dónde viene lo recaudado?</span>
+            <span>Meta | 100%</span>
+          </div>
+          <div className="relative h-8 w-full overflow-hidden rounded-md bg-slate-100">
+            <div className="flex h-full">
+              {segmentos.map((s) =>
+                s.value > 0 ? (
+                  <div
+                    key={s.key}
+                    title={`${s.label}: ${formatCOP(s.value)}`}
+                    style={{ width: `${(s.value / escala) * 100}%`, backgroundColor: s.color }}
+                  />
+                ) : null,
+              )}
+            </div>
+            {[25, 50, 75].map((t) => (
+              <span key={t} className="absolute inset-y-0 w-px bg-white/70" style={{ left: `${t}%` }} />
+            ))}
+            <span
+              className="absolute inset-y-0 w-0.5 bg-slate-900"
+              style={{ left: `calc(${(proyectado / escala) * 100}% - 2px)` }}
+            />
+          </div>
+          <div className="mt-2 flex justify-between text-xs text-slate-400">
+            <span>$0</span>
+            <span>25%</span>
+            <span>50%</span>
+            <span>75%</span>
+            <span>{formatMillones(escala)}</span>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-600">
+            {segmentos.map((s) => (
+              <span key={s.key} className="inline-flex items-center gap-2">
+                <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: s.color }} />
+                {s.label} <span className="font-semibold text-slate-900">{formatMillones(s.value)}</span>
+              </span>
+            ))}
+            <span className="inline-flex items-center gap-2">
+              <span
+                className="h-3 w-3 rounded-sm"
+                style={{ background: `repeating-linear-gradient(45deg, ${COLOR.descuentos} 0 2px, transparent 2px 4px)` }}
+              />
+              Descuentos <span className="font-semibold text-slate-900">−{formatMillones(descuentos)}</span>
+              <InfoTip text="Ya están descontados del recaudo: no se restan otra vez del total." />
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Chart row: 30% decena bars, 70% three origen donuts */}
-      <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-[3fr_7fr]">
-        <div className="min-w-0 rounded-[10px] border border-slate-200 bg-white">
-          <h2 className="flex items-center gap-1.5 border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">
-            Recaudo por decena — {mesTitulo}
-            <InfoTip text="Días 1–10 es la ventana de pronto pago: lo que entra ahí alcanzó el descuento." />
-          </h2>
-          <div className="px-2 py-3">
-            <SemanalChart data={decenas} />
+      {/* KPI cards */}
+      <div className="mb-5 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <KpiCard
+          title="Canon"
+          titleClassName="text-[#4f6bed]"
+          value={canon}
+          download={{
+            href: `/api/resumen/recaudo?periodo=${month}`,
+            title: "Descargar recaudo del mes (Excel)",
+            className: "text-[#4f6bed] hover:opacity-80",
+          }}
+          proyectado={{ total: canonProyectado, color: COLOR.canon }}
+        />
+        <KpiCard
+          title="Cuentas de cobro"
+          titleClassName="text-[#2ea89a]"
+          value={cuentas}
+          proyectado={{ total: cuentasProyectado, color: COLOR.cuentas }}
+        />
+        <KpiCard
+          title="Mora"
+          titleClassName="text-[#8b5cf6]"
+          value={mora}
+          download={{
+            href: `/api/resumen/mora?periodo=${month}`,
+            title: "Descargar detalle de mora del mes (Excel)",
+            className: "text-[#8b5cf6] hover:opacity-80",
+          }}
+          proyectado={{ total: moraProyectado, color: COLOR.mora }}
+        />
+        <KpiCard
+          title="Luz"
+          titleClassName="text-[#e9a23b]"
+          value={luz}
+          download={{
+            href: `/api/resumen/recaudo?periodo=${month}`,
+            title: "Descargar recaudo del mes, incluye servicios públicos (Excel)",
+            className: "text-[#e9a23b] hover:opacity-80",
+          }}
+          proyectado={{ total: luzProyectado, color: COLOR.luz }}
+        />
+        <KpiCard
+          title="Depósito"
+          titleClassName="text-slate-500"
+          value={extras.deposito}
+        />
+
+        {/* Desglose de descuentos */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+          <div className="flex items-baseline justify-between gap-3 border-b border-dashed border-slate-200 pb-3">
+            <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">Desglose de descuentos</p>
+            <p className="text-sm font-semibold tabular-nums text-slate-700">−{formatCOP(descuentos)}</p>
           </div>
-        </div>
-        <div className="flex min-w-0 flex-col overflow-hidden rounded-[10px] border border-slate-200 bg-white">
-          <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-900">
-            Origen del recaudo
-          </h2>
-          <div className="grid flex-1 grid-cols-1 content-center gap-4 p-4 md:grid-cols-3">
-            <OrigenChart data={origen} title="Corriente" />
-            <OrigenChart data={origenMora} title="Mora" />
-            <OrigenChart data={origenGeneral} title="General" />
+          <div className="divide-y divide-dashed divide-slate-200">
+            <div className="flex items-center justify-between gap-3 py-4">
+              <div>
+                <p className="font-semibold text-slate-900">Financieros</p>
+                <p className="text-sm text-slate-500">Pronto Pago del recaudo</p>
+                <p className="text-xs text-slate-400">Clientes que pagan en los primeros 10 días del mes</p>
+              </div>
+              <p className="text-lg font-bold tabular-nums text-slate-900 sm:text-xl">
+                −{formatCOP(extras.descuentoFinanciero)}
+              </p>
+            </div>
+            <div className="flex items-center justify-between gap-3 py-4">
+              <div>
+                <p className="flex items-center gap-1.5 font-semibold text-slate-900">
+                  Comerciales
+                  <InfoTip text="Canon × % de descuento de los contratos activos hoy. Para meses pasados usa los contratos actuales." />
+                </p>
+                <p className="text-sm text-slate-500">Pactados en contrato</p>
+              </div>
+              <p className="text-lg font-bold tabular-nums text-slate-900 sm:text-xl">
+                −{formatCOP(extras.descuentoComercial)}
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Table: max 8 rows */}
-      <div className="overflow-hidden rounded-[10px] border border-slate-200 bg-white">
-        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-          <h2 className="text-sm font-semibold text-slate-900">Pagos del mes</h2>
-          <Link
-            href={`/pagos?month=${month}`}
-            className="text-sm font-medium text-blue-600 hover:text-blue-700"
-          >
-            Ver todos →
-          </Link>
-        </div>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-100 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
-              <th className="px-4 py-2">Fecha</th>
-              <th className="px-4 py-2">Local</th>
-              <th className="px-4 py-2">Inquilino</th>
-              <th className="px-4 py-2">Estado</th>
-              <th className="px-4 py-2 text-right">Valor</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {ultimos.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-4 text-center text-sm text-slate-400">
-                  Sin pagos este mes
-                </td>
-              </tr>
-            ) : (
-              ultimos.map((p) => {
-                const estado = classifyPagoBucket(p)
-                const meta = ESTADO_META[estado]
-                return (
-                  <tr key={p.id} className="hover:bg-slate-50">
-                    <td className="whitespace-nowrap px-4 py-2 text-slate-600">
-                      {formatDateShort(p.fechaRecaudo)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-slate-600">
-                      {p.unitNumber ?? "—"}
-                    </td>
-                    <td className="max-w-0 truncate px-4 py-2 font-medium text-slate-800">
-                      {p.clienteName}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2">
-                      <span className="inline-flex items-center gap-1.5 text-slate-600">
-                        <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
-                        {meta.label}
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-right font-semibold tabular-nums text-slate-900">
-                      {formatCOP(p.valorFinal)}
+      {/* Detalle de mora + cartera jurídica (same data as /mora) */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[2fr_1fr]">
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+                <AlertTriangle className="h-4 w-4 text-rose-500" />
+                Detalle de mora
+              </h2>
+              {/* Same Tasa DIAN control as /mora — editable from here too. */}
+              <TasaMoraForm
+                periodo={moraData.summary.periodo}
+                tasaEa={moraData.summary.tasaEa}
+                tasaPeriodo={moraData.summary.tasaPeriodo}
+                align="left"
+              />
+            </div>
+            <Link href="/mora" className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
+              Ver todos <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[820px] text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/60 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  <th className="px-5 py-3">Arrendatario</th>
+                  <th className="px-3 py-3 text-right">Días mora</th>
+                  <th className="px-3 py-3 text-right">Facturas</th>
+                  <th className="px-3 py-3 text-right">Saldo vencido</th>
+                  <th className="px-3 py-3 text-right">Interés</th>
+                  <th className="px-3 py-3 text-right">Cartera corriente</th>
+                  <th className="px-5 py-3 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {filasMora.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-6 text-center text-slate-400">
+                      Sin arrendatarios en mora
                     </td>
                   </tr>
-                )
-              })
+                ) : (
+                  filasMora.map((r) => (
+                    <tr key={r.tenantId} className="hover:bg-slate-50">
+                      <td className="max-w-0 truncate px-5 py-2.5 font-medium text-slate-800">
+                        {r.cliente}
+                        {r.unitNumber && <span className="ml-2 text-xs font-normal text-slate-400">Local {r.unitNumber}</span>}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-slate-600">{r.diasMora}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-slate-600">{r.facturas}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold tabular-nums text-slate-900">
+                        {formatCOP(r.saldoVencido)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-slate-600">
+                        {formatCOP(r.interes)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-slate-600">
+                        {formatCOP(r.carteraCorriente)}
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-2.5 text-right font-semibold tabular-nums text-slate-900">
+                        {formatCOP(totalAPagar(r))}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {filasMora.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-slate-200 bg-slate-50/60 font-semibold text-slate-900">
+                    <td className="px-5 py-3">Total · {filasMora.length} arrendatarios</td>
+                    <td className="px-3 py-3" />
+                    <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{sumMora((r) => r.facturas)}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{formatCOP(sumMora((r) => r.saldoVencido))}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{formatCOP(sumMora((r) => r.interes))}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{formatCOP(sumMora((r) => r.carteraCorriente))}</td>
+                    <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums">{formatCOP(sumMora(totalAPagar))}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
+              <Scale className="h-4 w-4 text-slate-500" />
+              Cartera jurídica
+            </h2>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                juridica.length > 0 ? "bg-orange-50 text-orange-700" : "bg-slate-100 text-slate-500"
+              }`}
+            >
+              {juridica.length > 0 ? "Activo" : "Sin registros"}
+            </span>
+          </div>
+          <div className="p-4">
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-600">
+              <span className="mr-2 text-orange-600">01</span>Cartera jurídica actual
+            </p>
+            {juridica.length === 0 ? (
+              <p className="px-3 py-6 text-center text-sm text-slate-500">
+                No hay cartera jurídica. No hay facturas vencidas de C-Krea en cobro jurídico (cartera zona Z99).
+              </p>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {juridica.map((r) => (
+                  <li key={r.tenantId} className="flex items-center justify-between gap-3 px-3 py-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-slate-800">{r.cliente}</p>
+                      <p className="text-xs text-slate-500">
+                        {r.diasMora} días · {r.facturas} {r.facturas === 1 ? "factura" : "facturas"}
+                      </p>
+                    </div>
+                    <p className="whitespace-nowrap font-semibold tabular-nums text-slate-900">{formatCOP(r.saldoVencido)}</p>
+                  </li>
+                ))}
+              </ul>
             )}
-          </tbody>
-        </table>
+          </div>
+        </div>
       </div>
     </>
   )
