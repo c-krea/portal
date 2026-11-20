@@ -27,6 +27,7 @@ export type MoraRow = {
   facturas: number            // invoice count
   saldoVencido: number        // sum of overdue balances
   interes: number             // sum of interest
+  carteraCorriente: number    // open balance not yet due (vr_corriente, Z40 FVS); 0 for jurídica
   invoices: MoraInvoice[]     // per-invoice detail (expandable in the UI)
 }
 
@@ -373,6 +374,7 @@ async function getMoraData_uncached(): Promise<MoraData> {
         facturas: 0,
         saldoVencido: 0,
         interes: 0,
+        carteraCorriente: 0,
         invoices: [],
       }
       byTenant.set(key, row)
@@ -386,6 +388,21 @@ async function getMoraData_uncached(): Promise<MoraData> {
       row.diasMora = inv.diasVencidos
       row.unitNumber = inv.unidad
     }
+  }
+
+  // Cartera corriente (not yet due) per tenant, attached to the activo row only:
+  // what a tenant in mora must also pay this month on top of the overdue balance.
+  const corrienteRows = await execute(`
+    SELECT c.inquilino_id::text AS tenant_id, SUM(c.vr_corriente) AS corriente
+    FROM v2.vista_cartera_actual c
+    WHERE c.empresa_id = '${empresaId}'::uuid
+      AND c.factura LIKE 'FVS-%'
+      AND c.vr_corriente > 0
+    GROUP BY c.inquilino_id
+  `)
+  for (const c of corrienteRows) {
+    const row = byTenant.get(`${c.tenant_id}|false`)
+    if (row) row.carteraCorriente = Number(c.corriente ?? 0)
   }
 
   const all = [...byTenant.values()]

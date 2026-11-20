@@ -4,6 +4,7 @@ import { ArrowRight, Download, Scale, Wallet, AlertTriangle } from "lucide-react
 import { MonthFilter } from "@/components/pagos/month-filter"
 import { InfoTip } from "@/components/pagos/info-tip"
 import { ProgressRing } from "@/components/resumen/progress-ring"
+import { TasaMoraForm } from "@/components/mora/tasa-mora-form"
 import { getResumenExtras, getResumenKPIs } from "@/lib/data/pagos"
 import { getMoraData, getMoraTrendReconstruido, type MoraRow } from "@/lib/data/mora"
 import { getPortfolioStats } from "@/lib/data/dashboard"
@@ -73,9 +74,9 @@ function KpiCard({ title, titleClassName, value, negative, download, proyectado,
               Faltan <span className="font-semibold text-slate-900">{formatCOP(faltan)}</span>
             </div>
           </>
-        ) : (
+        ) : note ? (
           <div className="mt-4 border-t border-dashed border-slate-200 pt-3 text-sm text-slate-500">{note}</div>
-        )}
+        ) : null}
       </div>
       {proyectado && <ProgressRing pct={pctOf(value, proyectado.total)} color={proyectado.color} />}
     </div>
@@ -130,7 +131,9 @@ export default async function ResumenPage({
   ]
 
   const ocupacionPct = Math.round(pctOf(portfolio.activeClients, portfolio.totalUnits))
-  const topMora: MoraRow[] = [...moraData.activos].sort((a, b) => b.saldoVencido - a.saldoVencido).slice(0, 10)
+  const filasMora: MoraRow[] = [...moraData.activos].sort((a, b) => b.saldoVencido - a.saldoVencido)
+  const totalAPagar = (r: MoraRow) => r.saldoVencido + r.interes + r.carteraCorriente
+  const sumMora = (f: (r: MoraRow) => number) => filasMora.reduce((s, r) => s + f(r), 0)
   const juridica = moraData.juridica
 
   return (
@@ -271,18 +274,17 @@ export default async function ResumenPage({
           proyectado={{ total: luzProyectado, color: COLOR.luz }}
         />
         <KpiCard
-          title="Descuentos"
+          title="Depósito"
           titleClassName="text-slate-500"
-          value={descuentos}
-          negative
-          note="Pronto pago + descuentos de contrato. Ya están descontados del recaudo."
+          value={extras.deposito}
         />
 
         {/* Desglose de descuentos */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
-          <p className="border-b border-dashed border-slate-200 pb-3 text-sm font-semibold uppercase tracking-wider text-slate-500">
-            Desglose de descuentos
-          </p>
+          <div className="flex items-baseline justify-between gap-3 border-b border-dashed border-slate-200 pb-3">
+            <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">Desglose de descuentos</p>
+            <p className="text-sm font-semibold tabular-nums text-slate-700">−{formatCOP(descuentos)}</p>
+          </div>
           <div className="divide-y divide-dashed divide-slate-200">
             <div className="flex items-center justify-between gap-3 py-4">
               <div>
@@ -314,37 +316,45 @@ export default async function ResumenPage({
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[2fr_1fr]">
         <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-            <h2 className="flex flex-wrap items-baseline gap-x-3 text-lg font-semibold text-slate-900">
-              <span className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
                 <AlertTriangle className="h-4 w-4 text-rose-500" />
                 Detalle de mora
-              </span>
-              <span className="text-sm font-normal text-slate-500">Top 10 por saldo vencido · hoy</span>
-            </h2>
+              </h2>
+              {/* Same Tasa DIAN control as /mora — editable from here too. */}
+              <TasaMoraForm
+                periodo={moraData.summary.periodo}
+                tasaEa={moraData.summary.tasaEa}
+                tasaPeriodo={moraData.summary.tasaPeriodo}
+                align="left"
+              />
+            </div>
             <Link href="/mora" className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
               Ver todos <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
+            <table className="w-full min-w-[820px] text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50/60 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
                   <th className="px-5 py-3">Arrendatario</th>
                   <th className="px-3 py-3 text-right">Días mora</th>
                   <th className="px-3 py-3 text-right">Facturas</th>
                   <th className="px-3 py-3 text-right">Saldo vencido</th>
-                  <th className="px-5 py-3 text-right">Interés</th>
+                  <th className="px-3 py-3 text-right">Interés</th>
+                  <th className="px-3 py-3 text-right">Cartera corriente</th>
+                  <th className="px-5 py-3 text-right">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {topMora.length === 0 ? (
+                {filasMora.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-5 py-6 text-center text-slate-400">
+                    <td colSpan={7} className="px-5 py-6 text-center text-slate-400">
                       Sin arrendatarios en mora
                     </td>
                   </tr>
                 ) : (
-                  topMora.map((r) => (
+                  filasMora.map((r) => (
                     <tr key={r.tenantId} className="hover:bg-slate-50">
                       <td className="max-w-0 truncate px-5 py-2.5 font-medium text-slate-800">
                         {r.cliente}
@@ -355,13 +365,32 @@ export default async function ResumenPage({
                       <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold tabular-nums text-slate-900">
                         {formatCOP(r.saldoVencido)}
                       </td>
-                      <td className="whitespace-nowrap px-5 py-2.5 text-right tabular-nums text-slate-600">
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-slate-600">
                         {formatCOP(r.interes)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-slate-600">
+                        {formatCOP(r.carteraCorriente)}
+                      </td>
+                      <td className="whitespace-nowrap px-5 py-2.5 text-right font-semibold tabular-nums text-slate-900">
+                        {formatCOP(totalAPagar(r))}
                       </td>
                     </tr>
                   ))
                 )}
               </tbody>
+              {filasMora.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-slate-200 bg-slate-50/60 font-semibold text-slate-900">
+                    <td className="px-5 py-3">Total · {filasMora.length} arrendatarios</td>
+                    <td className="px-3 py-3" />
+                    <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{sumMora((r) => r.facturas)}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{formatCOP(sumMora((r) => r.saldoVencido))}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{formatCOP(sumMora((r) => r.interes))}</td>
+                    <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{formatCOP(sumMora((r) => r.carteraCorriente))}</td>
+                    <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums">{formatCOP(sumMora(totalAPagar))}</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>

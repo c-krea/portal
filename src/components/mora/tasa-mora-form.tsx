@@ -11,10 +11,13 @@ export function TasaMoraForm({
   periodo,
   tasaEa,
   tasaPeriodo,
+  align = "right",
 }: {
   periodo: string
   tasaEa: number | null
   tasaPeriodo: string | null
+  /** Side the panel lines up with: "right" (top-right on /mora) or "left" (next to a title). */
+  align?: "left" | "right"
 }) {
   const [open, setOpen] = useState(false)
   const [state, action, pending] = useActionState(guardarTasaMora, initial)
@@ -49,7 +52,7 @@ export function TasaMoraForm({
           {/* click-outside to close */}
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           {/* panel drops open below the box */}
-          <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-lg">
+          <div className={`absolute ${align === "left" ? "left-0" : "right-0"} top-full z-20 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-lg`}>
             <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
               Tasa interés mora DIAN · {periodo}
             </p>

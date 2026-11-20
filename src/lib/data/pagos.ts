@@ -349,9 +349,13 @@ export function serviciosPublicosRowsSql(empresaId: string, month: string): stri
 //             CURRENT active contracts. Contracts carry no history, so a past
 //             month shows today's agreements, not that month's.
 // Both discounts are informative — they are already out of the cash figures.
+// deposito    receipts whose cruce is the receipt itself (docto '001-RK-3956'
+//             ↔ cruce 'RK-3956'): money received with no invoice applied
+//             (anticipos). Zona Z40, not Eliminado, deduped by row_id_mov.
 export type ResumenExtras = {
   luz: number
   luzProyectado: number
+  deposito: number
   descuentoFinanciero: number
   descuentoComercial: number
 }
@@ -380,6 +384,18 @@ async function getResumenExtras_uncached(month: string): Promise<ResumenExtras> 
       WHERE e.empresa_id = '${empresaId}'::uuid
         AND e.periodo = '${month}'
     ),
+    deposito AS (
+      SELECT COALESCE(SUM(r.valor_final), 0) AS total
+      FROM (
+        SELECT DISTINCT ON (r.row_id_mov) r.valor_final
+        FROM siesa_raw.recaudo r
+        WHERE r.id_zona = 'Z40'
+          AND NOT r."Eliminado"
+          AND r.cruce = regexp_replace(r.docto, '^[0-9]+-', '')
+          AND date_trunc('month', r.fecha_recaudo::date) = DATE '${month}-01'
+        ORDER BY r.row_id_mov
+      ) r
+    ),
     comercial AS (
       SELECT COALESCE(SUM(c.canon_base * c.descuento_pct / 100), 0) AS total
       FROM v2.contratos c
@@ -390,6 +406,7 @@ async function getResumenExtras_uncached(month: string): Promise<ResumenExtras> 
     SELECT
       ROUND((SELECT total FROM luz))::numeric       AS luz,
       ROUND((SELECT total FROM luz_proy))::numeric  AS luz_proyectado,
+      ROUND((SELECT total FROM deposito))::numeric  AS deposito,
       ROUND((SELECT total FROM pp))::numeric        AS financiero,
       ROUND((SELECT total FROM comercial))::numeric AS comercial
   `)
@@ -397,6 +414,7 @@ async function getResumenExtras_uncached(month: string): Promise<ResumenExtras> 
   return {
     luz:                 Number(r.luz ?? 0),
     luzProyectado:       Number(r.luz_proyectado ?? 0),
+    deposito:            Number(r.deposito ?? 0),
     descuentoFinanciero: Number(r.financiero ?? 0),
     descuentoComercial:  Number(r.comercial ?? 0),
   }
