@@ -335,8 +335,12 @@ export function serviciosPublicosRowsSql(empresaId: string, month: string): stri
 
 // ── /resumen extras: Luz + descuentos ────────────────────────────────────────
 // luz         energy cash in the month (serviciosPublicosRowsSql).
-// financieros pronto pago granted on the same FVS rows as canon + mora
-//             (getResumenKPIs scope). valor_final is already net of it.
+// financieros pronto pago as booked by contabilidad: siesa_raw.documentos,
+//             auxiliar 42201090, periodo = month, not Eliminado. ventas is
+//             negative there, so the sum is flipped. NO canal / CO filter on
+//             purpose: C-Krea is the only user of 42201090 for pronto pago,
+//             but since 2026-06 SIESA books these rows under CO 001 / canal
+//             R03 instead of CO 044 / R08. Filtering by R08 returned $0.
 // comerciales contract-agreed discount: canon_base × descuento_pct of the
 //             CURRENT active contracts. Contracts carry no history, so a past
 //             month shows today's agreements, not that month's.
@@ -359,11 +363,11 @@ async function getResumenExtras_uncached(month: string): Promise<ResumenExtras> 
       FROM (${serviciosPublicosRowsSql(empresaId, month)}) s
     ),
     pp AS (
-      SELECT COALESCE(SUM(p.pronto_pago_aplicado), 0) AS total
-      FROM vp p
-      WHERE p.empresa_id = '${empresaId}'::uuid
-        AND date_trunc('month', p.fecha_recaudo) = DATE '${month}-01'
-        ${EXCLUDE_ELECTRICITY}
+      SELECT COALESCE(-SUM(d.ventas), 0) AS total
+      FROM siesa_raw.documentos d
+      WHERE d.auxiliar = '42201090'
+        AND d.periodo = ${y * 100 + m}
+        AND NOT d."Eliminado"
     ),
     comercial AS (
       SELECT COALESCE(SUM(c.canon_base * c.descuento_pct / 100), 0) AS total
