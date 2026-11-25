@@ -128,3 +128,12 @@
     @apply font-sans;
   }
 }
+/* Staff app (data-app-shell): fluid root size on desktop so a 14" laptop
+   (~1280–1536px viewport) shows the whole page like a 75% browser zoom.
+   12px at 1280px, growing linearly to the normal 16px at ~1700px+.
+   Everything sized in rem (Tailwind spacing/text) scales with it. */
+@media (min-width: 1024px) {
+  html:has([data-app-shell]) {
+    font-size: clamp(12px, 0.9375vw, 16px);
+  }
+}

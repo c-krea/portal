@@ -8,7 +8,7 @@ import { getEmpresaCkreaId } from "@/lib/empresa"
 export default async function ConfiguracionPage() {
   const empresaId = await getEmpresaCkreaId()
   // Only keys with a human label render — interes_mora_diario stays hidden
-  // (its rate is administered on /mora) and no raw rule key can ever leak.
+  // (its rate is administered on Resumen → Detalle de mora) and no raw rule key can ever leak.
   const rules = (await getFinancialRules(empresaId)).filter((rule) => rule.ruleKey in RULE_LABELS)
 
   return (
@@ -59,8 +59,8 @@ export default async function ConfiguracionPage() {
 
       <p className="mt-3 text-xs text-slate-400">
         La tasa de interés de mora se configura en{" "}
-        <Link href="/mora" className="font-medium text-slate-600 underline hover:text-slate-800">
-          Mora
+        <Link href="/" className="font-medium text-slate-600 underline hover:text-slate-800">
+          Resumen → Detalle de mora
         </Link>
         .
       </p>

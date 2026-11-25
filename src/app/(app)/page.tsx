@@ -1,10 +1,10 @@
-import Link from "next/link"
 import type { ReactNode } from "react"
-import { ArrowRight, Download, Scale, Wallet, AlertTriangle, Lock } from "lucide-react"
+import { Download, Scale, Wallet, AlertTriangle, Lock } from "lucide-react"
 import { MonthFilter } from "@/components/pagos/month-filter"
 import { InfoTip } from "@/components/pagos/info-tip"
 import { ProgressRing } from "@/components/resumen/progress-ring"
 import { TasaMoraForm } from "@/components/mora/tasa-mora-form"
+import { JuridicaList, MoraDetalleTable } from "@/components/resumen/mora-detalle"
 import { CuentasCobroEditor, CuentasCobroUltimoCambio } from "@/components/resumen/cuentas-cobro-editor"
 import { computeResumenTotales, getResumenCierre } from "@/lib/data/resumen"
 import { getCuentasCobroHistorial } from "@/lib/data/cuentas-cobro"
@@ -61,11 +61,16 @@ type KpiCardProps = {
 function KpiCard({ title, titleClassName, value, negative, download, proyectado, note, action, footnote }: KpiCardProps) {
   const faltan = proyectado ? Math.max(0, proyectado.total - value) : 0
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+    // @container: the value's font follows the card width (cqi), so a narrow
+    // card (14" laptop, 3 columns) shrinks the figure instead of cutting it.
+    <div className="@container flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
       <div className="min-w-0 flex-1">
         <p className={`text-sm font-semibold uppercase tracking-wider ${titleClassName}`}>{title}</p>
         <div className="mt-2 flex items-center gap-3">
-          <p className="truncate text-2xl font-bold tabular-nums tracking-tight text-slate-900 sm:text-[32px]">
+          <p
+            title={formatCOP(value)}
+            className="truncate text-[clamp(1.125rem,6.5cqi,2rem)] font-bold tabular-nums tracking-tight text-slate-900"
+          >
             {negative && value > 0 ? "−" : ""}
             {formatCOP(value)}
           </p>
@@ -105,7 +110,7 @@ export default async function ResumenPage({
   const [cierre, portfolio, moraData, historialCuentas, profile] = await Promise.all([
     month < currentPeriodo() ? getResumenCierre(month) : Promise.resolve(null),
     getPortfolioStats(empresaId),
-    // Detalle de mora + cartera jurídica: same data as /mora (live, not per month).
+    // Detalle de mora + cartera jurídica (live, not per month).
     getMoraData(),
     getCuentasCobroHistorial(month),
     getSessionProfile(),
@@ -135,8 +140,6 @@ export default async function ResumenPage({
 
   const ocupacionPct = Math.round(pctOf(ocupados, totalLocales))
   const filasMora: MoraRow[] = [...moraData.activos].sort((a, b) => b.saldoVencido - a.saldoVencido)
-  const totalAPagar = (r: MoraRow) => r.saldoVencido + r.interes + r.carteraCorriente
-  const sumMora = (f: (r: MoraRow) => number) => filasMora.reduce((s, r) => s + f(r), 0)
   const juridica = moraData.juridica
 
   return (
@@ -176,7 +179,7 @@ export default async function ResumenPage({
             href={`/api/resumen/recaudo?periodo=${month}`}
             download
             title="Descargar recaudo del mes (Excel)"
-            className="mt-2 block text-4xl font-bold tabular-nums tracking-tight text-[#2b3fae] hover:underline sm:text-[44px]"
+            className="mt-2 block text-4xl font-bold tabular-nums tracking-tight text-[#2b3fae] hover:underline sm:text-[2.75rem]"
           >
             {formatCOP(totalRecaudo)}
           </a>
@@ -334,7 +337,7 @@ export default async function ResumenPage({
         </div>
       </div>
 
-      {/* Detalle de mora + cartera jurídica (same data as /mora) */}
+      {/* Detalle de mora + cartera jurídica */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[2fr_1fr]">
         <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
@@ -342,8 +345,9 @@ export default async function ResumenPage({
               <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
                 <AlertTriangle className="h-4 w-4 text-rose-500" />
                 Detalle de mora
+                <InfoTip text="Saldo vencido de inquilinos activos (factura + 30 días), sin intereses; no incluye cartera jurídica. Interés: tasa DIAN del mes × días vencidos. Cartera corriente: facturas aún no vencidas, que también deben pagar." />
               </h2>
-              {/* Same Tasa DIAN control as /mora — editable from here too. */}
+              {/* Tasa DIAN del mes — se administra aquí. */}
               <TasaMoraForm
                 periodo={moraData.summary.periodo}
                 tasaEa={moraData.summary.tasaEa}
@@ -351,69 +355,9 @@ export default async function ResumenPage({
                 align="left"
               />
             </div>
-            <Link href="/mora" className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
-              Ver todos <ArrowRight className="h-4 w-4" />
-            </Link>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/60 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  <th className="px-5 py-3">Arrendatario</th>
-                  <th className="px-3 py-3 text-right">Días mora</th>
-                  <th className="px-3 py-3 text-right">Facturas</th>
-                  <th className="px-3 py-3 text-right">Saldo vencido</th>
-                  <th className="px-3 py-3 text-right">Interés</th>
-                  <th className="px-3 py-3 text-right">Cartera corriente</th>
-                  <th className="px-5 py-3 text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {filasMora.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-5 py-6 text-center text-slate-400">
-                      Sin arrendatarios en mora
-                    </td>
-                  </tr>
-                ) : (
-                  filasMora.map((r) => (
-                    <tr key={r.tenantId} className="hover:bg-slate-50">
-                      <td className="max-w-0 truncate px-5 py-2.5 font-medium text-slate-800">
-                        {r.cliente}
-                        {r.unitNumber && <span className="ml-2 text-xs font-normal text-slate-400">Local {r.unitNumber}</span>}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-slate-600">{r.diasMora}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-slate-600">{r.facturas}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-right font-semibold tabular-nums text-slate-900">
-                        {formatCOP(r.saldoVencido)}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-slate-600">
-                        {formatCOP(r.interes)}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-slate-600">
-                        {formatCOP(r.carteraCorriente)}
-                      </td>
-                      <td className="whitespace-nowrap px-5 py-2.5 text-right font-semibold tabular-nums text-slate-900">
-                        {formatCOP(totalAPagar(r))}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-              {filasMora.length > 0 && (
-                <tfoot>
-                  <tr className="border-t-2 border-slate-200 bg-slate-50/60 font-semibold text-slate-900">
-                    <td className="px-5 py-3">Total · {filasMora.length} arrendatarios</td>
-                    <td className="px-3 py-3" />
-                    <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{sumMora((r) => r.facturas)}</td>
-                    <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{formatCOP(sumMora((r) => r.saldoVencido))}</td>
-                    <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{formatCOP(sumMora((r) => r.interes))}</td>
-                    <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">{formatCOP(sumMora((r) => r.carteraCorriente))}</td>
-                    <td className="whitespace-nowrap px-5 py-3 text-right tabular-nums">{formatCOP(sumMora(totalAPagar))}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
+            <MoraDetalleTable data={filasMora} />
           </div>
         </div>
 
@@ -422,6 +366,7 @@ export default async function ResumenPage({
             <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-900">
               <Scale className="h-4 w-4 text-slate-500" />
               Cartera jurídica
+              <InfoTip text="Facturas de C-Krea en cobro jurídico: cartera SIESA zona Z99 de clientes con lista de precios ACK, más saldos de inquilinos marcados jurídica. No incluida en el detalle de mora — esta cartera ya no se gestiona por cobro directo, sino por proceso legal." />
             </h2>
             <span
               className={`rounded-full px-3 py-1 text-xs font-semibold ${
@@ -440,19 +385,7 @@ export default async function ResumenPage({
                 No hay cartera jurídica. No hay facturas vencidas de C-Krea en cobro jurídico (cartera zona Z99).
               </p>
             ) : (
-              <ul className="divide-y divide-slate-100">
-                {juridica.map((r) => (
-                  <li key={r.tenantId} className="flex items-center justify-between gap-3 px-3 py-3 text-sm">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-slate-800">{r.cliente}</p>
-                      <p className="text-xs text-slate-500">
-                        {r.diasMora} días · {r.facturas} {r.facturas === 1 ? "factura" : "facturas"}
-                      </p>
-                    </div>
-                    <p className="whitespace-nowrap font-semibold tabular-nums text-slate-900">{formatCOP(r.saldoVencido)}</p>
-                  </li>
-                ))}
-              </ul>
+              <JuridicaList data={juridica} />
             )}
           </div>
         </div>

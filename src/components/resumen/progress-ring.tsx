@@ -17,8 +17,9 @@ export function ProgressRing({
   const c = 2 * Math.PI * r
   const filled = (Math.min(Math.max(pct, 0), 100) / 100) * c
   return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden>
+    // Sized in rem (size/16) so the ring follows the app's fluid root font size.
+    <div className="relative shrink-0" style={{ width: `${size / 16}rem`, height: `${size / 16}rem` }}>
+      <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
         <circle
           cx={size / 2}
