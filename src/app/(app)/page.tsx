@@ -46,6 +46,7 @@ function DownloadLink({ href, title, className }: { href: string; title: string;
 type KpiCardProps = {
   title: string
   titleClassName: string
+  info?: string
   value: number
   negative?: boolean
   download?: { href: string; title: string; className: string }
@@ -58,14 +59,17 @@ type KpiCardProps = {
   footnote?: ReactNode
 }
 
-function KpiCard({ title, titleClassName, value, negative, download, proyectado, note, action, footnote }: KpiCardProps) {
+function KpiCard({ title, titleClassName, info, value, negative, download, proyectado, note, action, footnote }: KpiCardProps) {
   const faltan = proyectado ? Math.max(0, proyectado.total - value) : 0
   return (
     // @container: the value's font follows the card width (cqi), so a narrow
     // card (14" laptop, 3 columns) shrinks the figure instead of cutting it.
     <div className="@container flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
       <div className="min-w-0 flex-1">
-        <p className={`text-sm font-semibold uppercase tracking-wider ${titleClassName}`}>{title}</p>
+        <p className={`flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wider ${titleClassName}`}>
+          {title}
+          {info && <InfoTip text={info} />}
+        </p>
         <div className="mt-2 flex items-center gap-3">
           <p
             title={formatCOP(value)}
@@ -173,16 +177,18 @@ export default async function ResumenPage({
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500">
             <Wallet className="h-3.5 w-3.5" />
             Recaudo total
-            <InfoTip text="Canon + mora + luz + cuentas de cobro del mes, comparado con lo proyectado de cada línea. Luz proyectada: kWh × tarifa del mes anterior por local; mientras no se registran (hacia el día 10), usa los del mes previo." />
+            <InfoTip text="Canon + mora + luz + cuentas de cobro del mes, comparado con lo proyectado de cada línea. El depósito y la cartera jurídica no suman. El botón de descarga trae el detalle completo en Excel." />
           </p>
-          <a
-            href={`/api/resumen/recaudo?periodo=${month}`}
-            download
-            title="Descargar recaudo del mes (Excel)"
-            className="mt-2 block text-4xl font-bold tabular-nums tracking-tight text-[#2b3fae] hover:underline sm:text-[2.75rem]"
-          >
-            {formatCOP(totalRecaudo)}
-          </a>
+          <div className="mt-2 flex items-center gap-3">
+            <p className="text-4xl font-bold tabular-nums tracking-tight text-[#2b3fae] sm:text-[2.75rem]">
+              {formatCOP(totalRecaudo)}
+            </p>
+            <DownloadLink
+              href={`/api/resumen/recaudo?periodo=${month}`}
+              title="Descargar el recaudo completo del mes (Excel): canon, mora, luz, cuentas de cobro y depósito"
+              className="text-[#2b3fae] hover:opacity-80"
+            />
+          </div>
           <p className="mt-1 text-sm text-slate-600">
             de <span className="font-semibold text-slate-800">{formatCOP(proyectado)}</span> proyectado
           </p>
@@ -252,17 +258,14 @@ export default async function ResumenPage({
         <KpiCard
           title="Canon"
           titleClassName="text-[#4f6bed]"
+          info="Pagos de facturas de arriendo (FVS) recibidos hasta 30 días después de la factura, más anticipos: recibos sin factura aplicada (excepto depósitos RKD). Proyectado: facturación del mes (canal R08)."
           value={canon}
-          download={{
-            href: `/api/resumen/recaudo?periodo=${month}`,
-            title: "Descargar recaudo del mes (Excel)",
-            className: "text-[#4f6bed] hover:opacity-80",
-          }}
           proyectado={{ total: canonProyectado, color: COLOR.canon }}
         />
         <KpiCard
           title="Cuentas de cobro"
           titleClassName="text-[#2ea89a]"
+          info="Ejecutado y proyectado registrados a mano en el resumen. Cada cambio queda en el historial con usuario y fecha."
           value={cuentas}
           proyectado={{ total: cuentasProyectado, color: COLOR.cuentas }}
           action={
@@ -279,6 +282,7 @@ export default async function ResumenPage({
         <KpiCard
           title="Mora"
           titleClassName="text-[#8b5cf6]"
+          info="Pagos de facturas FVS recibidos más de 30 días después de la factura, sin cartera jurídica. Proyectado: lo recaudado de mora + el saldo vencido pendiente al cierre del mes."
           value={mora}
           download={{
             href: `/api/resumen/mora?periodo=${month}`,
@@ -290,30 +294,33 @@ export default async function ResumenPage({
         <KpiCard
           title="Luz"
           titleClassName="text-[#e9a23b]"
+          info="Recaudo de servicios públicos (energía) del mes. Proyectado: kWh del mes anterior × tarifa por local; mientras no se registran (hacia el día 10), usa los del mes previo."
           value={luz}
-          download={{
-            href: `/api/resumen/recaudo?periodo=${month}`,
-            title: "Descargar recaudo del mes, incluye servicios públicos (Excel)",
-            className: "text-[#e9a23b] hover:opacity-80",
-          }}
           proyectado={{ total: luzProyectado, color: COLOR.luz }}
         />
         <KpiCard
           title="Depósito"
           titleClassName="text-slate-500"
+          info="Recibos de depósito (documentos RKD) sin factura aplicada. No suma en el recaudo total."
           value={extras.deposito}
         />
 
         {/* Desglose de descuentos */}
         <div className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
           <div className="flex items-baseline justify-between gap-3 border-b border-dashed border-slate-200 pb-3">
-            <p className="text-sm font-semibold uppercase tracking-wider text-slate-500">Desglose de descuentos</p>
+            <p className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wider text-slate-500">
+              Desglose de descuentos
+              <InfoTip text="Informativo: los descuentos ya están restados del recaudo, no se descuentan otra vez del total." />
+            </p>
             <p className="text-sm font-semibold tabular-nums text-slate-700">−{formatCOP(descuentos)}</p>
           </div>
           <div className="divide-y divide-dashed divide-slate-200">
             <div className="flex items-center justify-between gap-3 py-4">
               <div>
-                <p className="font-semibold text-slate-900">Financieros</p>
+                <p className="flex items-center gap-1.5 font-semibold text-slate-900">
+                  Financieros
+                  <InfoTip text="Pronto pago contabilizado en el período (auxiliar 42201090 de SIESA)." />
+                </p>
                 <p className="text-sm text-slate-500">Pronto Pago del recaudo</p>
                 <p className="text-xs text-slate-400">Clientes que pagan en los primeros 10 días del mes</p>
               </div>
@@ -368,13 +375,6 @@ export default async function ResumenPage({
               Cartera jurídica
               <InfoTip text="Facturas de C-Krea en cobro jurídico: cartera SIESA zona Z99 de clientes con lista de precios ACK, más saldos de inquilinos marcados jurídica. No incluida en el detalle de mora — esta cartera ya no se gestiona por cobro directo, sino por proceso legal." />
             </h2>
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                juridica.length > 0 ? "bg-orange-50 text-orange-700" : "bg-slate-100 text-slate-500"
-              }`}
-            >
-              {juridica.length > 0 ? "Activo" : "Sin registros"}
-            </span>
           </div>
           <div className="p-4">
             <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-600">
