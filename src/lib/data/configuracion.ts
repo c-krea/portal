@@ -9,7 +9,7 @@ export type FinancialRule = {
 
 // Human-readable labels for each rule key. interes_mora_diario is DELIBERATELY
 // absent: since 2026-07-10 the live mora rate is the DIAN rate administered on
-// /mora (v2.tasa_interes_mora) and nothing reads that rule row anymore;
+// Resumen → Detalle de mora (v2.tasa_interes_mora) and nothing reads that rule row anymore;
 // grace_period_days is likewise absent (estado uses flat fecha_factura + 30).
 // `displayPercent` means the stored value is a decimal fraction (0.19) but the
 // human reads/writes a percentage (19) — RuleForm converts both ways so the

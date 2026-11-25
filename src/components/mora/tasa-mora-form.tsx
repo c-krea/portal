@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react"
 import { ChevronDown } from "lucide-react"
-import { guardarTasaMora, type TasaState } from "@/app/(app)/mora/actions"
+import { guardarTasaMora, type TasaState } from "@/app/(app)/tasa-mora-actions"
 
 const initial: TasaState = {}
 
@@ -16,7 +16,7 @@ export function TasaMoraForm({
   periodo: string
   tasaEa: number | null
   tasaPeriodo: string | null
-  /** Side the panel lines up with: "right" (top-right on /mora) or "left" (next to a title). */
+  /** Side the panel lines up with: "right" (top-right of a header) or "left" (next to a title). */
   align?: "left" | "right"
 }) {
   const [open, setOpen] = useState(false)

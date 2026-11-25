@@ -1,6 +1,5 @@
 import {
   LayoutDashboard,
-  AlertTriangle,
   Users,
   Receipt,
   Zap,
@@ -11,7 +10,6 @@ import {
 
 export const NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Resumen",       href: "/" },
-  { icon: AlertTriangle,   label: "Mora",          href: "/mora" },
   { icon: Users,           label: "Locales",       href: "/locales" },
   { icon: Receipt,         label: "Gastos",        href: "/gastos" },
   { icon: Zap,             label: "Medidores",     href: "/medidores" },
@@ -26,3 +24,6 @@ export const STATUS_COLORS = {
   proyectado: "blue-500",
   inactivo: "slate-400",
 } as const
+
+// Cookie that keeps the staff sidebar pinned open ("1") or collapsed (else).
+export const SIDEBAR_PINNED_COOKIE = "sidebar-pinned"

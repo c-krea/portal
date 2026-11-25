@@ -5,7 +5,7 @@
  * status/saldo. Interest accrual is computed on-demand from vista_cartera_actual.dias_mora
  * (see reportes/dashboard) instead of being persisted into a portal-side ledger.
  *
- * This function is a no-op preserved for the manual /mora "Calcular intereses" button.
+ * This function is a no-op kept for the accrual cron (api/cron/accrual).
  * Phase F removes the legacy `interest_accruals` table; this signature stays intact so
  * callers don't break.
  */

@@ -35,11 +35,6 @@
       "name": "Proyecciones",
       "url": "/proyecciones",
       "description": "Proyecciones de facturación"
-    },
-    {
-      "name": "Mora",
-      "url": "/mora",
-      "description": "Seguimiento de cartera en mora"
     }
   ],
   "icons": [

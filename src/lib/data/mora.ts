@@ -29,6 +29,9 @@ export type MoraRow = {
   interes: number             // sum of interest
   carteraCorriente: number    // open balance not yet due (vr_corriente, Z40 FVS); 0 for jurídica
   invoices: MoraInvoice[]     // per-invoice detail (expandable in the UI)
+  // Not-yet-due Z40 FVS invoices (vr_corriente) behind carteraCorriente. Shown in
+  // /resumen's dropdown next to the overdue ones; diasVencidos ≤ 0 = días para vencer.
+  corrientes: MoraInvoice[]
 }
 
 export type MoraSummary = {
@@ -376,6 +379,7 @@ async function getMoraData_uncached(): Promise<MoraData> {
         interes: 0,
         carteraCorriente: 0,
         invoices: [],
+        corrientes: [],
       }
       byTenant.set(key, row)
       juridicaFlag.set(row, r.es_juridica === true)
@@ -390,19 +394,38 @@ async function getMoraData_uncached(): Promise<MoraData> {
     }
   }
 
-  // Cartera corriente (not yet due) per tenant, attached to the activo row only:
+  // Cartera corriente (not yet due) per invoice, attached to the activo row (or
+  // the jurídica row of a Z40 tenant marked jurídica, if that is its only row):
   // what a tenant in mora must also pay this month on top of the overdue balance.
   const corrienteRows = await execute(`
-    SELECT c.inquilino_id::text AS tenant_id, SUM(c.vr_corriente) AS corriente
+    SELECT
+      c.inquilino_id::text AS tenant_id,
+      NULLIF(REGEXP_REPLACE(c.sucursal, '^.*[[:space:]]', ''), '') AS unidad,
+      c.factura,
+      c.fecha_factura::date AS fecha_factura,
+      ${moraVencEfecExpr("c.fecha_vencimiento", "c.fecha_factura::date")} AS venc_efec,
+      CURRENT_DATE - ${moraVencEfecExpr("c.fecha_vencimiento", "c.fecha_factura::date")} AS dias,
+      c.vr_corriente
     FROM v2.vista_cartera_actual c
     WHERE c.empresa_id = '${empresaId}'::uuid
       AND c.factura LIKE 'FVS-%'
       AND c.vr_corriente > 0
-    GROUP BY c.inquilino_id
+    ORDER BY c.fecha_factura
   `)
   for (const c of corrienteRows) {
-    const row = byTenant.get(`${c.tenant_id}|false`)
-    if (row) row.carteraCorriente = Number(c.corriente ?? 0)
+    const row = byTenant.get(`${c.tenant_id}|false`) ?? byTenant.get(`${c.tenant_id}|true`)
+    if (!row) continue
+    const saldo = Number(c.vr_corriente ?? 0)
+    row.carteraCorriente += saldo
+    row.corrientes.push({
+      factura: String(c.factura),
+      fechaFactura: String(c.fecha_factura),
+      vencimiento: String(c.venc_efec),
+      diasVencidos: Number(c.dias ?? 0),
+      saldoVencido: saldo,
+      interes: 0,
+      unidad: c.unidad ? String(c.unidad) : null,
+    })
   }
 
   const all = [...byTenant.values()]

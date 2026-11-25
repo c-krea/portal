@@ -1,56 +1,10 @@
 "use server"
 
-import { getEmpresaCkreaId } from "@/lib/empresa"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
-import { runInterestAccrual, type InterestAccrualSummary } from "@/lib/interest-engine"
 import { requireAdminOrFinanzasAction } from "@/lib/auth/session"
 import { executeDml } from "@/lib/db/executor"
 import { bustTags } from "@/lib/cache"
-
-const schema = z.object({
-  accrualDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
-})
-
-export type AccrualState = {
-  success?: boolean
-  error?: string
-  summary?: InterestAccrualSummary
-}
-
-export async function calcularIntereses(
-  _prev: AccrualState,
-  formData: FormData,
-): Promise<AccrualState> {
-  const auth = await requireAdminOrFinanzasAction()
-  if ("error" in auth) return { error: auth.error }
-
-  const parsed = schema.safeParse({
-    accrualDate: formData.get("accrualDate"),
-  })
-
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Fecha inválida" }
-  }
-
-  try {
-    const empresaId = await getEmpresaCkreaId()
-
-    const summary = await runInterestAccrual(empresaId, parsed.data.accrualDate)
-
-    revalidatePath("/mora")
-    revalidatePath("/facturas")
-    revalidatePath("/locales")
-    // NOTE: runInterestAccrual is currently a no-op (interest-engine writes nothing),
-    // so no data actually changed — nothing to bust. When the engine persists real
-    // accruals, add: bustTags("mora", "dashboard") (+ "facturas" once it is cached).
-
-    return { success: true, summary }
-  } catch (e) {
-    console.error(e)
-    return { error: "Error al calcular intereses. Intente de nuevo." }
-  }
-}
 
 // ── Monthly DIAN rate (interés de mora) — admin enters it each month ───────────
 const tasaSchema = z.object({
@@ -83,7 +37,6 @@ export async function guardarTasaMora(
             updated_at = now()
     `)
     bustTags("mora", "portal")
-    revalidatePath("/mora")
     revalidatePath("/") // Resumen shows and edits the same rate
     return { success: true, tasaEa }
   } catch (e) {
