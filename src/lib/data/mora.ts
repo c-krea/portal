@@ -428,3 +428,6 @@ async function getMoraData_uncached(): Promise<MoraData> {
 
   return { activos, juridica, summary }
 }
+
+// Uncached read for the monthly close (resumen-cierre cron).
+export { getMoraTrendReconstruido_uncached as getMoraTrendReconstruidoFresh }

@@ -616,3 +616,7 @@ export const getPagosKPIs    = cached(getPagosKPIs_uncached,    ["pagos:kpis"], 
 export const getPagos        = cached(getPagos_uncached,        ["pagos:list"],    "pagos")
 export const getPagosBuckets = cached(getPagosBuckets_uncached, ["pagos:buckets"], "pagos")
 export const getPagosRange   = cached(getPagosRange_uncached,   ["pagos:range"],   "pagos")
+
+// Uncached reads for the monthly close (resumen-cierre cron): it must freeze the
+// figures as they are now, not a copy cached up to CACHE_TTL_SECONDS ago.
+export { getResumenKPIs_uncached as getResumenKPIsFresh, getResumenExtras_uncached as getResumenExtrasFresh }
