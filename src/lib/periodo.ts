@@ -47,6 +47,23 @@ export function mesAnterior(periodo: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
 }
 
+// Business day = Monday–Friday that is not a Colombian holiday (Saturday does NOT
+// count here, unlike lecturaDay: this is for accounting closes, not the local).
+export function esDiaHabil(d: Date): boolean {
+  const dow = d.getDay()
+  return dow !== 0 && dow !== 6 && !isFestivoColombia(d)
+}
+
+// Day of the month of the n-th business day of `now`'s month.
+export function diaHabilDelMes(n: number, now: Date = nowBogota()): number {
+  const d = new Date(now.getFullYear(), now.getMonth(), 1)
+  let count = 0
+  for (;;) {
+    if (esDiaHabil(d) && ++count === n) return d.getDate()
+    d.setDate(d.getDate() + 1)
+  }
+}
+
 // Current billing month in Bogota, "YYYY-MM" (e.g. "2026-06"). Use this instead
 // of new Date() so the UTC/Bogota boundary never rolls the month early.
 export function currentPeriodo(): string {

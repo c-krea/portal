@@ -73,3 +73,6 @@ async function getPortfolioStats_uncached(empresaId: string) {
     totalUnits:     Number(rows3[0]?.total_units ?? 0),
   }
 }
+
+// Uncached read for the monthly close (resumen-cierre cron).
+export { getPortfolioStats_uncached as getPortfolioStatsFresh }

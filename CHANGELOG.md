@@ -4,6 +4,17 @@ Newest first. Older “Session N” labels are historical names for a ship, not 
 
 ## [Unreleased]
 
+### 2026-11-24 — Resumen: cierre mensual
+
+#### Added
+- **`v2.resumen_cierres_mensuales`**: una fila por mes con las cifras del Resumen (canon, mora, luz, cuentas de cobro, descuentos, depósito, totales y ocupación).
+- **Cron `/api/cron/resumen-cierre`** (diario 23:00 UTC = 18:00 Bogotá): solo actúa el 2.º día hábil del mes (lun–vie, sin festivos) y congela el mes anterior. `?periodo=YYYY-MM` cierra un mes pasado a mano (backfill o corrección); volver a cerrarlo sobrescribe la fila.
+
+- **Cuentas de cobro manuales.** Lápiz en la tarjeta del Resumen (admin y finanzas) para registrar ejecutado y proyectado del mes. `v2.cuentas_cobro_mensuales` guarda el valor vigente y `v2.cuentas_cobro_historial` cada cambio (usuario, fecha, antes → después), visible en el mismo panel. Editar un mes cerrado ajusta su cierre en la misma operación.
+
+#### Changed
+- **El Resumen de un mes pasado ya cerrado se lee del cierre** y muestra "Mes cerrado". El mes en curso, o un mes pasado sin cierre, se sigue calculando en vivo. El detalle de mora, la cartera jurídica y los Excel siguen siendo en vivo.
+
 ### 2026-10-27 — Resumen: mora del mes · Locales sin duplicados
 
 #### Added

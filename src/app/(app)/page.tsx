@@ -1,12 +1,15 @@
 import Link from "next/link"
 import type { ReactNode } from "react"
-import { ArrowRight, Download, Scale, Wallet, AlertTriangle } from "lucide-react"
+import { ArrowRight, Download, Scale, Wallet, AlertTriangle, Lock } from "lucide-react"
 import { MonthFilter } from "@/components/pagos/month-filter"
 import { InfoTip } from "@/components/pagos/info-tip"
 import { ProgressRing } from "@/components/resumen/progress-ring"
 import { TasaMoraForm } from "@/components/mora/tasa-mora-form"
-import { getResumenExtras, getResumenKPIs } from "@/lib/data/pagos"
-import { getMoraData, getMoraTrendReconstruido, type MoraRow } from "@/lib/data/mora"
+import { CuentasCobroEditor, CuentasCobroUltimoCambio } from "@/components/resumen/cuentas-cobro-editor"
+import { computeResumenTotales, getResumenCierre } from "@/lib/data/resumen"
+import { getCuentasCobroHistorial } from "@/lib/data/cuentas-cobro"
+import { getSessionProfile } from "@/lib/auth/session"
+import { getMoraData, type MoraRow } from "@/lib/data/mora"
 import { getPortfolioStats } from "@/lib/data/dashboard"
 import { getEmpresaCkreaId } from "@/lib/empresa"
 import { formatCOP } from "@/lib/formatters"
@@ -50,9 +53,12 @@ type KpiCardProps = {
   // Without: `note` explains why, and there is no ring.
   proyectado?: { total: number; color: string }
   note?: ReactNode
+  // Extra control next to the value (e.g. the cuentas de cobro editor) and a line under "Faltan".
+  action?: ReactNode
+  footnote?: ReactNode
 }
 
-function KpiCard({ title, titleClassName, value, negative, download, proyectado, note }: KpiCardProps) {
+function KpiCard({ title, titleClassName, value, negative, download, proyectado, note, action, footnote }: KpiCardProps) {
   const faltan = proyectado ? Math.max(0, proyectado.total - value) : 0
   return (
     <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
@@ -64,6 +70,7 @@ function KpiCard({ title, titleClassName, value, negative, download, proyectado,
             {formatCOP(value)}
           </p>
           {download && <DownloadLink {...download} />}
+          {action}
         </div>
         {proyectado ? (
           <>
@@ -73,6 +80,7 @@ function KpiCard({ title, titleClassName, value, negative, download, proyectado,
             <div className="mt-4 border-t border-dashed border-slate-200 pt-3 text-sm text-slate-600">
               Faltan <span className="font-semibold text-slate-900">{formatCOP(faltan)}</span>
             </div>
+            {footnote && <p className="mt-1 text-xs text-slate-400">{footnote}</p>}
           </>
         ) : note ? (
           <div className="mt-4 border-t border-dashed border-slate-200 pt-3 text-sm text-slate-500">{note}</div>
@@ -92,34 +100,29 @@ export default async function ResumenPage({
   const month = isValidPeriodo(rawMonth) ? rawMonth : currentPeriodo()
 
   const empresaId = await getEmpresaCkreaId()
-  const [kpis, extras, portfolio, moraTrend, moraData] = await Promise.all([
-    getResumenKPIs(month),
-    getResumenExtras(month),
+  // A closed month is read from v2.resumen_cierres_mensuales; the open month
+  // (or a past month not closed yet) is computed live.
+  const [cierre, portfolio, moraData, historialCuentas, profile] = await Promise.all([
+    month < currentPeriodo() ? getResumenCierre(month) : Promise.resolve(null),
     getPortfolioStats(empresaId),
-    // Balance at the END of the selected month, rebuilt like the /mora trend.
-    getMoraTrendReconstruido(empresaId),
     // Detalle de mora + cartera jurídica: same data as /mora (live, not per month).
     getMoraData(),
+    getCuentasCobroHistorial(month),
+    getSessionProfile(),
   ])
+  const canEditCuentas = profile?.rol === "admin" || profile?.rol === "finanzas"
+  const t = cierre?.totales ?? (await computeResumenTotales(month, { ocupacion: false }))
 
-  // Canon / Mora: unchanged definitions from the previous Resumen (getResumenKPIs).
-  const canon = kpis.recaudoFacturado
-  const canonProyectado = kpis.facturacionMes
-  const mora = kpis.recaudoMora
-  const pendienteMora = moraTrend.find((p) => p.periodo === month)?.saldoVencido ?? 0
-  const moraProyectado = mora + pendienteMora
-  // Cuentas de cobro: not wired yet — shown as 0 on purpose.
-  const cuentas = 0
-  const cuentasProyectado = 0
-  const luz = extras.luz
-  const luzProyectado = extras.luzProyectado
-  const descuentos = extras.descuentoFinanciero + extras.descuentoComercial
+  const { canon, canonProyectado, mora, moraProyectado, cuentas, cuentasProyectado, luz, luzProyectado } = t
+  const extras = { deposito: t.deposito, descuentoFinanciero: t.descuentoFinanciero, descuentoComercial: t.descuentoComercial }
+  const descuentos = t.descuentoFinanciero + t.descuentoComercial
 
-  const totalRecaudo = canon + mora + cuentas + luz
-  const proyectado = canonProyectado + moraProyectado + cuentasProyectado + luzProyectado
-  const conProyectado = canon + mora + cuentas + luz
-  const cumplimiento = pctOf(conProyectado, proyectado)
-  const faltanTotal = Math.max(0, proyectado - conProyectado)
+  const totalRecaudo = t.totalRecaudo
+  const proyectado = t.totalProyectado
+  const cumplimiento = pctOf(totalRecaudo, proyectado)
+  const faltanTotal = Math.max(0, proyectado - totalRecaudo)
+  const ocupados = t.localesOcupados ?? portfolio.activeClients
+  const totalLocales = t.localesTotal ?? portfolio.totalUnits
 
   // Hero bar: segments scaled to the proyectado (or the total, if larger).
   const escala = Math.max(proyectado, totalRecaudo, 1)
@@ -130,7 +133,7 @@ export default async function ResumenPage({
     { key: "cuentas", label: "Cuentas de cobro", value: cuentas, color: COLOR.cuentas },
   ]
 
-  const ocupacionPct = Math.round(pctOf(portfolio.activeClients, portfolio.totalUnits))
+  const ocupacionPct = Math.round(pctOf(ocupados, totalLocales))
   const filasMora: MoraRow[] = [...moraData.activos].sort((a, b) => b.saldoVencido - a.saldoVencido)
   const totalAPagar = (r: MoraRow) => r.saldoVencido + r.interes + r.carteraCorriente
   const sumMora = (f: (r: MoraRow) => number) => filasMora.reduce((s, r) => s + f(r), 0)
@@ -142,10 +145,19 @@ export default async function ResumenPage({
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900">
           Resumen — <MonthFilter selected={month} />
+          {cierre ? (
+            <span
+              title={`Cifras congeladas el ${new Date(cierre.generadoAt).toLocaleString("es-CO", { timeZone: "America/Bogota" })} (${cierre.origen})`}
+              className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600"
+            >
+              <Lock className="h-3 w-3" />
+              Mes cerrado
+            </span>
+          ) : null}
         </h1>
         <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-sm text-slate-600">
           <span className="h-2 w-2 rounded-full bg-emerald-500" />
-          {portfolio.activeClients} de {portfolio.totalUnits} ocupados
+          {ocupados} de {totalLocales} ocupados
           <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
             {ocupacionPct}%
           </span>
@@ -250,6 +262,16 @@ export default async function ResumenPage({
           titleClassName="text-[#2ea89a]"
           value={cuentas}
           proyectado={{ total: cuentasProyectado, color: COLOR.cuentas }}
+          action={
+            <CuentasCobroEditor
+              periodo={month}
+              ejecutado={cuentas}
+              proyectado={cuentasProyectado}
+              historial={historialCuentas}
+              canEdit={canEditCuentas}
+            />
+          }
+          footnote={<CuentasCobroUltimoCambio cambio={historialCuentas[0]} />}
         />
         <KpiCard
           title="Mora"
