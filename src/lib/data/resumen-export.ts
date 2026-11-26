@@ -5,6 +5,7 @@ import {
   EXCLUDE_ELECTRICITY,
   electricityTenantsSubquery,
   prevMonthStr,
+  recibosSinFacturaRowsSql,
   serviciosPublicosRowsSql,
 } from "@/lib/data/pagos"
 
@@ -14,7 +15,8 @@ import {
 // No new money rules here — every filter mirrors its aggregate twin:
 //   • Recaudo rows  ↔ getResumenKPIs (pagos.ts): same vp fence, empresa scope,
 //     electricity dedup, and on-time/late split via moraVencEfecExpr. On top of
-//     that it lists servicios públicos, the same rows as getResumenExtras.luz.
+//     that it lists servicios públicos, the same rows as getResumenExtras.luz,
+//     and the receipts with no invoice applied (anticipos → Canon, RKD → Depósito).
 //   • Mora rows     ↔ getResumenKPIs.late + getMoraTrendReconstruido (mora.ts):
 //     late non-jurídica cash in the month + (cartera still open today OR paid
 //     after the cutoff) for FVS invoices due before the month's cutoff.
@@ -36,10 +38,15 @@ function monthCte(month: string): string {
 
 // ── Recaudo del mes (Total recaudo) ─────────────────────────────────────────
 
-// facturado / mora / intereses_mora add up to the "Total recaudo" card.
-// mora_juridica and servicios_publicos are listed but sit outside that total.
+// Canon = facturado + anticipo + intereses_mora paid on time; Mora = mora +
+// intereses_mora paid late; Luz = servicios_publicos; + cuentas_cobro. Those
+// add up to the "Total recaudo" card. mora_juridica and deposito are listed
+// but sit outside that total.
 export type RecaudoTipo =
   | "facturado"
+  | "anticipo"
+  | "deposito"
+  | "cuentas_cobro" // one manual row per month, added by the recaudo route
   | "mora"
   | "intereses_mora"
   | "mora_juridica"
@@ -111,6 +118,28 @@ export async function getRecaudoExport(month: string, empresaId: string): Promis
         COALESCE(r.pronto_pago, 0)::numeric             AS pronto_pago,
         r.valor_final::numeric                          AS valor_final
       FROM (${serviciosPublicosRowsSql(empresaId, month)}) r
+    ),
+    -- Receipts with no invoice applied: anticipos (Canon) and RKD (Depósito).
+    sin_factura AS (
+      SELECT
+        r.fecha_recaudo::date                           AS fecha_recaudo,
+        r.docto::text                                   AS docto,
+        r.cruce::text                                   AS cruce,
+        r.documento::text                               AS nit,
+        r.cliente::text                                 AS razon_social_raw,
+        (SELECT i.id FROM v2.inquilinos i
+          WHERE i.nit = r.documento AND i.empresa_id = '${empresaId}'::uuid LIMIT 1) AS inquilino_id,
+        NULL::date                                      AS fecha_factura,
+        NULL::date                                      AS vencimiento,
+        r.tipo                                          AS tipo,
+        COALESCE(r.valor_aplicado, 0)::numeric          AS valor_aplicado,
+        COALESCE(r.pronto_pago, 0)::numeric             AS pronto_pago,
+        r.valor_final::numeric                          AS valor_final
+      FROM (
+        SELECT a.*, 'anticipo' AS tipo FROM (${recibosSinFacturaRowsSql(month, "anticipo")}) a
+        UNION ALL
+        SELECT d.*, 'deposito' AS tipo FROM (${recibosSinFacturaRowsSql(month, "deposito")}) d
+      ) r
     )
     SELECT
       x.fecha_recaudo::text                             AS fecha_recaudo,
@@ -126,7 +155,7 @@ export async function getRecaudoExport(month: string, empresaId: string): Promis
       x.valor_aplicado,
       x.pronto_pago,
       x.valor_final
-    FROM (SELECT * FROM fvs UNION ALL SELECT * FROM rge) x
+    FROM (SELECT * FROM fvs UNION ALL SELECT * FROM rge UNION ALL SELECT * FROM sin_factura) x
     LEFT JOIN v2.inquilinos t ON t.id = x.inquilino_id
     ORDER BY x.fecha_recaudo, x.docto, x.cruce
   `)

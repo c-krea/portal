@@ -15,6 +15,7 @@ import { getPpWindowDays } from "@/lib/data/configuracion"
 import { cn } from "@/lib/utils"
 import { isValidUuid } from "@/lib/security/validators"
 import { BadgePercent, Eye } from "lucide-react"
+import { EstadoCuentaButton } from "@/components/clientes/estado-cuenta-button"
 
 const CONTRACT_STATUS_CONFIG = {
   activo: { cls: "bg-emerald-50 text-emerald-700", label: "Activo" },
@@ -36,11 +37,11 @@ function KpiCard({
 }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={cn("mt-1 text-sm sm:text-lg font-semibold truncate", warning ? "text-rose-600" : "text-slate-900")}>
+      <p className="text-sm text-slate-500">{label}</p>
+      <p className={cn("mt-1 truncate text-base font-semibold tabular-nums sm:text-2xl", warning ? "text-rose-600" : "text-slate-900")}>
         {value}
       </p>
-      {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
+      {subtitle && <p className="mt-0.5 text-sm text-slate-400">{subtitle}</p>}
     </div>
   )
 }
@@ -102,7 +103,14 @@ export default async function ClienteDetailPage({
 
   return (
     <>
-      <PageHeader title={detail.razonSocial}>
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            {detail.razonSocial}
+            <EstadoCuentaButton tenantId={id} className="p-1.5 [&_svg]:h-5 [&_svg]:w-5" />
+          </span>
+        }
+      >
         <Link
           href={`/locales/${id}/portal`}
           className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
@@ -121,38 +129,34 @@ export default async function ClienteDetailPage({
             <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400">
               Datos del Inquilino
             </h2>
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs text-slate-400">Razón Social</p>
-                <p className="font-medium text-slate-900">{detail.razonSocial}</p>
-              </div>
-              <div className="flex gap-6">
-                <div>
-                  <p className="text-xs text-slate-400">NIT</p>
-                  <p className="font-mono text-sm text-slate-700">{detail.nit}</p>
-                </div>
-                {detail.condicionPago && (
-                  <div>
-                    <p className="text-xs text-slate-400">Condición de Pago</p>
-                    <p className="text-slate-700">{detail.condicionPago}</p>
-                  </div>
-                )}
-              </div>
-              {detail.contactoNombre && (
-                <div>
-                  <p className="text-xs text-slate-400">Contacto</p>
-                  <p className="text-slate-700">{detail.contactoNombre}</p>
-                </div>
-              )}
-              <div>
-                <p className="text-xs text-slate-400">Email</p>
-                <p className="text-sm text-slate-700">{detail.email ?? <span className="text-slate-300">—</span>}</p>
+            {/* Two columns: the fields used to stack in one tall column and
+                leave the right half of the card empty. */}
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-4 text-sm sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <dt className="text-xs text-slate-400">Razón Social</dt>
+                <dd className="font-medium text-slate-900">{detail.razonSocial}</dd>
               </div>
               <div>
-                <p className="text-xs text-slate-400">Teléfono</p>
-                <p className="text-slate-700">{detail.telefono ?? <span className="text-slate-300">—</span>}</p>
+                <dt className="text-xs text-slate-400">NIT</dt>
+                <dd className="font-mono text-slate-700">{detail.nit}</dd>
               </div>
-            </div>
+              <div>
+                <dt className="text-xs text-slate-400">Condición de Pago</dt>
+                <dd className="text-slate-700">{detail.condicionPago ?? <span className="text-slate-300">—</span>}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-400">Contacto</dt>
+                <dd className="text-slate-700">{detail.contactoNombre ?? <span className="text-slate-300">—</span>}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-400">Teléfono</dt>
+                <dd className="text-slate-700">{detail.telefono ?? <span className="text-slate-300">—</span>}</dd>
+              </div>
+              <div className="min-w-0 sm:col-span-2">
+                <dt className="text-xs text-slate-400">Email</dt>
+                <dd className="break-words text-slate-700">{detail.email ?? <span className="text-slate-300">—</span>}</dd>
+              </div>
+            </dl>
           </div>
 
           {/* Contracts */}
@@ -216,10 +220,10 @@ export default async function ClienteDetailPage({
             {isPpWindow ? (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-emerald-700">Saldo Total</p>
+                  <p className="text-sm text-emerald-700">Saldo Total</p>
                   <BadgePercent className="h-3.5 w-3.5 text-emerald-500" />
                 </div>
-                <p className="mt-1 text-sm sm:text-lg font-semibold text-emerald-800 truncate">{formatCOP(saldoConPP)}</p>
+                <p className="mt-1 truncate text-base font-semibold tabular-nums text-emerald-800 sm:text-2xl">{formatCOP(saldoConPP)}</p>
                 <p className="mt-0.5 text-xs text-emerald-600 line-through">{formatCOP(saldoTotal)}</p>
                 <p className="mt-0.5 text-[10px] text-emerald-500">c/pronto pago · día {todayDay}</p>
               </div>
@@ -281,7 +285,7 @@ export default async function ClienteDetailPage({
           </div>
           {pagos.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50">
                     <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Fecha</th>

@@ -57,8 +57,9 @@ export async function computeResumenTotales(
     src.cuentas(month),
   ])
 
-  // Canon / Mora: unchanged definitions from the previous Resumen (getResumenKPIs).
-  const canon = kpis.recaudoFacturado
+  // Canon: on-time FVS cash (getResumenKPIs) + anticipos (receipts with no
+  // invoice applied that are not RKD depósitos — see recibosSinFacturaRowsSql).
+  const canon = kpis.recaudoFacturado + extras.anticipos
   const canonProyectado = kpis.facturacionMes
   const mora = kpis.recaudoMora
   const pendienteMora = moraTrend.find((p) => p.periodo === month)?.saldoVencido ?? 0

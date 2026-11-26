@@ -54,7 +54,7 @@ const columns: ColumnDef<CarteraItem>[] = [
     size: 120,
     meta: { className: "hidden md:table-cell" },
     cell: ({ getValue }) => (
-      <span className="font-mono text-xs text-slate-600">{getValue<string | null>() ?? "—"}</span>
+      <span className="font-mono text-sm text-slate-600">{getValue<string | null>() ?? "—"}</span>
     ),
   },
   {

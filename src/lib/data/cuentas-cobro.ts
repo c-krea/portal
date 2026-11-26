@@ -65,7 +65,7 @@ async function getCuentasCobroHistorial_uncached(month: string): Promise<Cuentas
 
 export const getCuentasCobro = cached(getCuentasCobro_uncached, ["cuentas-cobro:mes"], "pagos")
 export const getCuentasCobroHistorial = cached(getCuentasCobroHistorial_uncached, ["cuentas-cobro:historial"], "pagos")
-export { getCuentasCobro_uncached as getCuentasCobroFresh }
+export { getCuentasCobro_uncached as getCuentasCobroFresh, getCuentasCobroHistorial_uncached as getCuentasCobroHistorialFresh }
 
 // One statement, so the value, its history row and the month's cierre (if the
 // month is already closed) change together or not at all.

@@ -14,6 +14,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import { ArrowUpDown, ArrowUp, ArrowDown, ChevronDown, ChevronRight, X } from "lucide-react"
 import { formatCOP } from "@/lib/formatters"
 import { cn } from "@/lib/utils"
+import { EstadoCuentaButton } from "@/components/clientes/estado-cuenta-button"
 import type { ClienteRow } from "@/lib/data/clientes"
 
 type StatusKey = ClienteRow["status"]
@@ -89,7 +90,10 @@ const columns: ColumnDef<ClienteRow>[] = [
     cell: ({ row }) => (
       <div>
         {row.original.cliente ? (
-          <p className="font-medium text-slate-900">{row.original.cliente}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="font-medium text-slate-900">{row.original.cliente}</p>
+            {row.original.tenantId && <EstadoCuentaButton tenantId={row.original.tenantId} />}
+          </div>
         ) : (
           <p className="italic text-slate-400">Vacante</p>
         )}

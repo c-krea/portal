@@ -37,7 +37,7 @@ export default async function ClientesPage({
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {/* Al día */}
         <div className="rounded-[10px] border border-slate-200 bg-white p-4">
-          <p className="text-[26px] font-bold tracking-tight tabular-nums text-slate-900">
+          <p className="text-[1.75rem] font-bold tracking-tight tabular-nums text-slate-900">
             {alDia} <span className="align-middle text-sm font-semibold text-slate-400">({pctOf(alDia)}%)</span>
           </p>
           <p className="mt-1 text-sm text-slate-600">Locales Al Día</p>
@@ -45,7 +45,7 @@ export default async function ClientesPage({
 
         {/* En mora */}
         <div className="rounded-[10px] border border-slate-200 bg-white p-4">
-          <p className="text-[26px] font-bold tracking-tight tabular-nums text-slate-900">
+          <p className="text-[1.75rem] font-bold tracking-tight tabular-nums text-slate-900">
             {enMora} <span className="align-middle text-sm font-semibold text-slate-400">({pctOf(enMora)}%)</span>
           </p>
           <p className="mt-1 flex items-center gap-1 text-sm text-slate-600">
@@ -56,7 +56,7 @@ export default async function ClientesPage({
 
         {/* Locales vacíos */}
         <div className="rounded-[10px] border border-slate-200 bg-white p-4">
-          <p className="text-[26px] font-bold tracking-tight tabular-nums text-slate-900">
+          <p className="text-[1.75rem] font-bold tracking-tight tabular-nums text-slate-900">
             {kpis.vacantes}
           </p>
           <p className="mt-1 flex items-center gap-1 text-sm text-slate-600">
@@ -67,7 +67,7 @@ export default async function ClientesPage({
 
         {/* Ocupación */}
         <div className="rounded-[10px] border border-slate-200 bg-white p-4">
-          <p className="text-[26px] font-bold tracking-tight tabular-nums text-slate-900">
+          <p className="text-[1.75rem] font-bold tracking-tight tabular-nums text-slate-900">
             {kpis.occupiedUnits} / {kpis.totalUnits}{" "}
             <span className="align-middle text-sm font-semibold text-slate-400">({occupancyPct}%)</span>
           </p>
