@@ -45,13 +45,13 @@ function generadoLabel(): string {
 const COL = { factura: '18%', emision: '18%', vence: '24%', dias: '18%', valor: '22%' } as const
 
 const s = StyleSheet.create({
-  // paddingBottom leaves room for the C-Krea logo + footer on the last page.
-  page: { fontFamily: 'Helvetica', fontSize: 9.5, color: INK, paddingTop: 48, paddingBottom: 150, paddingHorizontal: 54 },
+  // paddingBottom leaves room for the REYMON logo + footer on the last page.
+  page: { fontFamily: 'Helvetica', fontSize: 9.5, color: INK, paddingTop: 48, paddingBottom: 110, paddingHorizontal: 54 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: LINE },
-  logo: { width: 150, objectFit: 'contain' },
-  // C-Krea logo, centred at the bottom of the last page, above the footer.
+  logo: { height: 76, objectFit: 'contain' },
+  // REYMON logo, centred at the bottom of the last page, above the footer.
   bottomLogo: { position: 'absolute', left: 0, right: 0, bottom: 58, alignItems: 'center' },
-  bottomLogoImg: { height: 70, objectFit: 'contain' },
+  bottomLogoImg: { width: 120, objectFit: 'contain' },
   title: { fontFamily: 'Helvetica-Bold', fontSize: 18, textAlign: 'right' },
   generado: { fontSize: 9, color: MUTED, textAlign: 'right', marginTop: 4 },
   nombre: { fontFamily: 'Helvetica-Bold', fontSize: 13, marginTop: 22, textTransform: 'uppercase' },
@@ -82,9 +82,9 @@ export function EstadoCuentaPDF({
   bottomLogoSrc,
 }: {
   data: EstadoCuentaData
-  /** Header logo (REYMON). */
+  /** Header logo, top left (C-Krea). */
   logoSrc: string
-  /** C-Krea logo at the bottom of the last page. */
+  /** REYMON logo at the bottom of the last page. */
   bottomLogoSrc: string
 }) {
   const total = data.documentos.reduce((acc, d) => acc + d.saldo, 0)

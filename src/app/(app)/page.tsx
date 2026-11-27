@@ -22,13 +22,12 @@ const COLOR = {
   cuentas: "#2ea89a",
   mora: "#8b5cf6",
   luz: "#e9a23b",
-  descuentos: "#94a3b8",
+  deposito: "#64748b",
 } as const
 
-// "$ 160,8 M" for the hero legend.
-function formatMillones(value: number): string {
-  const m = value / 1_000_000
-  return `$ ${m.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} M`
+// "60,0%" for the Recaudo total shares.
+function formatPct1(pct: number): string {
+  return `${pct.toLocaleString("es-CO", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
 }
 
 function pctOf(value: number, base: number): number {
@@ -47,6 +46,8 @@ type KpiCardProps = {
   title: string
   titleClassName: string
   info?: string
+  // Grey line under the value when the card has no proyectado (e.g. Depósito).
+  caption?: string
   value: number
   negative?: boolean
   download?: { href: string; title: string; className: string }
@@ -59,7 +60,7 @@ type KpiCardProps = {
   footnote?: ReactNode
 }
 
-function KpiCard({ title, titleClassName, info, value, negative, download, proyectado, note, action, footnote }: KpiCardProps) {
+function KpiCard({ title, titleClassName, info, caption, value, negative, download, proyectado, note, action, footnote }: KpiCardProps) {
   const faltan = proyectado ? Math.max(0, proyectado.total - value) : 0
   return (
     // @container: the value's font follows the card width (cqi), so a narrow
@@ -81,6 +82,7 @@ function KpiCard({ title, titleClassName, info, value, negative, download, proye
           {download && <DownloadLink {...download} />}
           {action}
         </div>
+        {caption && <p className="mt-1 text-sm text-slate-500">{caption}</p>}
         {proyectado ? (
           <>
             <p className="mt-1 text-sm text-slate-500">
@@ -129,17 +131,25 @@ export default async function ResumenPage({
   const totalRecaudo = t.totalRecaudo
   const proyectado = t.totalProyectado
   const cumplimiento = pctOf(totalRecaudo, proyectado)
-  const faltanTotal = Math.max(0, proyectado - totalRecaudo)
   const ocupados = t.localesOcupados ?? portfolio.activeClients
   const totalLocales = t.localesTotal ?? portfolio.totalUnits
 
-  // Hero bar: segments scaled to the proyectado (or the total, if larger).
-  const escala = Math.max(proyectado, totalRecaudo, 1)
-  const segmentos = [
+  // Hero. Recaudo total = ejecutado (canon + cuentas + mora + luz) + depósito;
+  // the cumplimiento compares only the ejecutado with its proyección, since
+  // depósito has no proyección.
+  const recaudoTotal = totalRecaudo + extras.deposito
+  const lineasRecaudo = [
     { key: "canon", label: "Canon", value: canon, color: COLOR.canon },
+    { key: "cuentas", label: "Cuentas de cobro", value: cuentas, color: COLOR.cuentas },
     { key: "mora", label: "Mora", value: mora, color: COLOR.mora },
     { key: "luz", label: "Luz", value: luz, color: COLOR.luz },
-    { key: "cuentas", label: "Cuentas de cobro", value: cuentas, color: COLOR.cuentas },
+    { key: "deposito", label: "Depósito", value: extras.deposito, color: COLOR.deposito },
+  ]
+  const lineasProyeccion = [
+    { key: "canon", label: "Canon", proyectado: canonProyectado, ejecutado: canon, color: COLOR.canon },
+    { key: "cuentas", label: "Cuentas de cobro", proyectado: cuentasProyectado, ejecutado: cuentas, color: COLOR.cuentas },
+    { key: "mora", label: "Mora", proyectado: moraProyectado, ejecutado: mora, color: COLOR.mora },
+    { key: "luz", label: "Luz", proyectado: luzProyectado, ejecutado: luz, color: COLOR.luz },
   ]
 
   const ocupacionPct = Math.round(pctOf(ocupados, totalLocales))
@@ -171,17 +181,18 @@ export default async function ResumenPage({
         </span>
       </div>
 
-      {/* Hero: recaudo total + composition bar */}
-      <div className="mb-5 grid grid-cols-1 gap-6 rounded-2xl border border-slate-200 bg-white p-6 lg:grid-cols-[2fr_5fr]">
-        <div>
+      {/* Hero: recaudo total (left) + proyección vs ejecutado (right) */}
+      <div className="mb-5 grid grid-cols-1 gap-5 xl:grid-cols-[1fr_2fr]">
+        {/* Recaudo total: everything collected, incl. depósito, with each line's share */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-6">
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500">
             <Wallet className="h-3.5 w-3.5" />
             Recaudo total
-            <InfoTip text="Canon + mora + luz + cuentas de cobro del mes, comparado con lo proyectado de cada línea. El depósito y la cartera jurídica no suman. El botón de descarga trae el detalle completo en Excel." />
+            <InfoTip text="Todo lo recaudado en el mes: canon + cuentas de cobro + mora + luz + depósito. El % es la participación de cada línea. La cartera jurídica no suma. El botón de descarga trae el detalle completo en Excel." />
           </p>
           <div className="mt-2 flex items-center gap-3">
             <p className="text-4xl font-bold tabular-nums tracking-tight text-[#2b3fae] sm:text-[2.75rem]">
-              {formatCOP(totalRecaudo)}
+              {formatCOP(recaudoTotal)}
             </p>
             <DownloadLink
               href={`/api/resumen/recaudo?periodo=${month}`}
@@ -189,66 +200,65 @@ export default async function ResumenPage({
               className="text-[#2b3fae] hover:opacity-80"
             />
           </div>
-          <p className="mt-1 text-sm text-slate-600">
-            de <span className="font-semibold text-slate-800">{formatCOP(proyectado)}</span> proyectado
-          </p>
-          <div className="mt-4 flex flex-col items-start gap-2">
-            <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
-              {Math.round(cumplimiento)}% de cumplimiento
-            </span>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">
-              Faltan <span className="font-semibold text-slate-800">{formatCOP(faltanTotal)}</span>
-            </span>
-          </div>
+          <ul className="mt-4 divide-y divide-slate-100 text-sm">
+            {lineasRecaudo.map((l) => (
+              <li key={l.key} className="flex items-center gap-3 py-1.5">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: l.color }} />
+                <span className="min-w-0 flex-1 truncate text-slate-600">{l.label}</span>
+                <span className="whitespace-nowrap font-semibold tabular-nums text-slate-900">{formatCOP(l.value)}</span>
+                <span className="w-12 text-right tabular-nums text-slate-400">{formatPct1(pctOf(l.value, recaudoTotal))}</span>
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <div className="flex min-w-0 flex-col justify-center">
-          <div className="mb-3 flex items-center justify-between text-sm text-slate-500">
-            <span>¿De dónde viene lo recaudado?</span>
-            <span>Meta | 100%</span>
-          </div>
-          <div className="relative h-8 w-full overflow-hidden rounded-md bg-slate-100">
-            <div className="flex h-full">
-              {segmentos.map((s) =>
-                s.value > 0 ? (
-                  <div
-                    key={s.key}
-                    title={`${s.label}: ${formatCOP(s.value)}`}
-                    style={{ width: `${(s.value / escala) * 100}%`, backgroundColor: s.color }}
-                  />
-                ) : null,
-              )}
+        {/* Proyección vs ejecutado per line + overall cumplimiento ring */}
+        <div className="flex flex-col gap-6 rounded-2xl border border-slate-200 bg-white p-6 lg:flex-row lg:items-center">
+          <div className="grid min-w-0 flex-1 grid-cols-1 gap-6 sm:grid-cols-2">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Proyección</p>
+              <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-700 sm:text-[2.25rem]">
+                {formatCOP(proyectado)}
+              </p>
+              <ul className="mt-4 divide-y divide-slate-100 text-sm">
+                {lineasProyeccion.map((l) => (
+                  <li key={l.key} className="flex items-center gap-3 py-2">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: l.color }} />
+                    <span className="min-w-0 flex-1 truncate text-slate-600">{l.label}</span>
+                    <span className="whitespace-nowrap tabular-nums text-slate-600">{formatCOP(l.proyectado)}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
-            {[25, 50, 75].map((t) => (
-              <span key={t} className="absolute inset-y-0 w-px bg-white/70" style={{ left: `${t}%` }} />
-            ))}
-            <span
-              className="absolute inset-y-0 w-0.5 bg-slate-900"
-              style={{ left: `calc(${(proyectado / escala) * 100}% - 2px)` }}
-            />
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500">
+                Ejecutado
+                <InfoTip text="Canon + cuentas de cobro + mora + luz del mes, comparado con lo proyectado de cada línea. El depósito no tiene proyección y no entra aquí." />
+              </p>
+              <p className="mt-2 text-3xl font-bold tabular-nums tracking-tight text-[#2b3fae] sm:text-[2.25rem]">
+                {formatCOP(totalRecaudo)}
+              </p>
+              <ul className="mt-4 divide-y divide-slate-100 text-sm">
+                {lineasProyeccion.map((l) => (
+                  <li key={l.key} className="flex items-center gap-3 py-2">
+                    <span className="min-w-0 flex-1 whitespace-nowrap text-right font-semibold tabular-nums text-slate-900">
+                      {formatCOP(l.ejecutado)}
+                    </span>
+                    <span className="w-12 text-right tabular-nums text-slate-500">
+                      {Math.round(pctOf(l.ejecutado, l.proyectado))}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
-          <div className="mt-2 flex justify-between text-xs text-slate-400">
-            <span>$0</span>
-            <span>25%</span>
-            <span>50%</span>
-            <span>75%</span>
-            <span>{formatMillones(escala)}</span>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-600">
-            {segmentos.map((s) => (
-              <span key={s.key} className="inline-flex items-center gap-2">
-                <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: s.color }} />
-                {s.label} <span className="font-semibold text-slate-900">{formatMillones(s.value)}</span>
-              </span>
-            ))}
-            <span className="inline-flex items-center gap-2">
-              <span
-                className="h-3 w-3 rounded-sm"
-                style={{ background: `repeating-linear-gradient(45deg, ${COLOR.descuentos} 0 2px, transparent 2px 4px)` }}
-              />
-              Descuentos <span className="font-semibold text-slate-900">−{formatMillones(descuentos)}</span>
-              <InfoTip text="Ya están descontados del recaudo: no se restan otra vez del total." />
-            </span>
+          <div className="flex shrink-0 flex-col items-center gap-2 border-slate-100 lg:border-l lg:pl-8">
+            <ProgressRing pct={cumplimiento} color={COLOR.canon} size={144} stroke={12} labelClassName="text-3xl" />
+            <p className="text-center text-xs text-slate-500">
+              Cumplimiento
+              <br />
+              de la proyección
+            </p>
           </div>
         </div>
       </div>
@@ -301,8 +311,9 @@ export default async function ResumenPage({
         <KpiCard
           title="Depósito"
           titleClassName="text-slate-500"
-          info="Recibos de depósito (documentos RKD) sin factura aplicada. No suma en el recaudo total."
+          info="Recibos de depósito (documentos RKD) sin factura aplicada. Suma en el Recaudo total, pero no tiene proyección: no entra en el ejecutado ni en el cumplimiento."
           value={extras.deposito}
+          caption={`${formatPct1(pctOf(extras.deposito, recaudoTotal))} del recaudo total`}
         />
 
         {/* Desglose de descuentos */}

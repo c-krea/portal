@@ -42,8 +42,8 @@ export function EstadoCuentaButton({ tenantId, className }: { tenantId: string; 
       const blob = await pdf(
         <EstadoCuentaPDF
           data={res.data}
-          logoSrc={`${origin}/logo-reymon.png`}
-          bottomLogoSrc={`${origin}/logo-estado-cuenta.png`}
+          logoSrc={`${origin}/logo-estado-cuenta.png`}
+          bottomLogoSrc={`${origin}/logo-reymon.png`}
         />,
       ).toBlob()
       const url = URL.createObjectURL(blob)
