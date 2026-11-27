@@ -40,4 +40,4 @@ Next.js 16 · TypeScript · Supabase · Drizzle · Tailwind v4 · Vercel
 
 ## Deploy
 
-Vercel auto-deploys `main`. Production git author must currently be `gburgos293@gmail.com` or the deploy is blocked — change that in Vercel when ownership moves.
+Vercel auto-deploys `main`. Production git author must currently be `gburgos293@gmail.com` or the deploy is blocked — change that in Vercel when ownership moves..
