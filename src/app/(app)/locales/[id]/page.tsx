@@ -118,7 +118,7 @@ export default async function ClienteDetailPage({
           <Eye className="h-4 w-4" />
           Ver portal
         </Link>
-        <BackButton label="Locales" />
+        <BackButton label="Locales" href="/locales" />
       </PageHeader>
 
       <div className="space-y-6">
