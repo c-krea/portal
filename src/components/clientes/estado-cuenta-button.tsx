@@ -38,8 +38,14 @@ export function EstadoCuentaButton({ tenantId, className }: { tenantId: string; 
         import("@react-pdf/renderer"),
         import("@/lib/pdf/estado-cuenta"),
       ])
-      const logoSrc = `${window.location.origin}/logo-estado-cuenta.png`
-      const blob = await pdf(<EstadoCuentaPDF data={res.data} logoSrc={logoSrc} />).toBlob()
+      const origin = window.location.origin
+      const blob = await pdf(
+        <EstadoCuentaPDF
+          data={res.data}
+          logoSrc={`${origin}/logo-reymon.png`}
+          bottomLogoSrc={`${origin}/logo-estado-cuenta.png`}
+        />,
+      ).toBlob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url

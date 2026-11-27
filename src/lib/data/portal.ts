@@ -412,6 +412,10 @@ export type PortalCarteraRow = {
   diasInterest: number
   fechaFactura: string | null
   fechaVence: string | null
+  /** Effective due date for mora (fecha_factura + 30), as on the Resumen. */
+  vencEfec: string | null
+  /** Estimated DIAN interest (FVS only; 0 when not overdue). */
+  interes: number
   ventas: number | null
   impuesto: number | null
   retenciones: number | null
@@ -485,7 +489,7 @@ async function getPortalCartera_uncached(nit: string): Promise<PortalCartera> {
       ${moraDiasVencidosExpr("venc_efec")}::int  AS dias_mora,
       ${moraDiasVencidosExpr("venc_efec")}::int  AS dias_interest,
       ${moraInteresExpr("vr_vencido_raw", "venc_efec")}::numeric AS interes_est,
-      fecha_factura, fecha_vence, ventas, impuesto, retenciones
+      fecha_factura, fecha_vence, venc_efec, ventas, impuesto, retenciones
     FROM base
     ORDER BY fecha_factura DESC, unidad, factura
   `)
@@ -500,6 +504,8 @@ async function getPortalCartera_uncached(nit: string): Promise<PortalCartera> {
     diasInterest: Number(r.dias_interest ?? 0),
     fechaFactura: r.fecha_factura ? String(r.fecha_factura) : null,
     fechaVence:  r.fecha_vence ? String(r.fecha_vence) : null,
+    vencEfec:    r.venc_efec ? String(r.venc_efec) : null,
+    interes:     String(r.factura).startsWith("FVS-") ? Number(r.interes_est ?? 0) : 0,
     ventas:      r.ventas != null ? Number(r.ventas) : null,
     impuesto:    r.impuesto != null ? Number(r.impuesto) : null,
     retenciones: r.retenciones != null ? Number(r.retenciones) : null,
@@ -758,7 +764,7 @@ export const getPortalPagosKpis = cached(getPortalPagosKpis_uncached, ["portal:p
 export const getPortalMedidorHistory = cached(getPortalMedidorHistory_uncached, ["portal:medidorHistory"], "portal")
 export const getPortalContratos = cached(getPortalContratos_uncached, ["portal:contratos"], "portal")
 // v2: PR #8 added tipo / factura / saldoEnergia; a new key keeps pre-deploy entries from being served.
-export const getPortalCartera = cached(getPortalCartera_uncached, ["portal:cartera:v2"], "portal")
+export const getPortalCartera = cached(getPortalCartera_uncached, ["portal:cartera:v3"], "portal")
 // Time-derived — do not cache. Caching `isStale` kept the tenant warning up
 // after Siesa had already resumed (and on any local clone older than 48h).
 export const getSyncFreshness = getSyncFreshness_uncached

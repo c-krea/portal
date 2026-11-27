@@ -45,9 +45,13 @@ function generadoLabel(): string {
 const COL = { factura: '18%', emision: '18%', vence: '24%', dias: '18%', valor: '22%' } as const
 
 const s = StyleSheet.create({
-  page: { fontFamily: 'Helvetica', fontSize: 9.5, color: INK, paddingTop: 48, paddingBottom: 64, paddingHorizontal: 54 },
+  // paddingBottom leaves room for the C-Krea logo + footer on the last page.
+  page: { fontFamily: 'Helvetica', fontSize: 9.5, color: INK, paddingTop: 48, paddingBottom: 150, paddingHorizontal: 54 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: LINE },
-  logo: { height: 76, objectFit: 'contain' },
+  logo: { width: 150, objectFit: 'contain' },
+  // C-Krea logo, centred at the bottom of the last page, above the footer.
+  bottomLogo: { position: 'absolute', left: 0, right: 0, bottom: 58, alignItems: 'center' },
+  bottomLogoImg: { height: 70, objectFit: 'contain' },
   title: { fontFamily: 'Helvetica-Bold', fontSize: 18, textAlign: 'right' },
   generado: { fontSize: 9, color: MUTED, textAlign: 'right', marginTop: 4 },
   nombre: { fontFamily: 'Helvetica-Bold', fontSize: 13, marginTop: 22, textTransform: 'uppercase' },
@@ -72,7 +76,17 @@ const s = StyleSheet.create({
   footer: { position: 'absolute', left: 54, right: 54, bottom: 32, flexDirection: 'row', justifyContent: 'space-between', fontSize: 8, color: MUTED },
 })
 
-export function EstadoCuentaPDF({ data, logoSrc }: { data: EstadoCuentaData; logoSrc: string }) {
+export function EstadoCuentaPDF({
+  data,
+  logoSrc,
+  bottomLogoSrc,
+}: {
+  data: EstadoCuentaData
+  /** Header logo (REYMON). */
+  logoSrc: string
+  /** C-Krea logo at the bottom of the last page. */
+  bottomLogoSrc: string
+}) {
   const total = data.documentos.reduce((acc, d) => acc + d.saldo, 0)
   const enMora = data.documentos.reduce((acc, d) => acc + d.vencido, 0)
   const corriente = total - enMora
@@ -142,6 +156,13 @@ export function EstadoCuentaPDF({ data, logoSrc }: { data: EstadoCuentaData; log
             </View>
           </>
         )}
+
+        {/* Absolute and NOT fixed, placed after the content: it lands on the
+            last page only, pinned to its bottom above the footer. */}
+        <View style={s.bottomLogo} wrap={false}>
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt */}
+          <Image src={bottomLogoSrc} style={s.bottomLogoImg} />
+        </View>
 
         <View style={s.footer} fixed>
           <Text>La información financiera proviene de SIESA como sistema maestro.</Text>

@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "10mb",
     },
   },
+  // /mora was folded into the Resumen (Detalle de mora); keep old links working.
+  async redirects() {
+    return [{ source: "/mora", destination: "/", permanent: false }]
+  },
   async headers() {
     return [
       {
